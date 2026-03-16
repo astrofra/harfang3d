@@ -26,13 +26,23 @@ set_target_properties(hg_lua PROPERTIES FOLDER "harfang/languages")
 
 add_dependencies(hg_lua lua)
 
+add_executable(launcher launcher.cpp)
+target_include_directories(launcher
+	PUBLIC
+		${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
+		${CMAKE_CURRENT_SOURCE_DIR}/../../extern
+		${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
+target_link_libraries(launcher foundation jsonhpp libluadll)
+set_target_properties(launcher PROPERTIES OUTPUT_NAME "launcher" DEBUG_POSTFIX "" FOLDER "harfang/languages")
+add_dependencies(launcher hg_lua)
+
 if(WIN32)
 	set_target_properties(hg_lua PROPERTIES COMPILE_FLAGS /bigobj)
 elseif(UNIX)
 	target_compile_definitions(hg_lua PUBLIC LUA_USE_LINUX)
 endif()
 
-install(TARGETS hg_lua lua RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
+install(TARGETS hg_lua lua launcher RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
 
 install_cppsdk_dependencies(hg_lua lua)
 
