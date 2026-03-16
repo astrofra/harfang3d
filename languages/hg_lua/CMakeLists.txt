@@ -32,7 +32,7 @@ target_include_directories(launcher
 		${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
 		${CMAKE_CURRENT_SOURCE_DIR}/../../extern
 		${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
-target_link_libraries(launcher foundation jsonhpp libluadll)
+target_link_libraries(launcher engine foundation platform jsonhpp libluadll)
 set_target_properties(launcher PROPERTIES OUTPUT_NAME "launcher" DEBUG_POSTFIX "" FOLDER "harfang/languages")
 add_dependencies(launcher hg_lua)
 
