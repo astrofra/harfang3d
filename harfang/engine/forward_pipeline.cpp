@@ -73,17 +73,17 @@ enum ForwardPipelineUniformTexture {
 //
 ForwardPipelineLight MakeForwardPipelinePointLight(
 	const Mat4 &world, const Color &diffuse, const Color &specular, float radius, float priority, ForwardPipelineShadowType shadow_type, float shadow_bias) {
-	return {FPLT_Point, shadow_type, world, diffuse, specular, radius, 0.f, 0.f, Vec4::Zero, priority, shadow_bias};
+	return {FPLT_Point, shadow_type, world, diffuse, specular, radius, 0.f, 0.f, Vec4::Zero, priority, shadow_bias, 0.1f, 100.f};
 }
 
 ForwardPipelineLight MakeForwardPipelineSpotLight(const Mat4 &world, const Color &diffuse, const Color &specular, float radius, float inner_angle,
 	float outer_angle, float priority, ForwardPipelineShadowType shadow_type, float shadow_bias) {
-	return {FPLT_Spot, shadow_type, world, diffuse, specular, radius, inner_angle, outer_angle, Vec4::Zero, priority, shadow_bias};
+	return {FPLT_Spot, shadow_type, world, diffuse, specular, radius, inner_angle, outer_angle, Vec4::Zero, priority, shadow_bias, 0.1f, 100.f};
 }
 
 ForwardPipelineLight MakeForwardPipelineLinearLight(const Mat4 &world, const Color &diffuse, const Color &specular, const Vec4 &pssm_split, float priority,
 	ForwardPipelineShadowType shadow_type, float shadow_bias) {
-	return {FPLT_Linear, shadow_type, world, diffuse, specular, 0.f, 0.f, 0.f, pssm_split, priority, shadow_bias};
+	return {FPLT_Linear, shadow_type, world, diffuse, specular, 0.f, 0.f, 0.f, pssm_split, priority, shadow_bias, 0.1f, 100.f};
 }
 
 //
@@ -362,7 +362,7 @@ void GenerateSpotShadowMapForForwardPipeline(bgfx::ViewId &view_id, const std::v
 	const auto &spot_buffer = pipeline.framebuffers.find("spot_shadow_map");
 	if (spot_buffer != framebuffers_end) {
 		const auto view = InverseFast(light.world);
-		const auto proj = ComputePerspectiveProjectionMatrix(0.1f, 100.f, FovToZoomFactor(2.f * light.outer_angle), {1.f, 1.f});
+		const auto proj = ComputePerspectiveProjectionMatrix(light.shadow_near, light.shadow_far, FovToZoomFactor(2.f * light.outer_angle), {1.f, 1.f});
 		const auto frustum = MakeFrustum(proj, light.world);
 		const auto crop_mtx = ComputeCropMatrix();
 		shadow_data.spot_shadow_mtx = crop_mtx * (proj * view);

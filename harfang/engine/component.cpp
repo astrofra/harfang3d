@@ -810,6 +810,11 @@ Object Scene::CreateObject(const ModelRef &model, std::vector<Material> material
 Light Scene::CreateLight() { return {scene_ref, lights.add_ref({})}; }
 void Scene::DestroyLight(ComponentRef ref) { lights.remove_ref(ref); }
 
+static void ClampLightShadowRange(float &shadow_near, float &shadow_far) {
+	shadow_near = Clamp(shadow_near, 0.0001f, Max(shadow_far - 0.0001f, 0.0001f));
+	shadow_far = Max(shadow_far, shadow_near + 0.0001f);
+}
+
 LightType Scene::GetLightType(ComponentRef ref) const {
 	if (const auto *c = GetComponent_(lights, ref))
 		return c->type;
@@ -1172,23 +1177,117 @@ void Light::SetShadowBias(float v) {
 		warn("Orphaned light component");
 }
 
+float Scene::GetLightShadowNear(ComponentRef ref) const {
+	if (const auto *c = GetComponent_(lights, ref))
+		return c->shadow_near;
+
+	warn("Invalid light component");
+	return {};
+}
+
+void Scene::SetLightShadowNear(ComponentRef ref, float v) {
+	if (auto *c = GetComponent_(lights, ref))
+		c->shadow_near = Clamp(v, 0.0001f, Max(c->shadow_far - 0.0001f, 0.0001f));
+	else
+		warn("Invalid light component");
+}
+
+float Light::GetShadowNear() const {
+	if (scene_ref && scene_ref->scene)
+		return scene_ref->scene->GetLightShadowNear(ref);
+
+	warn("Orphaned light component");
+	return {};
+}
+
+void Light::SetShadowNear(float v) {
+	if (scene_ref && scene_ref->scene)
+		scene_ref->scene->SetLightShadowNear(ref, v);
+	else
+		warn("Orphaned light component");
+}
+
+float Scene::GetLightShadowFar(ComponentRef ref) const {
+	if (const auto *c = GetComponent_(lights, ref))
+		return c->shadow_far;
+
+	warn("Invalid light component");
+	return {};
+}
+
+void Scene::SetLightShadowFar(ComponentRef ref, float v) {
+	if (auto *c = GetComponent_(lights, ref))
+		c->shadow_far = Max(v, c->shadow_near + 0.0001f);
+	else
+		warn("Invalid light component");
+}
+
+float Light::GetShadowFar() const {
+	if (scene_ref && scene_ref->scene)
+		return scene_ref->scene->GetLightShadowFar(ref);
+
+	warn("Orphaned light component");
+	return {};
+}
+
+void Light::SetShadowFar(float v) {
+	if (scene_ref && scene_ref->scene)
+		scene_ref->scene->SetLightShadowFar(ref, v);
+	else
+		warn("Orphaned light component");
+}
+
 //
 Light Scene::CreateLinearLight(const Color &diffuse, float diffuse_intensity, const Color &specular, float specular_intensity, float priority,
 	LightShadowType shadow_type, float shadow_bias, const Vec4 &pssm_split) {
-	return {scene_ref,
-		lights.add_ref({LT_Linear, shadow_type, diffuse, diffuse_intensity, specular, specular_intensity, 0, 0, 0, pssm_split, priority, shadow_bias})};
+	Light_ light;
+	light.type = LT_Linear;
+	light.shadow_type = shadow_type;
+	light.diffuse = diffuse;
+	light.diffuse_intensity = diffuse_intensity;
+	light.specular = specular;
+	light.specular_intensity = specular_intensity;
+	light.pssm_split = pssm_split;
+	light.priority = priority;
+	light.shadow_bias = shadow_bias;
+	return {scene_ref, lights.add_ref(light)};
 }
 
 Light Scene::CreatePointLight(const float radius, const Color &diffuse, float diffuse_intensity, const Color &specular, float specular_intensity,
 	float priority, LightShadowType shadow_type, float shadow_bias) {
-	return {scene_ref,
-		lights.add_ref({LT_Point, shadow_type, diffuse, diffuse_intensity, specular, specular_intensity, radius, 0, 0, Vec4::Zero, priority, shadow_bias})};
+	Light_ light;
+	light.type = LT_Point;
+	light.shadow_type = shadow_type;
+	light.diffuse = diffuse;
+	light.diffuse_intensity = diffuse_intensity;
+	light.specular = specular;
+	light.specular_intensity = specular_intensity;
+	light.radius = radius;
+	light.pssm_split = Vec4::Zero;
+	light.priority = priority;
+	light.shadow_bias = shadow_bias;
+	return {scene_ref, lights.add_ref(light)};
 }
 
 Light Scene::CreateSpotLight(const float radius, const float inner_angle, const float outer_angle, const Color &diffuse, float diffuse_intensity,
-	const Color &specular, float specular_intensity, float priority, LightShadowType shadow_type, float shadow_bias) {
-	return {scene_ref, lights.add_ref({LT_Spot, shadow_type, diffuse, diffuse_intensity, specular, specular_intensity, radius, inner_angle, outer_angle,
-						   Vec4::Zero, priority, shadow_bias})};
+	const Color &specular, float specular_intensity, float priority, LightShadowType shadow_type, float shadow_bias, float shadow_near, float shadow_far) {
+	Light_ light;
+	light.type = LT_Spot;
+	light.shadow_type = shadow_type;
+	light.diffuse = diffuse;
+	light.diffuse_intensity = diffuse_intensity;
+	light.specular = specular;
+	light.specular_intensity = specular_intensity;
+	light.radius = radius;
+	light.inner_angle = inner_angle;
+	light.outer_angle = outer_angle;
+	light.pssm_split = Vec4::Zero;
+	light.priority = priority;
+	light.shadow_bias = shadow_bias;
+	light.shadow_near = shadow_near;
+	light.shadow_far = shadow_far;
+	ClampLightShadowRange(light.shadow_near, light.shadow_far);
+	return {scene_ref, lights.add_ref(light)};
 }
 
 //

@@ -165,6 +165,10 @@ struct Light { // 16B on 64 bit
 	void SetPriority(float v);
 	float GetShadowBias() const;
 	void SetShadowBias(float v);
+	float GetShadowNear() const;
+	void SetShadowNear(float v);
+	float GetShadowFar() const;
+	void SetShadowFar(float v);
 
 	intrusive_shared_ptr_st<SceneRef> scene_ref;
 	ComponentRef ref;

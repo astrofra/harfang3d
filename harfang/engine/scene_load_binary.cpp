@@ -55,6 +55,8 @@ void SaveComponent(const Scene::Light_ *data_, const Writer &iw, const Handle &h
 	Write(iw, h, data_->pssm_split);
 	Write(iw, h, data_->priority);
 	Write(iw, h, data_->shadow_bias);
+	Write(iw, h, data_->shadow_near);
+	Write(iw, h, data_->shadow_far);
 }
 
 void SaveComponent(const Scene::RigidBody_ *data_, const Writer &iw, const Handle &h) {
@@ -158,6 +160,8 @@ void LoadComponent(Scene::Light_ *data_, const Reader &ir, const Handle &h) {
 	Read(ir, h, data_->pssm_split);
 	Read(ir, h, data_->priority);
 	Read(ir, h, data_->shadow_bias);
+	Read(ir, h, data_->shadow_near);
+	Read(ir, h, data_->shadow_far);
 }
 
 void LoadComponent(Scene::RigidBody_ *data_, const Reader &ir, const Handle &h) {
@@ -232,7 +236,7 @@ static void SkipProbe(const Reader &ir, const Handle &h) {
 }
 
 //
-uint32_t GetSceneBinaryFormatVersion() { return 9; }
+uint32_t GetSceneBinaryFormatVersion() { return 10; }
 
 bool Scene::Save_binary(
 	const Writer &iw, const Handle &h, const PipelineResources &resources, uint32_t save_flags, const std::vector<NodeRef> *nodes_to_save) const {
@@ -253,6 +257,7 @@ bool Scene::Save_binary(
 		version 7: store animation chunk size so that it can be jumped over without parsing its content
 		version 8: save collision properties
 		version 9: save environment probe
+		version 10: save light shadow near/far
 	*/
 	const auto version = GetSceneBinaryFormatVersion();
 	Write<uint32_t>(iw, h, version);

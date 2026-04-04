@@ -392,7 +392,7 @@ void GetSceneForwardPipelineLights(const Scene &scene, std::vector<ForwardPipeli
 		const auto trs = light.GetTransform();
 		const auto lgt = light.GetLight();
 
-		ForwardPipelineLight lgt_;
+		ForwardPipelineLight lgt_{};
 
 		lgt_.world = scene.GetTransformWorldMatrix(trs.ref.idx);
 		lgt_.diffuse = lgt.GetDiffuseColor() * lgt.GetDiffuseIntensity();
@@ -412,6 +412,8 @@ void GetSceneForwardPipelineLights(const Scene &scene, std::vector<ForwardPipeli
 			lgt_.radius = lgt.GetRadius();
 			lgt_.inner_angle = lgt.GetInnerAngle();
 			lgt_.outer_angle = lgt.GetOuterAngle();
+			lgt_.shadow_near = lgt.GetShadowNear();
+			lgt_.shadow_far = lgt.GetShadowFar();
 		} else { // fall back to point
 			lgt_.type = FPLT_Point;
 			lgt_.pssm_split = Vec4::Zero;
