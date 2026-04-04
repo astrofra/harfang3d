@@ -380,7 +380,7 @@ void UnmountLauncherAssets(const MountedAssets &mounted_assets) {
 
 } // namespace
 
-int main() {
+int LauncherMain() {
 	const auto cwd = hg::GetCurrentWorkingDirectory();
 	MountedAssets mounted_assets;
 	if (!MountLauncherAssets(cwd, mounted_assets)) {
@@ -430,3 +430,9 @@ int main() {
 	UnmountLauncherAssets(mounted_assets);
 	return ok ? 0 : 1;
 }
+
+int main() { return LauncherMain(); }
+
+#if defined(_WIN32) && defined(HG_LUA_LAUNCHER_NO_CONSOLE)
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return LauncherMain(); }
+#endif
