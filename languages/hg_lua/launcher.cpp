@@ -1,5 +1,8 @@
 // HARFANG(R) Copyright (C) 2026 NWNC. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 
+#include <engine/assets.h>
+
+#include <foundation/data.h>
 #include <foundation/dir.h>
 #include <foundation/file.h>
 #include <foundation/path_tools.h>
@@ -13,6 +16,7 @@ extern "C" {
 }
 
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -32,6 +36,14 @@ struct LauncherConfig {
 	std::string entry;
 	std::vector<std::string> args;
 };
+
+struct MountedAssets {
+	std::string folder_path;
+	std::string package_path;
+};
+
+std::vector<std::string> MakeAssetPathCandidates(const std::string &name);
+bool ResolveAssetName(const std::string &name, std::string &resolved_name);
 
 std::string GetExecutablePath() {
 #if defined(_WIN32)
@@ -65,11 +77,10 @@ std::string JsonValueToArg(const json &value) {
 	return value.dump();
 }
 
-bool LoadConfig(const std::string &path, LauncherConfig &config, std::string &error) {
+bool ParseConfig(const std::string &content, const std::string &source, LauncherConfig &config, std::string &error) {
 	try {
-		const auto content = hg::FileToString(path.c_str());
 		if (content.empty()) {
-			error = "configuration file is empty: " + path;
+			error = "configuration file is empty: " + source;
 			return false;
 		}
 
@@ -101,9 +112,60 @@ bool LoadConfig(const std::string &path, LauncherConfig &config, std::string &er
 
 		return true;
 	} catch (const json::exception &e) {
-		error = "invalid JSON in " + path + ": " + e.what();
+		error = "invalid JSON in " + source + ": " + e.what();
 		return false;
 	}
+}
+
+bool LoadTextFile(const std::string &path, std::string &content, std::string &error) {
+	content = hg::FileToString(path.c_str());
+	if (content.empty() && !hg::Exists(path.c_str())) {
+		error = "file not found: " + path;
+		return false;
+	}
+	return true;
+}
+
+bool LoadTextAsset(const std::string &name, std::string &content, std::string &error) {
+	std::string resolved_name;
+	if (!ResolveAssetName(name, resolved_name)) {
+		error = "asset not found: " + name;
+		return false;
+	}
+
+	content = hg::AssetToString(resolved_name.c_str());
+	return true;
+}
+
+std::vector<std::string> MakeAssetPathCandidates(const std::string &name) {
+	std::set<std::string> unique;
+	unique.insert(name);
+
+	auto slash = name;
+	for (auto &ch : slash)
+		if (ch == '\\')
+			ch = '/';
+	unique.insert(slash);
+
+	auto backslash = name;
+	for (auto &ch : backslash)
+		if (ch == '/')
+			ch = '\\';
+	unique.insert(backslash);
+
+	return {unique.begin(), unique.end()};
+}
+
+bool ResolveAssetName(const std::string &name, std::string &resolved_name) {
+	for (const auto &candidate : MakeAssetPathCandidates(name)) {
+		if (!hg::IsAssetFile(candidate.c_str()))
+			continue;
+
+		resolved_name = candidate;
+		return true;
+	}
+
+	return false;
 }
 
 int MessageHandler(lua_State *L) {
@@ -185,15 +247,72 @@ void ConfigurePackagePaths(lua_State *L, const std::string &exe_dir, const std::
 	});
 }
 
-bool RunEntryPoint(lua_State *L, const std::string &entry_path, const std::vector<std::string> &args) {
-	CreateArgTable(L, entry_path, args);
-
-	auto status = luaL_loadfile(L, entry_path.c_str());
-	if (status == LUA_OK) {
-		const auto nargs = PushArgs(L);
-		status = ProtectedCall(L, nargs, LUA_MULTRET);
+std::string ResolveAssetDisplayPath(const MountedAssets &mounted_assets, const std::string &name) {
+	if (!mounted_assets.folder_path.empty()) {
+		const auto folder_asset_path = hg::PathJoin(mounted_assets.folder_path, name);
+		if (hg::Exists(folder_asset_path.c_str()))
+			return folder_asset_path;
 	}
 
+	if (!mounted_assets.package_path.empty())
+		return mounted_assets.package_path + ":" + name;
+
+	return name;
+}
+
+std::string ModuleNameToAssetPath(const std::string &module_name) {
+	std::string path = module_name;
+	for (auto &ch : path)
+		if (ch == '.')
+			ch = '/';
+	return path;
+}
+
+int AssetSearcher(lua_State *L) {
+	const auto *module_name = luaL_checkstring(L, 1);
+	const auto base_name = ModuleNameToAssetPath(module_name);
+
+	for (const auto &candidate : {base_name + ".lua", base_name + "/init.lua"}) {
+		std::string resolved_name;
+		if (!ResolveAssetName(candidate, resolved_name))
+			continue;
+
+		const auto source = hg::AssetToData(resolved_name.c_str());
+		const auto chunk_name = "@" + resolved_name;
+		const auto status = luaL_loadbuffer(L, reinterpret_cast<const char *>(source.GetData()), source.GetSize(), chunk_name.c_str());
+		if (status == LUA_OK) {
+			lua_pushstring(L, resolved_name.c_str());
+			return 2;
+		}
+
+		return 1;
+	}
+
+	lua_pushfstring(L, "\n\tno asset module '%s'", module_name);
+	return 1;
+}
+
+void InstallAssetSearcher(lua_State *L) {
+	lua_getglobal(L, "package");
+	lua_getfield(L, -1, "searchers");
+
+	const auto count = static_cast<int>(luaL_len(L, -1));
+	for (int i = count + 1; i > 2; --i) {
+		lua_rawgeti(L, -1, i - 1);
+		lua_rawseti(L, -2, i);
+	}
+
+	lua_pushcfunction(L, AssetSearcher);
+	lua_rawseti(L, -2, 2);
+
+	lua_pop(L, 2);
+}
+
+bool RunLoadedChunk(lua_State *L, const std::string &script_name, const std::vector<std::string> &args) {
+	CreateArgTable(L, script_name, args);
+
+	const auto nargs = PushArgs(L);
+	const auto status = ProtectedCall(L, nargs, LUA_MULTRET);
 	if (status != LUA_OK) {
 		const auto *message = lua_tostring(L, -1);
 		PrintError(message != nullptr ? message : "unknown Lua error");
@@ -204,54 +323,116 @@ bool RunEntryPoint(lua_State *L, const std::string &entry_path, const std::vecto
 	return true;
 }
 
+bool RunEntryPoint(lua_State *L, const MountedAssets &mounted_assets, const std::string &entry_name, const std::vector<std::string> &args) {
+	if (hg::IsPathAbsolute(entry_name)) {
+		CreateArgTable(L, entry_name, args);
+
+		const auto status = luaL_loadfile(L, entry_name.c_str());
+		if (status != LUA_OK) {
+			const auto *message = lua_tostring(L, -1);
+			PrintError(message != nullptr ? message : "unknown Lua error");
+			lua_pop(L, 1);
+			return false;
+		}
+
+		return RunLoadedChunk(L, entry_name, args);
+	}
+
+	std::string resolved_name;
+	if (!ResolveAssetName(entry_name, resolved_name)) {
+		PrintError("entry script not found in mounted assets: " + entry_name);
+		return false;
+	}
+
+	const auto source = hg::AssetToData(resolved_name.c_str());
+	const auto display_path = ResolveAssetDisplayPath(mounted_assets, resolved_name);
+	const auto chunk_name = "@" + display_path;
+	const auto status = luaL_loadbuffer(L, reinterpret_cast<const char *>(source.GetData()), source.GetSize(), chunk_name.c_str());
+	if (status != LUA_OK) {
+		const auto *message = lua_tostring(L, -1);
+		PrintError(message != nullptr ? message : "unknown Lua error");
+		lua_pop(L, 1);
+		return false;
+	}
+
+	return RunLoadedChunk(L, display_path, args);
+}
+
+bool MountLauncherAssets(const std::string &cwd, MountedAssets &mounted_assets) {
+	const auto data_dir = hg::PathJoin(cwd, "data");
+	const auto data_zip = hg::PathJoin(cwd, "data.zip");
+
+	if (hg::IsDir(data_dir.c_str()) && hg::AddAssetsFolder(data_dir.c_str()))
+		mounted_assets.folder_path = data_dir;
+
+	if (hg::Exists(data_zip.c_str()) && hg::AddAssetsPackage(data_zip.c_str()))
+		mounted_assets.package_path = data_zip;
+
+	return !mounted_assets.folder_path.empty() || !mounted_assets.package_path.empty();
+}
+
+void UnmountLauncherAssets(const MountedAssets &mounted_assets) {
+	if (!mounted_assets.folder_path.empty())
+		hg::RemoveAssetsFolder(mounted_assets.folder_path.c_str());
+	if (!mounted_assets.package_path.empty())
+		hg::RemoveAssetsPackage(mounted_assets.package_path.c_str());
+}
+
 } // namespace
 
-int main() {
+int LauncherMain() {
 	const auto cwd = hg::GetCurrentWorkingDirectory();
-	const auto data_dir = hg::PathJoin(cwd, "data");
-	const auto config_path = hg::PathJoin(data_dir, "launcher.json");
-
-	if (!hg::IsDir(data_dir.c_str())) {
-		PrintError("missing data directory in current working directory: " + data_dir);
+	MountedAssets mounted_assets;
+	if (!MountLauncherAssets(cwd, mounted_assets)) {
+		PrintError("missing data source in current working directory: expected data/ or data.zip");
 		return 1;
 	}
 
-	if (!hg::Exists(config_path.c_str())) {
-		PrintError("missing launcher configuration: " + config_path);
+	std::string config_content, error;
+	if (!LoadTextAsset("launcher.json", config_content, error)) {
+		PrintError(error);
+		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
 
 	LauncherConfig config;
-	std::string error;
-	if (!LoadConfig(config_path, config, error)) {
+	const auto config_source = ResolveAssetDisplayPath(mounted_assets, "launcher.json");
+	if (!ParseConfig(config_content, config_source, config, error)) {
 		PrintError(error);
-		return 1;
-	}
-
-	const auto entry_path = hg::CleanPath(hg::IsPathAbsolute(config.entry) ? config.entry : hg::PathJoin(data_dir, config.entry));
-	if (!hg::Exists(entry_path.c_str())) {
-		PrintError("entry script not found: " + entry_path);
+		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
 
 	const auto exe_path = GetExecutablePath();
 	const auto exe_dir = exe_path.empty() ? cwd : hg::CutFilePath(exe_path);
+	const auto data_dir = hg::PathJoin(cwd, "data");
 
 	auto *L = luaL_newstate();
 	if (L == nullptr) {
 		PrintError("failed to create Lua state");
+		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
 
 	luaL_openlibs(L);
 	ConfigurePackagePaths(L, exe_dir, data_dir);
+	InstallAssetSearcher(L);
 
-	lua_pushstring(L, data_dir.c_str());
+	lua_pushstring(L, mounted_assets.folder_path.c_str());
 	lua_setglobal(L, "LAUNCHER_DATA_DIR");
-	lua_pushstring(L, config_path.c_str());
+	lua_pushstring(L, mounted_assets.package_path.c_str());
+	lua_setglobal(L, "LAUNCHER_DATA_PACKAGE");
+	lua_pushstring(L, config_source.c_str());
 	lua_setglobal(L, "LAUNCHER_CONFIG_PATH");
 
-	const auto ok = RunEntryPoint(L, entry_path, config.args);
+	const auto ok = RunEntryPoint(L, mounted_assets, config.entry, config.args);
 	lua_close(L);
+	UnmountLauncherAssets(mounted_assets);
 	return ok ? 0 : 1;
 }
+
+int main() { return LauncherMain(); }
+
+#if defined(_WIN32) && defined(HG_LUA_LAUNCHER_NO_CONSOLE)
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) { return LauncherMain(); }
+#endif
