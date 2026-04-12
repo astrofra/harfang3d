@@ -387,6 +387,10 @@ public:
 	void SetLightPriority(ComponentRef ref, float v);
 	float GetLightShadowBias(ComponentRef ref) const;
 	void SetLightShadowBias(ComponentRef ref, float v);
+	float GetLightShadowNear(ComponentRef ref) const;
+	void SetLightShadowNear(ComponentRef ref, float v);
+	float GetLightShadowFar(ComponentRef ref) const;
+	void SetLightShadowFar(ComponentRef ref, float v);
 
 	/// Create a Node with a Transform and a point Light component.
 	Light CreatePointLight(float radius, const Color &diffuse = {1, 1, 1}, float diffuse_intensity = 1, const Color &specular = {1, 1, 1},
@@ -394,7 +398,7 @@ public:
 	/// Create a Node with a Transform and a spot Light component.
 	Light CreateSpotLight(float radius, float inner_angle, float outer_angle, const Color &diffuse = {1, 1, 1}, float diffuse_intensity = 1,
 		const Color &specular = {1, 1, 1}, float specular_intensity = 1, float priority = 0, LightShadowType shadow_type = LST_None,
-		float shadow_bias = default_shadow_bias);
+		float shadow_bias = default_shadow_bias, float shadow_near = 0.1f, float shadow_far = 100.f);
 	/// Create a Node with a Transform and a linear Light component.
 	Light CreateLinearLight(const Color &diffuse = {1, 1, 1}, float diffuse_intensity = 1, const Color &specular = {1, 1, 1}, float specular_intensity = 1,
 		float priority = 0, LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias, const Vec4 &pssm_split = default_pssm_split);
@@ -404,8 +408,8 @@ public:
 		return CreatePointLight(radius, diffuse, 1, specular, 1, priority, shadow_type, shadow_bias);
 	}
 	Light CreateSpotLight(float radius, float inner_angle, float outer_angle, const Color &diffuse, const Color &specular, float priority = 0,
-		LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias) {
-		return CreateSpotLight(radius, inner_angle, outer_angle, diffuse, 1, specular, 1, priority, shadow_type, shadow_bias);
+		LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias, float shadow_near = 0.1f, float shadow_far = 100.f) {
+		return CreateSpotLight(radius, inner_angle, outer_angle, diffuse, 1, specular, 1, priority, shadow_type, shadow_bias, shadow_near, shadow_far);
 	}
 	Light CreateLinearLight(const Color &diffuse, const Color &specular, float priority = 0, LightShadowType shadow_type = LST_None,
 		float shadow_bias = default_shadow_bias, const Vec4 &pssm_split = default_pssm_split) {
@@ -771,6 +775,8 @@ private:
 		float priority{0.f};
 
 		float shadow_bias{default_shadow_bias};
+		float shadow_near{0.1f};
+		float shadow_far{100.f};
 	};
 
 	struct RigidBody_ { // 6B
@@ -921,7 +927,7 @@ Node CreatePointLight(Scene &scene, const Mat4 &mtx, float radius, const Color &
 	float shadow_bias = default_shadow_bias);
 Node CreateSpotLight(Scene &scene, const Mat4 &mtx, float radius, float inner_angle, float outer_angle, const Color &diffuse = {1, 1, 1},
 	float diffuse_intensity = 1, const Color &specular = {1, 1, 1}, float specular_intensity = 1, float priority = 0, LightShadowType shadow_type = LST_None,
-	float shadow_bias = default_shadow_bias);
+	float shadow_bias = default_shadow_bias, float shadow_near = 0.1f, float shadow_far = 100.f);
 Node CreateLinearLight(Scene &scene, const Mat4 &mtx, const Color &diffuse = {1, 1, 1}, float diffuse_intensity = 1, const Color &specular = {1, 1, 1},
 	float specular_intensity = 1, float priority = 0, LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias,
 	const Vec4 &pssm_split = default_pssm_split);
@@ -929,7 +935,8 @@ Node CreateLinearLight(Scene &scene, const Mat4 &mtx, const Color &diffuse = {1,
 Node CreatePointLight(Scene &scene, const Mat4 &mtx, float radius, const Color &diffuse, const Color &specular, float priority = 0.f,
 	LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias);
 Node CreateSpotLight(Scene &scene, const Mat4 &mtx, float radius, float inner_angle, float outer_angle, const Color &diffuse, const Color &specular,
-	float priority = 0, LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias);
+	float priority = 0, LightShadowType shadow_type = LST_None, float shadow_bias = default_shadow_bias, float shadow_near = 0.1f,
+	float shadow_far = 100.f);
 Node CreateLinearLight(Scene &scene, const Mat4 &mtx, const Color &diffuse, const Color &specular, float priority = 0, LightShadowType shadow_type = LST_None,
 	float shadow_bias = default_shadow_bias, const Vec4 &pssm_split = default_pssm_split);
 

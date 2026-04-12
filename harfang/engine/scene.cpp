@@ -1470,12 +1470,12 @@ Node CreatePointLight(Scene &scene, const Mat4 &mtx, float radius, const Color &
 }
 
 Node CreateSpotLight(Scene &scene, const Mat4 &mtx, float radius, float inner_angle, float outer_angle, const Color &diffuse, float diffuse_intensity,
-	const Color &specular, float specular_intensity, float priority, LightShadowType shadow_type, float shadow_bias) {
+	const Color &specular, float specular_intensity, float priority, LightShadowType shadow_type, float shadow_bias, float shadow_near, float shadow_far) {
 	Node node = scene.CreateNode();
 	node.SetName("Spot Light");
 	node.SetTransform(scene.CreateTransform(mtx));
-	node.SetLight(
-		scene.CreateSpotLight(radius, inner_angle, outer_angle, diffuse, diffuse_intensity, specular, specular_intensity, priority, shadow_type, shadow_bias));
+	node.SetLight(scene.CreateSpotLight(
+		radius, inner_angle, outer_angle, diffuse, diffuse_intensity, specular, specular_intensity, priority, shadow_type, shadow_bias, shadow_near, shadow_far));
 	return node;
 }
 
@@ -2739,8 +2739,9 @@ Node CreatePointLight(
 }
 
 Node CreateSpotLight(Scene &scene, const Mat4 &mtx, float radius, float inner_angle, float outer_angle, const Color &diffuse, const Color &specular,
-	float priority, LightShadowType shadow_type, float shadow_bias) {
-	return CreateSpotLight(scene, mtx, radius, inner_angle, outer_angle, diffuse, 1.f, specular, 1.f, priority, shadow_type, shadow_bias);
+	float priority, LightShadowType shadow_type, float shadow_bias, float shadow_near, float shadow_far) {
+	return CreateSpotLight(scene, mtx, radius, inner_angle, outer_angle, diffuse, 1.f, specular, 1.f, priority, shadow_type, shadow_bias, shadow_near,
+		shadow_far);
 }
 
 Node CreateLinearLight(Scene &scene, const Mat4 &mtx, const Color &diffuse, const Color &specular, float priority, LightShadowType shadow_type,

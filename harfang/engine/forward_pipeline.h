@@ -29,7 +29,7 @@ enum ForwardPipelineShadowType { FPST_None, FPST_Map };
 	@note The complete lighting rig is passed as a ForwardPipelineLights.
 	@see PrepareForwardPipelineLights.
 */
-struct ForwardPipelineLight { // 112B
+struct ForwardPipelineLight {
 	ForwardPipelineLightType type;
 	ForwardPipelineShadowType shadow_type;
 
@@ -42,6 +42,8 @@ struct ForwardPipelineLight { // 112B
 	Vec4 pssm_split;
 	float priority;
 	float shadow_bias;
+	float shadow_near;
+	float shadow_far;
 };
 
 ForwardPipelineLight MakeForwardPipelinePointLight(const Mat4 &world, const Color &diffuse, const Color &specular, float radius = 0.f, float priority = 0.f,

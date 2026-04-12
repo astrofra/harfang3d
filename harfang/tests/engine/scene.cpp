@@ -21,6 +21,7 @@
 
 #include "foundation/data.h"
 #include "foundation/data_rw_interface.h"
+#include "foundation/math.h"
 
 using namespace hg;
 
@@ -344,6 +345,89 @@ static void test_LoadSaveLightBinary() {
 	}
 }
 
+static void test_SpotLightShadowRange() {
+	Scene scene;
+
+	auto light = scene.CreateSpotLight(3.f, Deg(10.f), Deg(15.f));
+	TEST_CHECK(AlmostEqual(scene.GetLightShadowNear(light.ref), 0.1f));
+	TEST_CHECK(AlmostEqual(scene.GetLightShadowFar(light.ref), 100.f));
+
+	scene.SetLightShadowNear(light.ref, 0.25f);
+	scene.SetLightShadowFar(light.ref, 25.f);
+	TEST_CHECK(AlmostEqual(light.GetShadowNear(), 0.25f));
+	TEST_CHECK(AlmostEqual(light.GetShadowFar(), 25.f));
+
+	light.SetShadowNear(0.f);
+	TEST_CHECK(AlmostEqual(light.GetShadowNear(), 0.0001f, 1e-6f));
+
+	light.SetShadowFar(light.GetShadowNear());
+	TEST_CHECK(AlmostEqual(light.GetShadowFar(), light.GetShadowNear() + 0.0001f, 1e-6f));
+
+	light.SetShadowFar(5.f);
+	light.SetShadowNear(5.f);
+	TEST_CHECK(AlmostEqual(light.GetShadowNear(), 4.9999f, 1e-5f));
+
+	const auto configured = scene.CreateSpotLight(4.f, Deg(12.f), Deg(20.f), Color::White, Color::White, 0.f, LST_None, default_shadow_bias, 0.5f, 50.f);
+	TEST_CHECK(AlmostEqual(configured.GetShadowNear(), 0.5f));
+	TEST_CHECK(AlmostEqual(configured.GetShadowFar(), 50.f));
+}
+
+static void test_ForwardPipelineSpotLightShadowRangePropagation() {
+	Scene scene;
+
+	CreateSpotLight(scene, Mat4::Identity, 6.f, Deg(10.f), Deg(20.f), Color::White, Color::White, 0.f, LST_Map, default_shadow_bias, 0.35f, 35.f);
+
+	std::vector<ForwardPipelineLight> out_lights;
+	GetSceneForwardPipelineLights(scene, out_lights);
+
+	TEST_CHECK(out_lights.size() == 1);
+	TEST_CHECK(out_lights[0].type == FPLT_Spot);
+	TEST_CHECK(AlmostEqual(out_lights[0].shadow_near, 0.35f));
+	TEST_CHECK(AlmostEqual(out_lights[0].shadow_far, 35.f));
+}
+
+static void test_LoadSaveSpotLightShadowRange() {
+	PipelineResources resources;
+
+	Data json_data;
+	{
+		Scene scene;
+		CreateSpotLight(scene, Mat4::Identity, 8.f, Deg(15.f), Deg(25.f), Color::White, Color::White, 0.f, LST_Map, default_shadow_bias, 0.4f, 40.f);
+		TEST_CHECK(SaveSceneJsonToData(json_data, scene, resources) == true);
+	}
+
+	json_data.Rewind();
+
+	{
+		Scene scene;
+		LoadSceneContext ctx;
+		TEST_CHECK(LoadSceneJsonFromData(json_data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx) == true);
+		const auto lights = scene.GetLights();
+		TEST_CHECK(lights.size() == 1);
+		TEST_CHECK(AlmostEqual(lights[0].GetLight().GetShadowNear(), 0.4f));
+		TEST_CHECK(AlmostEqual(lights[0].GetLight().GetShadowFar(), 40.f));
+	}
+
+	Data binary_data;
+	{
+		Scene scene;
+		CreateSpotLight(scene, Mat4::Identity, 8.f, Deg(15.f), Deg(25.f), Color::White, Color::White, 0.f, LST_Map, default_shadow_bias, 0.6f, 60.f);
+		TEST_CHECK(SaveSceneBinaryToData(binary_data, scene, resources) == true);
+	}
+
+	binary_data.Rewind();
+
+	{
+		Scene scene;
+		LoadSceneContext ctx;
+		TEST_CHECK(LoadSceneBinaryFromData(binary_data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx) == true);
+		const auto lights = scene.GetLights();
+		TEST_CHECK(lights.size() == 1);
+		TEST_CHECK(AlmostEqual(lights[0].GetLight().GetShadowNear(), 0.6f));
+		TEST_CHECK(AlmostEqual(lights[0].GetLight().GetShadowFar(), 60.f));
+	}
+}
+
 static void test_SceneLuaVM() {
 	Scene scene;
 	const auto node = CreateScript(scene);
@@ -639,6 +723,9 @@ void test_scene() {
 	test_LoadSaveCameraBinary();
 	test_LoadSaveLight();
 	test_LoadSaveLightBinary();
+	test_SpotLightShadowRange();
+	test_ForwardPipelineSpotLightShadowRangePropagation();
+	test_LoadSaveSpotLightShadowRange();
 	test_SceneLuaVM();
 	test_LuaScriptSceneOnUpdateEventCallback();
 	test_LuaScriptSceneOnCreateOnDestroyEventCallback();

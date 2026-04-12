@@ -69,6 +69,8 @@ void SaveComponent(const Scene::Light_ *data_, json &js) {
 	js["pssm_split"] = data_->pssm_split;
 	js["priority"] = data_->priority;
 	js["shadow_bias"] = data_->shadow_bias;
+	js["shadow_near"] = data_->shadow_near;
+	js["shadow_far"] = data_->shadow_far;
 }
 
 void SaveComponent(const Scene::RigidBody_ *data_, json &js) {
@@ -197,6 +199,10 @@ void LoadComponent(Scene::Light_ *data_, const json &js) {
 	data_->priority = js["priority"];
 	if (js.find("shadow_bias") != std::end(js))
 		data_->shadow_bias = js["shadow_bias"];
+	if (js.find("shadow_near") != std::end(js))
+		data_->shadow_near = js["shadow_near"];
+	if (js.find("shadow_far") != std::end(js))
+		data_->shadow_far = js["shadow_far"];
 }
 
 void LoadComponent(Scene::RigidBody_ *data_, const json &js) {
