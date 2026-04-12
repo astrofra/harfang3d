@@ -1,12 +1,11 @@
 local hg = require("harfang")
+local AssetCompiler = require("editor.asset_compiler")
 
 local Project = {}
 Project.__index = Project
 
 local function normalize(path)
-	path = hg.CleanPath(path)
-	path = hg.NormalizePath(path)
-	return path:gsub("\\", "/")
+	return hg.CleanPath(path or ""):gsub("\\", "/")
 end
 
 local function lower(path)
@@ -45,11 +44,13 @@ function Project.new()
 	self.project_file = ""
 	self.root = ""
 	self.compiled_root = ""
+	self.assetc_path = ""
 	self.db = {}
 	self.db_raw = ""
 	self.selection = {}
 	self.filter = ""
 	self.last_error = ""
+	self.last_compile_log = ""
 	self.blacklist = {
 		["_meta"] = true,
 		["_prod"] = true,
@@ -78,7 +79,8 @@ function Project:absolute_path(path)
 	return normalize(hg.GetCurrentWorkingDirectory() .. "/" .. path)
 end
 
-function Project:open(project_file)
+function Project:open(project_file, options)
+	options = options or {}
 	local path = self:absolute_path(project_file)
 
 	if path == "" then
@@ -94,24 +96,59 @@ function Project:open(project_file)
 		return false
 	end
 
-	self.project_file = path
-	self.root = normalize(hg.GetFilePath(path))
-	self.compiled_root = ""
-	for _, candidate in ipairs({
-		self.root .. "_compiled",
-		self.root:gsub("/resources$", "/resources_compiled"),
-		self.root .. "/resources_compiled",
-	}) do
-		if candidate ~= self.root and hg.Exists(candidate) and hg.IsDir(candidate) then
-			self.compiled_root = normalize(candidate)
-			break
+	local root = normalize(hg.GetFilePath(path))
+	local compiled_root = ""
+	local compile_log = ""
+	local assetc_path = normalize(options.assetc_path or self.assetc_path or "")
+
+	if options.compile_assets ~= false then
+		local ok, output_root, err, log = AssetCompiler.compile_project(path, root, {
+			assetc_path = assetc_path,
+			cache_root = options.compiled_cache_root,
+			output_root = options.compiled_root,
+		})
+		compile_log = log or ""
+		if not ok then
+			self.last_error = err
+			self.last_compile_log = compile_log
+			return false
 		end
+		compiled_root = output_root
 	end
+
+	self.project_file = path
+	self.root = root
+	self.compiled_root = normalize(compiled_root)
+	self.assetc_path = assetc_path
 	self.db = {}
 	self.db_raw = hg.FileToString(path) or ""
 	self.selection = {}
 	self.last_error = ""
+	self.last_compile_log = compile_log
 
+	return true
+end
+
+function Project:compile_assets(options)
+	if not self:is_open() then
+		self.last_error = "No project is open."
+		return false
+	end
+
+	options = options or {}
+	local ok, output_root, err, log = AssetCompiler.compile_project(self.project_file, self.root, {
+		assetc_path = options.assetc_path or self.assetc_path,
+		cache_root = options.compiled_cache_root,
+		output_root = options.compiled_root or self.compiled_root,
+	})
+	self.last_compile_log = log or ""
+	if not ok then
+		self.last_error = err
+		return false
+	end
+
+	self.compiled_root = normalize(output_root)
+	self.last_error = ""
 	return true
 end
 
@@ -144,6 +181,16 @@ function Project:path(relative_path)
 		return normalize(relative_path)
 	end
 	return normalize(self.root .. "/" .. relative_path)
+end
+
+function Project:compiled_path(relative_path)
+	if self.compiled_root == nil or self.compiled_root == "" then
+		return ""
+	end
+	if relative_path == nil or relative_path == "" then
+		return self.compiled_root
+	end
+	return normalize(self.compiled_root .. "/" .. relative_path)
 end
 
 function Project:relative_path(path)

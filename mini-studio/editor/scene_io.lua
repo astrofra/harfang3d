@@ -25,13 +25,17 @@ function SceneIO.load(project, relative_path, resources)
 		return nil, "Scene file does not exist: " .. absolute_path
 	end
 
-	local scene = hg.Scene()
-	local ok = false
-	if project.compiled_root ~= nil and project.compiled_root ~= "" and hg.Exists(project.compiled_root .. "/" .. relative_path) then
-		ok = hg.LoadSceneFromAssets(relative_path, scene, resources, hg.GetForwardPipelineInfo(), scene_flags())
-	else
-		ok = hg.LoadSceneFromFile(absolute_path, scene, resources, hg.GetForwardPipelineInfo(), scene_flags())
+	if project.compiled_root == nil or project.compiled_root == "" then
+		return nil, "Project assets are not compiled. Reopen the project to compile them."
 	end
+
+	local compiled_path = project:compiled_path(relative_path)
+	if not hg.Exists(compiled_path) or not hg.IsFile(compiled_path) then
+		return nil, "Compiled scene file does not exist: " .. compiled_path
+	end
+
+	local scene = hg.Scene()
+	local ok = hg.LoadSceneFromAssets(relative_path, scene, resources, hg.GetForwardPipelineInfo(), scene_flags())
 	if not ok then
 		return nil, "Failed to load scene: " .. relative_path
 	end

@@ -12,10 +12,12 @@ The first argument should be a `.prj` file. Extra arguments are project-relative
 
 `mini-studio/assets/core` is mounted as the local HARFANG runtime asset root for ImGui and pipeline shaders.
 
+When a project opens, Mini Studio runs `assetc` on the project folder and writes the compiled copy under `Documents/HARFANG_Mini_Studio/asset-cache/<project-name>-<hash>`. Scene loads use this compiled folder through `LoadSceneFromAssets`; scene saves still write to the original project folder.
+
 Implemented in this first pass:
 
 - HARFANG window, rendering, input, and ImGui app shell.
-- Project opening from `.prj` files, with project-root path helpers.
+- Project opening from `.prj` files, temporary asset compilation, and project-root path helpers.
 - Filtered project tree, hiding Studio implementation folders and sidecars.
 - Scene document manager with multi-scene loading and switching.
 - Scene graph tree with single-node selection.
@@ -23,4 +25,4 @@ Implemented in this first pass:
 - Projected 2D gizmo overlay for translation, rotation, and uniform scale.
 - Save Project and Save Scene commands.
 
-Deferred items remain the larger Studio features from the specification: asset compiler integration, docking, undo/redo, inspectors, scene editing commands, and thumbnail/icon views.
+Deferred items remain the larger Studio features from the specification: docking, undo/redo, inspectors, scene editing commands, and thumbnail/icon views.

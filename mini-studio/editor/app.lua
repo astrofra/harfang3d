@@ -5,6 +5,7 @@ local ProjectView = require("editor.project_view")
 local DocumentManager = require("editor.document_manager")
 local SceneGraph = require("editor.scene_graph")
 local Viewport = require("editor.viewport")
+local AssetCompiler = require("editor.asset_compiler")
 
 local App = {}
 App.__index = App
@@ -17,7 +18,7 @@ local function path_join(a, b)
 end
 
 local function normalize(path)
-	return hg.NormalizePath(hg.CleanPath(path)):gsub("\\", "/")
+	return hg.CleanPath(path or ""):gsub("\\", "/")
 end
 
 local function add_assets_folder_if_present(path)
@@ -36,6 +37,7 @@ function App.new(config)
 	self.initial_project = config.initial_project
 	self.initial_scenes = config.initial_scenes or {}
 	self.lua_binary = config.lua_binary or ""
+	self.assetc_path = config.assetc_path or AssetCompiler.assetc_from_lua_binary(self.lua_binary)
 	self.res_x = 1280
 	self.res_y = 800
 	self.render_flags = hg.RF_VSync | hg.RF_MSAA4X
@@ -47,6 +49,7 @@ function App.new(config)
 	self.keyboard = hg.Keyboard()
 	self.mouse = hg.Mouse()
 	self.status = ""
+	self.project_assets_folder = ""
 	self.open_project_popup_requested = false
 	self.open_project_path = path_join(self.script_dir, "assets/project.prj")
 	self.clear_color = hg.Color(0.08, 0.085, 0.095, 1)
@@ -56,13 +59,25 @@ end
 function App:resource_candidates()
 	local cwd = hg.GetCurrentWorkingDirectory():gsub("\\", "/")
 	local script_dir = self.script_dir:gsub("\\", "/")
+	local primary = path_join(script_dir, "assets")
+	if hg.Exists(path_join(primary, "core")) then
+		return { primary }
+	end
 	return {
-		path_join(script_dir, "assets"),
+		primary,
 		"resources_compiled",
 		"tutorials/resources_compiled",
 		path_join(cwd, "tutorials/resources_compiled"),
 		path_join(path_join(script_dir, ".."), "tutorials/resources_compiled"),
 	}
+end
+
+function App:clear_project_resources()
+	if self.resources ~= nil then
+		self.resources:DestroyAllTextures()
+		self.resources:DestroyAllModels()
+		self.resources:DestroyAllPrograms()
+	end
 end
 
 function App:init_systems()
@@ -98,14 +113,19 @@ function App:shutdown_systems()
 end
 
 function App:open_project(path)
-	if self.project:open(path) then
-		if self.project.compiled_root ~= nil and self.project.compiled_root ~= "" then
-			add_assets_folder_if_present(self.project.compiled_root)
-		else
-			add_assets_folder_if_present(self.project.root)
+	if self.project:open(path, { assetc_path = self.assetc_path }) then
+		if self.project_assets_folder ~= "" then
+			hg.RemoveAssetsFolder(self.project_assets_folder)
+			self.project_assets_folder = ""
 		end
+		if not add_assets_folder_if_present(self.project.compiled_root) then
+			self.status = "Failed to add compiled assets folder: " .. self.project.compiled_root
+			return false
+		end
+		self.project_assets_folder = self.project.compiled_root
+		self:clear_project_resources()
 		self.documents:clear()
-		self.status = "Opened project: " .. self.project.project_file
+		self.status = "Opened project: " .. self.project.project_file .. " | Compiled: " .. self.project.compiled_root
 		return true
 	end
 
