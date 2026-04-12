@@ -26,15 +26,30 @@ set_target_properties(hg_lua PROPERTIES FOLDER "harfang/languages")
 
 add_dependencies(hg_lua lua)
 
+set(_hg_lua_launcher_includes
+	${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
+	${CMAKE_CURRENT_SOURCE_DIR}/../../extern
+	${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
+set(_hg_lua_launcher_libs engine foundation platform jsonhpp libluadll)
+
 add_executable(launcher launcher.cpp)
 target_include_directories(launcher
 	PUBLIC
-		${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
-		${CMAKE_CURRENT_SOURCE_DIR}/../../extern
-		${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
-target_link_libraries(launcher foundation jsonhpp libluadll)
+		${_hg_lua_launcher_includes})
+target_link_libraries(launcher ${_hg_lua_launcher_libs})
 set_target_properties(launcher PROPERTIES OUTPUT_NAME "launcher" DEBUG_POSTFIX "" FOLDER "harfang/languages")
 add_dependencies(launcher hg_lua)
+
+if(WIN32)
+	add_executable(launcher_noconsole WIN32 launcher.cpp)
+	target_include_directories(launcher_noconsole
+		PUBLIC
+			${_hg_lua_launcher_includes})
+	target_link_libraries(launcher_noconsole ${_hg_lua_launcher_libs})
+	target_compile_definitions(launcher_noconsole PRIVATE HG_LUA_LAUNCHER_NO_CONSOLE)
+	set_target_properties(launcher_noconsole PROPERTIES OUTPUT_NAME "launcher_noconsole" DEBUG_POSTFIX "" FOLDER "harfang/languages")
+	add_dependencies(launcher_noconsole hg_lua)
+endif()
 
 if(WIN32)
 	set_target_properties(hg_lua PROPERTIES COMPILE_FLAGS /bigobj)
@@ -43,6 +58,9 @@ elseif(UNIX)
 endif()
 
 install(TARGETS hg_lua lua launcher RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
+if(WIN32)
+	install(TARGETS launcher_noconsole RUNTIME DESTINATION hg_lua COMPONENT lua)
+endif()
 
 install_cppsdk_dependencies(hg_lua lua)
 
