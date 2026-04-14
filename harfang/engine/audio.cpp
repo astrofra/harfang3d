@@ -40,6 +40,7 @@ struct ALStream {
 
 	time_ns timestamp;
 	size_t free_buffer_count{}, get{}, put{};
+	size_t empty_frame_count{};
 
 	bool loop{false};
 };
@@ -90,7 +91,7 @@ static bool CheckALSuccess(const char *file = "unknown", ALuint line = 0) {
 	do {                                                                                                                                                       \
 		_C_;                                                                                                                                                   \
 		(void)CheckALSuccess(__FILE__, __LINE__);                                                                                                              \
-	} while (0);
+	} while (0)
 
 #define __AL_CALL_RET(_C_)                                                                                                                                     \
 	do {                                                                                                                                                       \
@@ -98,7 +99,13 @@ static bool CheckALSuccess(const char *file = "unknown", ALuint line = 0) {
 		if (!CheckALSuccess(__FILE__, __LINE__)) {                                                                                                             \
 			return false;                                                                                                                                      \
 		}                                                                                                                                                      \
-	} while (0);
+	} while (0)
+
+static bool EnsureALContextCurrent() {
+	if (al_mixer.context && alcGetCurrentContext() != al_mixer.context)
+		return alcMakeContextCurrent(al_mixer.context) == ALC_TRUE;
+	return true;
+}
 
 //
 static inline int AFF_ALFormat(AudioFrameFormat fmt) {
@@ -123,6 +130,7 @@ static void AllocStream(ALStream &stream) {
 
 	stream.free_buffer_count = 16;
 	stream.get = stream.put = 0;
+	stream.empty_frame_count = 0;
 
 	stream.buffers.resize(stream.free_buffer_count);
 	stream.buffers_timestamp.resize(stream.free_buffer_count);
@@ -130,12 +138,15 @@ static void AllocStream(ALStream &stream) {
 
 	stream.loop = false;
 
-	alGenBuffers(numeric_cast<ALsizei>(stream.buffers.size()), stream.buffers.data());
+	__AL_CALL(alGenBuffers(numeric_cast<ALsizei>(stream.buffers.size()), stream.buffers.data()));
 }
 
 static void FreeStream(ALStream &stream) {
 	if (stream.ref != InvalidAudioStreamRef)
 		stream.streamer.Close(stream.ref);
+
+	if (!stream.buffers.empty())
+		__AL_CALL(alDeleteBuffers(numeric_cast<ALsizei>(stream.buffers.size()), stream.buffers.data()));
 
 	stream.streamer = {};
 	stream.ref = InvalidAudioStreamRef;
@@ -146,11 +157,9 @@ static void FreeStream(ALStream &stream) {
 
 	stream.free_buffer_count = 0;
 	stream.get = stream.put = 0;
+	stream.empty_frame_count = 0;
 
 	stream.loop = false;
-
-	if (!stream.buffers.empty())
-		alDeleteBuffers(numeric_cast<ALsizei>(stream.buffers.size()), stream.buffers.data());
 }
 
 //
@@ -159,6 +168,12 @@ static bool UpdateSourceStream(SourceRef src_ref) {
 		return true;
 
 	std::lock_guard<std::mutex> lock(al_mixer.lock);
+	if (!EnsureALContextCurrent()) {
+		warn("OpenAL context not current on audio stream update thread");
+		return false;
+	}
+
+	alGetError(); // discard a stale error so stream update checks only its own AL calls
 
 	const auto src = al_mixer.sources[src_ref];
 	auto &stream = al_mixer.streams[src_ref];
@@ -184,17 +199,19 @@ static bool UpdateSourceStream(SourceRef src_ref) {
 		AudioFrameFormat pcm_format;
 
 		if (stream.streamer.GetFrame(stream.ref, (uintptr_t *)&pcm_buffer, &pcm_size, &pcm_format)) {
+			stream.empty_frame_count = 0;
 			stream.buffers_timestamp[stream.put] = stream.streamer.GetTimeStamp(stream.ref);
 			stream.buffers_format[stream.put] = pcm_format;
 
-			__AL_CALL(
+			__AL_CALL_RET(
 				alBufferData(stream.buffers[stream.put], AFF_ALFormat(pcm_format), pcm_buffer, numeric_cast<ALsizei>(pcm_size), AFF_Frequency[pcm_format]));
-			__AL_CALL(alSourceQueueBuffers(src, 1, &stream.buffers[stream.put]));
+			__AL_CALL_RET(alSourceQueueBuffers(src, 1, &stream.buffers[stream.put]));
 
 			stream.put = (stream.put + 1) % stream.buffers.size();
 			--stream.free_buffer_count;
 		} else {
 			if (stream.streamer.IsEnded(stream.ref)) { // stream is EOF
+				stream.empty_frame_count = 0;
 				if (stream.loop) { // handle loop
 					if (!stream.streamer.Seek(stream.ref, 0)) // FIXME seek to sample_start
 						return false;
@@ -202,7 +219,11 @@ static bool UpdateSourceStream(SourceRef src_ref) {
 					break; // EOF
 				}
 			} else {
-				return false; // stream error
+				if (++stream.empty_frame_count > 50) {
+					warn("Audio stream returned no frame for too long");
+					return false; // stream error
+				}
+				break; // no decoded frame yet, retry on the next mixer tick
 			}
 		}
 	}
@@ -214,16 +235,15 @@ static bool UpdateSourceStream(SourceRef src_ref) {
 	if (state == AL_PAUSED)
 		return true; // source paused
 
-	if (state == AL_STOPPED)
-		return false; // source stopped
-
 	if (state != AL_PLAYING) {
 		ALint buffer_queued;
 		__AL_CALL_RET(alGetSourcei(src, AL_BUFFERS_QUEUED, &buffer_queued));
 
 		if (buffer_queued > 0) {
-			__AL_CALL_RET(alSourcePlay(src)); // stalled!
+			__AL_CALL_RET(alSourcePlay(src)); // start or restart after underrun
 		} else {
+			if (stream.empty_frame_count > 0)
+				return true; // decoder produced no frame yet, keep stream alive for retry
 			return false; // no buffer queue, source not playing -> we're done here
 		}
 	}
@@ -347,7 +367,7 @@ void UnloadSound(SoundRef snd_ref) {
 		return;
 
 	auto &sound = sounds[snd_ref];
-	alDeleteBuffers(numeric_cast<ALsizei>(sound.buffers.size()), sound.buffers.data());
+	__AL_CALL(alDeleteBuffers(numeric_cast<ALsizei>(sound.buffers.size()), sound.buffers.data()));
 	sound.buffers.clear();
 }
 
@@ -548,10 +568,11 @@ void SetSourceRepeat(SourceRef src_ref, SourceRepeat repeat) {
 
 	auto &stream = al_mixer.streams[src_ref];
 
-	if (stream.ref == InvalidAudioStreamRef)
-		alSourcei(src, AL_LOOPING, repeat == SR_Loop ? AL_TRUE : AL_FALSE);
-	else
+	if (stream.ref == InvalidAudioStreamRef) {
+		__AL_CALL(alSourcei(src, AL_LOOPING, repeat == SR_Loop ? AL_TRUE : AL_FALSE));
+	} else {
 		stream.loop = repeat == SR_Loop;
+	}
 }
 
 void SetSourceTransform(SourceRef src_ref, const Mat4 &world, const Vec3 &velocity) {

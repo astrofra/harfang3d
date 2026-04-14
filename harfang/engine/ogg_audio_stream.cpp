@@ -124,19 +124,24 @@ static bool OpenOGG(OGGStream &stream) {
 
 	int error = VORBIS__no_error;
 	stream.vorbis = stb_vorbis_open_from_callbacks(&callbacks, stream.ref, &error, NULL);
-	if (error != VORBIS__no_error) {
+	if (!stream.vorbis || error != VORBIS__no_error) {
 		return false;
 	}
 
 	stb_vorbis_info info = stb_vorbis_get_info(stream.vorbis);
 
 	stream.fmt = AFF_Unsupported;
+	if (info.channels < 1 || info.channels > 2) {
+		warn(format("Unsupported OGG channel count %1").arg(info.channels));
+		return false;
+	}
+
 	if (info.sample_rate == 48000) {
 		stream.fmt = (info.channels == 2) ? AFF_LPCM_48KHZ_S16_Stereo : AFF_LPCM_48KHZ_S16_Mono;
 	} else if (info.sample_rate == 44100) {
 		stream.fmt = (info.channels == 2) ? AFF_LPCM_44KHZ_S16_Stereo : AFF_LPCM_44KHZ_S16_Mono;
 	} else {
-		warn(format("Unsupported OGG sample rate %1 or channel count %2").arg(info.sample_rate).arg(info.channels));
+		warn(format("Unsupported OGG sample rate %1").arg(info.sample_rate));
 		return false;
 	}
 	stream.buffer.resize(16384);
@@ -164,10 +169,13 @@ static AudioStreamRef OGGAudioStreamOpen(const ReadProvider *read_provider, cons
 	ogg.ref = new AudioStreamRef(ref);
 
 	if (!OpenOGG(ogg)) {
-		if (ogg.provider) {
+		if (ogg.vorbis) {
+			stb_vorbis_close(ogg.vorbis);
+		} else if (ogg.provider && ogg.reader && ogg.reader->is_valid(ogg.handle)) {
 			ogg.provider->close(ogg.handle);
 		}
 		delete ogg.ref;
+		ogg = {};
 		return InvalidAudioStreamRef;
 	}
 
@@ -188,6 +196,8 @@ static int OGGAudioStreamClose(AudioStreamRef ref) {
 		delete stream.ref;
 		stream.ref = nullptr;
 	}
+	stream.reader = nullptr;
+	stream.provider = nullptr;
 	return 1;
 }
 
@@ -220,9 +230,9 @@ static int OGGAudioStreamIsEnded(AudioStreamRef ref) {
 		return 1;
 
 	const auto &stream = g_streams[ref];
-	int loc = stb_vorbis_get_sample_offset(stream.vorbis);
-	int n = stb_vorbis_stream_length_in_samples(stream.vorbis);
-	return (loc < n);
+	const int loc = stb_vorbis_get_sample_offset(stream.vorbis);
+	const unsigned int n = stb_vorbis_stream_length_in_samples(stream.vorbis);
+	return loc >= 0 && static_cast<unsigned int>(loc) >= n;
 }
 
 static int OGGAudioStreamGetFrame(AudioStreamRef ref, uintptr_t *data, int *size, AudioFrameFormat *format) {
@@ -231,9 +241,12 @@ static int OGGAudioStreamGetFrame(AudioStreamRef ref, uintptr_t *data, int *size
 
 	auto &stream = g_streams[ref];
 	stb_vorbis_info info = stb_vorbis_get_info(stream.vorbis);
-	int n = stb_vorbis_get_frame_short_interleaved(stream.vorbis, info.channels, (short *)&stream.buffer[0], stream.buffer.size());
-	int error = stb_vorbis_get_error(stream.vorbis);
+	const int n =
+		stb_vorbis_get_frame_short_interleaved(stream.vorbis, info.channels, (short *)&stream.buffer[0], numeric_cast<int>(stream.buffer.size()));
+	const int error = stb_vorbis_get_error(stream.vorbis);
 	if (n == 0) {
+		if (error != VORBIS__no_error && error != VORBIS_need_more_data)
+			warn(hg::format("OGG decode error %1").arg(error));
 		return 0;
 	}
 
