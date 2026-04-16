@@ -43,6 +43,8 @@ option(HG_BUILD_CPP_SDK "Harfang: Build C++ SDK" OFF)
 option(HG_BUILD_TESTS "Harfang: Build Unit tests" OFF)
 
 option(HG_BUILD_DOCS "Harfang: Build documentation" OFF)
+option(HG_BUILD_STATIC_DOCS "Harfang: Build static HTML documentation" OFF)
+option(HG_BUILD_DOCS_WITH_DOXYGEN "Harfang: Require Doxygen for documentation builds" OFF)
 
 option(HG_BUILD_HG_LUA "Harfang: Build Harfang Lua extension" OFF)
 option(HG_BUILD_HG_PYTHON "Harfang: Build Harfang CPython 3.2+ extension" OFF)
@@ -204,7 +206,7 @@ if(NOT Python3_FOUND)
 	endif()
 endif()
 
-if(HG_BUILD_DOCS)
+if(HG_BUILD_DOCS_WITH_DOXYGEN)
 	find_package(Doxygen REQUIRED)
 endif()
 
@@ -332,6 +334,9 @@ SET(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
 if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 	list(APPEND HG_BINDING_DEFINES_LIST "HG_ENABLE_BULLET3_SCENE_PHYSICS")
 endif()
+if(HG_ENABLE_RECAST_DETOUR_API)
+	list(APPEND HG_BINDING_DEFINES_LIST "HG_ENABLE_RECAST_DETOUR_API")
+endif()
 
 if(HG_BINDING_DEFINES_LIST)
 	list(JOIN HG_BINDING_DEFINES_LIST "," HG_BINDING_DEFINES_LIST)
@@ -351,7 +356,7 @@ add_subdirectory(tools)
 
 add_subdirectory(languages)
 
-if(HG_BUILD_DOCS)
+if(HG_BUILD_DOCS OR HG_BUILD_STATIC_DOCS)
 	add_subdirectory(doc)
 endif()
 
@@ -395,6 +400,7 @@ message(STATUS "Build GLTF importer: " ${HG_BUILD_GLTF_IMPORTER})
 message(STATUS "Build AssetC: " ${HG_BUILD_ASSETC})
 message(STATUS "Build C++ SDK: " ${HG_BUILD_CPP_SDK})
 message(STATUS "Build documentation: " ${HG_BUILD_DOCS})
+message(STATUS "Build static documentation: " ${HG_BUILD_STATIC_DOCS})
 
 message(STATUS "Build Lua extension: " ${HG_BUILD_HG_LUA})
 
