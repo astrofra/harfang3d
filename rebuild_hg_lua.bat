@@ -38,17 +38,20 @@ cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^
 	-DHG_BUILD_HG_LUA=ON ^
-	-DHG_BUILD_ASSETC=OFF ^
+	-DHG_BUILD_ASSETC=ON ^
 	-DHG_BUILD_ASSIMP_CONVERTER=OFF ^
 	-DHG_BUILD_FBX_CONVERTER=OFF ^
 	-DHG_BUILD_GLTF_IMPORTER=OFF ^
 	-DHG_BUILD_GLTF_EXPORTER=OFF
 if errorlevel 1 exit /b !errorlevel!
 
-echo [2/2] Build et install HG Lua (%CONFIG%)...
+echo [2/2] Build et install HG Lua + AssetC (%CONFIG%)...
 cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target INSTALL
 if errorlevel 1 exit /b !errorlevel!
 
+cmake -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%\hg_lua\harfang" -DBUILD_TYPE="%CONFIG%" -P "%BUILD_DIR%\tools\assetc\cmake_install.cmake"
+if errorlevel 1 exit /b !errorlevel!
+
 echo.
-echo HG Lua rebuild ok.
+echo HG Lua + AssetC rebuild ok.
 echo Install: "%INSTALL_DIR%\hg_lua"
