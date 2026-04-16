@@ -3,6 +3,7 @@
 #include "engine/scene_forward_pipeline.h"
 #include "engine/assets_rw_interface.h"
 #include "engine/scene.h"
+#include "engine/to_json.h"
 
 #include "foundation/file_rw_interface.h"
 #include "foundation/format.h"
@@ -55,6 +56,15 @@ bool LoadForwardPipelineAAAConfig(const json &js, ForwardPipelineAAAConfig &conf
 	config.exposure = js["exposure"];
 	config.gamma = js["gamma"];
 
+	if (js.contains("compositing_params0"))
+		config.compositing_params0 = js["compositing_params0"];
+	if (js.contains("compositing_params1"))
+		config.compositing_params1 = js["compositing_params1"];
+	if (js.contains("compositing_params2"))
+		config.compositing_params2 = js["compositing_params2"];
+	if (js.contains("compositing_params3"))
+		config.compositing_params3 = js["compositing_params3"];
+
 	return true;
 }
 
@@ -73,6 +83,11 @@ void SaveForwardPipelineAAAConfig(json &js, const ForwardPipelineAAAConfig &conf
 
 	js["exposure"] = config.exposure;
 	js["gamma"] = config.gamma;
+
+	js["compositing_params0"] = config.compositing_params0;
+	js["compositing_params1"] = config.compositing_params1;
+	js["compositing_params2"] = config.compositing_params2;
+	js["compositing_params3"] = config.compositing_params3;
 }
 
 bool LoadForwardPipelineAAAConfigFromFile(const char *path, ForwardPipelineAAAConfig &config) {
@@ -141,7 +156,7 @@ bool IsValid(const ForwardPipelineAAA &aaa) {
 
 	return bgfx::isValid(aaa.frame_hdr.handle) && bgfx::isValid(aaa.frame_hdr_fb) && bgfx::isValid(aaa.work_frame_hdr_fb) &&
 		   bgfx::isValid(aaa.prv_frame_hdr_fb) && bgfx::isValid(aaa.next_frame_hdr_fb) && bgfx::isValid(aaa.u_color) && bgfx::isValid(aaa.u_depth) &&
-		   bgfx::isValid(aaa.compositing_prg);
+		   bgfx::isValid(aaa.u_compositingParams) && bgfx::isValid(aaa.compositing_prg);
 }
 
 static ForwardPipelineAAA _CreateForwardPipelineAAA(const Reader &ir, const ReadProvider &ip, const char *path, const ForwardPipelineAAAConfig &config,
@@ -241,6 +256,7 @@ static ForwardPipelineAAA _CreateForwardPipelineAAA(const Reader &ir, const Read
 		aaa.compositing_prg = LoadProgram(ir, ip, format("%1/shader/compositing").arg(path).c_str());
 		aaa.u_color = bgfx::createUniform("u_color", bgfx::UniformType::Sampler);
 		aaa.u_depth = bgfx::createUniform("u_depth", bgfx::UniformType::Sampler);
+		aaa.u_compositingParams = bgfx::createUniform("uCompositingParams", bgfx::UniformType::Vec4, 4);
 	}
 
 	{
@@ -357,6 +373,7 @@ void DestroyForwardPipelineAAA(ForwardPipelineAAA &aaa) {
 	bgfx_Destroy(aaa.compositing_prg);
 	bgfx_Destroy(aaa.u_color);
 	bgfx_Destroy(aaa.u_depth);
+	bgfx_Destroy(aaa.u_compositingParams);
 
 	//
 	bgfx_Destroy(aaa.copy_prg);
@@ -848,6 +865,16 @@ void SubmitSceneToForwardPipeline(bgfx::ViewId &view_id, const Scene &scene, con
 		vtx.Begin(1).SetPos({1, -1, 0}).SetTexCoord0({1, k_y}).End();
 		vtx.Begin(2).SetPos({1, 1, 0}).SetTexCoord0({1, 1.f - k_y}).End();
 		vtx.Begin(3).SetPos({-1, 1, 0}).SetTexCoord0({0, 1.f - k_y}).End();
+
+		const Vec4 compositing_params[] = {
+			aaa_config.compositing_params0,
+			aaa_config.compositing_params1,
+			aaa_config.compositing_params2,
+			aaa_config.compositing_params3,
+		};
+
+		SetUniforms(pipeline.uniform_values, {});
+		bgfx::setUniform(aaa.u_compositingParams, compositing_params, 4);
 		DrawTriangles(view_id, {0, 1, 2, 0, 2, 3}, vtx, aaa.compositing_prg, {}, {}, ComputeRenderState(BM_Opaque, DT_Always));
 
 		++view_id;

@@ -1604,7 +1604,9 @@ static std::vector<hg::ForwardPipelineLight> _GetSceneForwardPipelineLights(cons
 		'float bloom_threshold', 'float bloom_bias', 'float bloom_intensity',
 		'float motion_blur',
 		'float exposure', 'float gamma',
-		'float dof_focus_point', 'float dof_focus_length'
+		'float dof_focus_point', 'float dof_focus_length',
+		'hg::Vec4 compositing_params0', 'hg::Vec4 compositing_params1',
+		'hg::Vec4 compositing_params2', 'hg::Vec4 compositing_params3'
 	])
 	gen.end_class(forward_pipeline_aaa_config)
 

@@ -1,8 +1,8 @@
-# Compositing Shader Uniform API Implementation Spec
+# Compositing Shader Parameters API Implementation Spec
 
 This document is a technical implementation brief.
 
-Its purpose is to define the least invasive reliable way to pass predefined and user-defined uniforms to the final forward-pipeline compositing shader from C++, Lua, and Python.
+Its purpose is to define the least invasive reliable way to pass application-defined values to the final forward-pipeline compositing shader from C++, Lua, and Python.
 
 The scope is limited to the AAA final compositing pass loaded from:
 
@@ -16,33 +16,42 @@ The implementation should not change the overall forward pipeline architecture, 
 
 Expose a small API that lets applications drive custom post-processing parameters in the final compositing shader.
 
-The API must support two use cases:
+The API must fit the existing `ForwardPipelineAAAConfig` shape. That structure currently exposes purpose-oriented values such as `exposure`, `gamma`, `bloom_threshold`, `motion_blur`, and `dof_focus_point`; it does not expose low-level shader uniform handles or draw-time uniform lists.
 
-- predefined compositor parameters with stable engine-owned uniform names
-- arbitrary user uniforms declared by a custom compositing shader
+The recommended API therefore adds a small number of generic `Vec4` fields to `ForwardPipelineAAAConfig`. These fields are transported to the compositing shader through one fixed engine-owned uniform array.
 
 The intended end-user pattern is:
 
 1. create or load a custom compositing shader under the regular pipeline resource path
-2. set fixed compositor parameters on `ForwardPipelineAAAConfig`
-3. optionally attach arbitrary `UniformSetValue` and `UniformSetTexture` lists to the same config
-4. call `SubmitSceneToForwardPipeline` or `SubmitSceneToPipeline` as usual
+2. set generic compositor vectors on `ForwardPipelineAAAConfig`
+3. call `SubmitSceneToForwardPipeline` or `SubmitSceneToPipeline` as usual
+4. read the vectors from the compositing shader through the fixed uniform contract
 
 The final compositing draw must receive:
 
 - the existing forward-pipeline scalar and matrix uniforms, especially `uResolution` and `uAAAParams`
-- the new predefined compositor parameter block
-- the user-provided arbitrary uniforms and sampler uniforms
+- the new generic compositor parameter vector block
+
+Arbitrary named uniforms, arbitrary samplers, and script-visible `UniformSetValue`/`UniformSetTexture` lists are intentionally out of scope for the minimal implementation.
 
 ## 2. Current State
 
-`ForwardPipelineAAAConfig` already contains compositor-related values:
+The public Lua/Python documentation for `ForwardPipelineAAAConfig` currently exposes these members:
 
+- `bloom_bias`
+- `bloom_intensity`
+- `bloom_threshold`
+- `dof_focus_length`
+- `dof_focus_point`
 - `exposure`
 - `gamma`
-- `sharpen`
-- `use_tonemapping`
-- `debug_buffer`
+- `max_distance`
+- `motion_blur`
+- `sample_count`
+- `temporal_aa_weight`
+- `z_thickness`
+
+The C++ structure also contains additional fields such as `sharpen`, `use_tonemapping`, `specular_weight`, and `debug_buffer`, but those are not currently listed in the public binding table shown above.
 
 `UpdateForwardPipelineAAA` packs the runtime AAA values into `uAAAParams[3]`:
 
@@ -50,7 +59,7 @@ The final compositing draw must receive:
 - `uAAAParams[1].y`: inverse gamma
 - `uAAAParams[2].y`: sharpen
 
-`compositing_fs.sc` already reads `uAAAParams` and `uResolution` through `forward_pipeline.sh`.
+`compositing_fs.sc` reads `uAAAParams` and `uResolution` through `forward_pipeline.sh`.
 
 The final compositing pass in `scene_forward_pipeline.cpp` currently submits the fullscreen quad with empty uniform lists:
 
@@ -58,40 +67,42 @@ The final compositing pass in `scene_forward_pipeline.cpp` currently submits the
 DrawTriangles(view_id, {0, 1, 2, 0, 2, 3}, vtx, aaa.compositing_prg, {}, {}, ComputeRenderState(BM_Opaque, DT_Always));
 ```
 
-That means the pass does not explicitly bind `pipeline.uniform_values` for this draw. A reliable implementation must stop relying on any previous draw state and must set the required uniforms immediately before the compositor submit.
+That means the pass does not explicitly bind `pipeline.uniform_values` for this draw. A reliable implementation must stop relying on previous draw state and must set the required uniforms immediately before the compositor submit.
 
-There is also a naming mismatch to audit before landing the API:
+There was also a sampler naming mismatch:
 
 - the C++ compositing path creates and binds `u_color` and `u_depth`
-- the provided `tutorials/resources/core/shader/compositing_fs.sc` samples `u_copyColor` and `u_copyDepth`
-- the copy shader also uses `u_copyColor` and `u_copyDepth`
+- `compositing_fs.sc` used to sample `u_copyColor` and `u_copyDepth`
+- the copy shader correctly uses `u_copyColor` and `u_copyDepth`
 
-The recommended cleanup is to keep `copy_fs.sc` on `u_copyColor` and `u_copyDepth`, and align `compositing_fs.sc` with the C++ compositor names `u_color` and `u_depth`. If the compiled assets already use `u_color` and `u_depth`, only the source shader needs updating.
+That mismatch should be fixed independently by aligning `compositing_fs.sc` with the C++ compositor names `u_color` and `u_depth`, while leaving the copy shader unchanged.
 
 ## 3. Recommended Design
 
-Use a two-tier API.
+Add generic compositor vectors to `ForwardPipelineAAAConfig`.
 
-Tier 1 is a fixed compositor parameter block owned by the engine:
+The public API remains field-based:
+
+```cpp
+Vec4 compositing_params0 = Vec4::Zero;
+Vec4 compositing_params1 = Vec4::Zero;
+Vec4 compositing_params2 = Vec4::Zero;
+Vec4 compositing_params3 = Vec4::Zero;
+```
+
+The shader contract is a fixed uniform array:
 
 ```glsl
 uniform vec4 uCompositingParams[4];
 ```
 
-This provides 16 stable float slots for shader authors without requiring custom bgfx uniform handle management from scripts.
+This provides 16 stable float slots for custom compositing shader authors without introducing low-level uniform list management into `ForwardPipelineAAAConfig`.
 
-Tier 2 reuses the existing generic render API:
+This design deliberately treats the values as generic compositor payload, not as arbitrary bgfx uniforms. The shader uniform name is fixed, and the application decides how to interpret each component.
 
-- `UniformSetValue`
-- `UniformSetTexture`
-- `MakeUniformSetValue`
-- `MakeUniformSetTexture`
+Do not extend `uAAAParams` for custom compositor values. It is already shared by temporal AA, motion blur, SSGI, SSR, PBR, tone mapping, and sharpen. Packing user data into it would create hidden coupling and make future AAA changes risky.
 
-This keeps arbitrary uniforms consistent with `DrawTriangles`, `DrawModel`, `DrawText`, and other existing draw APIs.
-
-Do not extend `uAAAParams` for user data. It is already shared by temporal AA, motion blur, SSGI, SSR, PBR, tone mapping, and sharpen. Packing custom compositor values into it would create hidden coupling and make future AAA changes risky.
-
-Do not introduce runtime shader reflection or name-based maps for this first implementation. bgfx requires the shader source to declare the uniform names, and Harfang already has a working explicit uniform list abstraction.
+Do not add `std::vector<UniformSetValue>` or `std::vector<UniformSetTexture>` members to `ForwardPipelineAAAConfig` for the first implementation. That would conflict with the current config style, make serialization unclear, and expose a lower-level draw API inside a purpose-oriented pipeline config.
 
 ## 4. Public API
 
@@ -104,21 +115,26 @@ Vec4 compositing_params0 = Vec4::Zero;
 Vec4 compositing_params1 = Vec4::Zero;
 Vec4 compositing_params2 = Vec4::Zero;
 Vec4 compositing_params3 = Vec4::Zero;
-
-std::vector<UniformSetValue> compositing_uniform_values;
-std::vector<UniformSetTexture> compositing_uniform_textures;
 ```
 
-The fixed params are application-defined. The engine only transports them.
+The engine C++ side only transports these values. The default core compositing shader may still document conventions for how it interprets some slots.
 
-The arbitrary lists follow the same rules as the existing draw APIs:
+Default compositing shader convention:
 
-- scalar, vector, and matrix uniforms use `UniformSetValue`
-- sampler uniforms use `UniformSetTexture`
-- the shader must declare a matching name and compatible type
-- the application owns the meaning of each value
+- `compositing_params0.x`: vignette strength, where `0` disables the effect
+- `compositing_params0.y`: vignette radius
+- `compositing_params0.z`: vignette softness
+- `compositing_params0.w`: unused
 
-### 4.2 Fixed Uniform Contract
+Suggested remaining-slot convention for custom shaders:
+
+- `compositing_params1`: secondary effect controls
+- `compositing_params2`: color or curve controls
+- `compositing_params3`: spare/debug controls
+
+If a future compositor effect needs stable purpose-oriented public controls beyond this generic payload, it should get explicit fields such as `color_grading_intensity` instead of silently consuming more generic slots.
+
+### 4.2 Shader Contract
 
 Default and custom compositing shaders may declare:
 
@@ -126,37 +142,33 @@ Default and custom compositing shaders may declare:
 uniform vec4 uCompositingParams[4];
 ```
 
-Suggested convention for examples only:
+The mapping is direct:
 
-- `uCompositingParams[0]`: primary effect controls
-- `uCompositingParams[1]`: secondary effect controls
-- `uCompositingParams[2]`: color or curve controls
-- `uCompositingParams[3]`: spare/debug controls
+- `uCompositingParams[0]` = `ForwardPipelineAAAConfig::compositing_params0`
+- `uCompositingParams[1]` = `ForwardPipelineAAAConfig::compositing_params1`
+- `uCompositingParams[2]` = `ForwardPipelineAAAConfig::compositing_params2`
+- `uCompositingParams[3]` = `ForwardPipelineAAAConfig::compositing_params3`
 
-The engine must not assign built-in semantics to these fields in the public API. If a future built-in effect needs named semantic fields, it should get explicit `ForwardPipelineAAAConfig` members instead of consuming generic slots silently.
+The application and shader must agree on component meaning. The default core shader uses:
 
-### 4.3 Reserved Names and Stages
+- `uCompositingParams[0].x`: vignette strength
+- `uCompositingParams[0].y`: vignette radius
+- `uCompositingParams[0].z`: vignette softness
 
-Reserved compositor uniform names:
+Custom compositing shaders may define their own meaning for the remaining slots.
 
-- `u_color`
-- `u_depth`
-- `uResolution`
-- `uAAAParams`
-- `uCompositingParams`
+### 4.3 Non-Goals
 
-Reserved sampler stages:
+The minimal API does not support:
 
-- stage 0: compositor color input
-- stage 1: compositor depth input
+- arbitrary uniform names
+- arbitrary uniform types beyond `vec4` slots
+- arbitrary sampler uniforms
+- arbitrary texture binding stages
+- runtime shader reflection
+- script-visible bgfx uniform handles
 
-For user sampler uniforms, use stage 2 or higher:
-
-```glsl
-SAMPLER2D(u_lut, 2);
-```
-
-The first implementation should document this rule. A debug warning for stage 0 or 1 in `compositing_uniform_textures` is useful, but not required for the minimal patch.
+Those can be considered later as a separate lower-level compositing override API if a concrete use case requires them.
 
 ## 5. C++ Implementation
 
@@ -180,39 +192,34 @@ Include it in `IsValid(const ForwardPipelineAAA&)`.
 
 ### 5.2 Final Compositing Submit
 
-Immediately before submitting `aaa.compositing_prg`, set uniforms in this order:
-
-1. existing forward-pipeline value uniforms
-2. fixed compositor params
-3. arbitrary compositor values and textures
+Immediately before submitting `aaa.compositing_prg`, set the existing forward-pipeline uniforms and then set the compositor parameter array.
 
 Recommended code shape:
 
 ```cpp
-SetUniforms(pipeline.uniform_values, {});
-
 const Vec4 compositing_params[] = {
 	aaa_config.compositing_params0,
 	aaa_config.compositing_params1,
 	aaa_config.compositing_params2,
 	aaa_config.compositing_params3,
 };
+SetUniforms(pipeline.uniform_values, {});
 bgfx::setUniform(aaa.u_compositingParams, compositing_params, 4);
-
-SetUniforms(aaa_config.compositing_uniform_values, aaa_config.compositing_uniform_textures);
 
 DrawTriangles(view_id, {0, 1, 2, 0, 2, 3}, vtx, aaa.compositing_prg, {}, {}, ComputeRenderState(BM_Opaque, DT_Always));
 ```
 
-This avoids copying `UniformSetValue` objects every frame. Copying these objects recreates bgfx uniform handles, so do not build a temporary combined vector in the render path.
+This keeps the final pass explicit and avoids copying `UniformSetValue` objects every frame.
 
-`SetUniforms(pipeline.uniform_values, {})` intentionally does not bind `pipeline.uniform_textures`. The final compositor already binds its color and depth input explicitly, and arbitrary user textures should be controlled by `compositing_uniform_textures`.
+Setting `pipeline.uniform_values` matters because the compositing shader relies on `uResolution` and `uAAAParams`. Relying on stale bgfx state from previous draw submissions is fragile.
+
+Do not bind `pipeline.uniform_textures` to the final compositor by default. The final compositor already binds its color and depth input explicitly through `u_color` and `u_depth`.
 
 ### 5.3 Non-Tonemapping Copy Path
 
 The `use_tonemapping == false` copy path should remain unchanged for the minimal implementation.
 
-Reason: the requested API targets the compositing shader. Applying arbitrary uniforms to `copy_prg` would imply that custom effects run even when tone mapping/compositing is disabled, which changes the meaning of `use_tonemapping`.
+Reason: the requested API targets the compositing shader. Applying compositor parameters to `copy_prg` would imply that custom effects run even when tone mapping/compositing is disabled, which changes the meaning of `use_tonemapping`.
 
 If a later API wants custom compositing without tone mapping, add a separate explicit flag such as `use_compositing_shader`, not an implicit side effect.
 
@@ -220,14 +227,14 @@ If a later API wants custom compositing without tone mapping, add a separate exp
 
 In `tutorials/resources/core/shader/compositing_fs.sc`:
 
-1. align sampler names with C++ if needed:
+1. make sure sampler names match the C++ compositor path:
 
 ```glsl
 SAMPLER2D(u_color, 0);
 SAMPLER2D(u_depth, 1);
 ```
 
-2. add the fixed parameter block:
+2. add the generic parameter block:
 
 ```glsl
 uniform vec4 uCompositingParams[4];
@@ -239,16 +246,7 @@ Uniform declarations belong in the shader source or an included `.sh` file, not 
 
 ## 6. Lua and Python Bindings
 
-The binding layer already exposes:
-
-- `UniformSetValue`
-- `UniformSetValueList`
-- `UniformSetTexture`
-- `UniformSetTextureList`
-- `MakeUniformSetValue`
-- `MakeUniformSetTexture`
-
-Update the `ForwardPipelineAAAConfig` binding to include existing missing fields and the new compositor fields:
+Update the `ForwardPipelineAAAConfig` binding to include the new vector fields:
 
 ```python
 gen.bind_members(forward_pipeline_aaa_config, [
@@ -257,31 +255,19 @@ gen.bind_members(forward_pipeline_aaa_config, [
 	'float bloom_threshold', 'float bloom_bias', 'float bloom_intensity',
 	'float motion_blur',
 	'float exposure', 'float gamma',
-	'float sharpen',
 	'float dof_focus_point', 'float dof_focus_length',
-	'bool use_tonemapping',
-	'float specular_weight',
-	'hg::ForwardPipelineAAADebugBuffer debug_buffer',
 	'hg::Vec4 compositing_params0',
 	'hg::Vec4 compositing_params1',
 	'hg::Vec4 compositing_params2',
 	'hg::Vec4 compositing_params3',
-	'std::vector<hg::UniformSetValue> compositing_uniform_values',
-	'std::vector<hg::UniformSetTexture> compositing_uniform_textures',
 ])
 ```
 
-If Fabgen member binding for vectors is not acceptable on every target language, add small helper functions instead:
+This mirrors the current binding style: simple public fields on the config object.
 
-```cpp
-void SetForwardPipelineAAACompositingUniforms(ForwardPipelineAAAConfig &config,
-	const std::vector<UniformSetValue> &values,
-	const std::vector<UniformSetTexture> &textures);
+Do not add `UniformSetValueList` or `UniformSetTextureList` members to the config for this feature.
 
-void ClearForwardPipelineAAACompositingUniforms(ForwardPipelineAAAConfig &config);
-```
-
-Bind those helpers for C++, Lua, and Python. This fallback keeps the public script API explicit and avoids depending on direct vector member assignment.
+The existing unbound C++ fields such as `sharpen`, `use_tonemapping`, `specular_weight`, and `debug_buffer` can be exposed in a separate API cleanup if desired, but they are not required for compositor parameter vectors.
 
 ## 7. Usage Examples
 
@@ -294,15 +280,20 @@ $input v_texcoord0
 
 SAMPLER2D(u_color, 0);
 SAMPLER2D(u_depth, 1);
-SAMPLER2D(u_lut, 2);
 
 uniform vec4 uCompositingParams[4];
-uniform vec4 uVignette;
 
 void main() {
 	vec4 c = texture2D(u_color, v_texcoord0);
-	float amount = uCompositingParams[0].x;
-	c.rgb *= mix(vec3_splat(1.0), uVignette.rgb, amount);
+
+	float vignette_strength = uCompositingParams[0].x;
+	float vignette_radius = uCompositingParams[0].y;
+	float vignette_softness = uCompositingParams[0].z;
+
+	vec2 centered_uv = v_texcoord0 * 2.0 - 1.0;
+	float vignette = 1.0 - smoothstep(vignette_radius, vignette_radius + vignette_softness, length(centered_uv));
+	c.rgb *= mix(vec3_splat(1.0), vec3_splat(vignette), vignette_strength);
+
 	gl_FragColor = c;
 	gl_FragDepth = texture2D(u_depth, v_texcoord0).r;
 }
@@ -312,48 +303,35 @@ void main() {
 
 ```cpp
 ForwardPipelineAAAConfig aaa_config;
-aaa_config.compositing_params0 = {0.35f, 0.f, 0.f, 0.f};
-aaa_config.compositing_uniform_values = {
-	MakeUniformSetValue("uVignette", Vec4{0.9f, 0.85f, 0.75f, 1.f}),
-};
-aaa_config.compositing_uniform_textures = {
-	MakeUniformSetTexture("u_lut", lut_texture, 2),
-};
+aaa_config.compositing_params0 = {0.45f, 0.95f, 0.85f, 0.f};
 ```
 
 ### 7.3 Python
 
 ```python
 aaa_config = hg.ForwardPipelineAAAConfig()
-aaa_config.compositing_params0 = hg.Vec4(0.35, 0.0, 0.0, 0.0)
-aaa_config.compositing_uniform_values = hg.UniformSetValueList([
-	hg.MakeUniformSetValue("uVignette", hg.Vec4(0.9, 0.85, 0.75, 1.0)),
-])
-aaa_config.compositing_uniform_textures = hg.UniformSetTextureList([
-	hg.MakeUniformSetTexture("u_lut", lut_texture, 2),
-])
+aaa_config.compositing_params0 = hg.Vec4(0.85, 0.80, 0.45, 0.0)
 ```
 
 ### 7.4 Lua
 
 ```lua
 aaa_config = hg.ForwardPipelineAAAConfig()
-aaa_config.compositing_params0 = hg.Vec4(0.35, 0.0, 0.0, 0.0)
-aaa_config.compositing_uniform_values = hg.UniformSetValueList({
-	hg.MakeUniformSetValue("uVignette", hg.Vec4(0.9, 0.85, 0.75, 1.0))
-})
-aaa_config.compositing_uniform_textures = hg.UniformSetTextureList({
-	hg.MakeUniformSetTexture("u_lut", lut_texture, 2)
-})
+aaa_config.compositing_params0 = hg.Vec4(0.85, 0.80, 0.45, 0.0)
 ```
-
-If direct list assignment is not supported by the generated bindings, use the helper functions from section 6 instead.
 
 ## 8. Serialization
 
-Do not serialize arbitrary `UniformSetValue` or `UniformSetTexture` lists in `LoadForwardPipelineAAAConfig` or `SaveForwardPipelineAAAConfig`. They contain runtime handles and texture references.
+The generic compositor vectors are plain values and can be serialized safely.
 
-Fixed `compositing_params0` through `compositing_params3` can be serialized because they are plain values. Use backward-compatible presence checks when loading JSON so older config files still work:
+Recommended JSON keys:
+
+- `compositing_params0`
+- `compositing_params1`
+- `compositing_params2`
+- `compositing_params3`
+
+Use backward-compatible presence checks when loading JSON so older config files still work:
 
 ```cpp
 if (js.contains("compositing_params0")) {
@@ -361,7 +339,7 @@ if (js.contains("compositing_params0")) {
 }
 ```
 
-The minimal patch may leave fixed compositor params out of JSON serialization if the existing config file format should remain untouched. In that case, document that these fields are runtime-only.
+The minimal patch may leave these fields out of JSON serialization if the existing config file format should remain untouched. In that case, document that compositor vectors are runtime-only.
 
 ## 9. Validation Plan
 
@@ -369,17 +347,21 @@ Add one C++ render smoke test or tutorial-level sample that:
 
 - loads a custom compositing shader
 - sets `compositing_params0.x` to a visible value
-- sets an arbitrary `uVignette` uniform through `compositing_uniform_values`
-- optionally binds a sampler at stage 2 through `compositing_uniform_textures`
+- sets `compositing_params1` to a visible color/tint value
 - verifies that the scene still renders with `use_tonemapping == true`
 
 Add Lua and Python binding smoke tests that:
 
 - construct `ForwardPipelineAAAConfig`
 - assign `compositing_params0`
-- assign one `UniformSetValue`
-- assign one `UniformSetTexture`
+- assign `compositing_params1`
 - call the existing submit function without requiring a new overload
+
+Add a Lua tutorial derived from `scene_aaa.lua`:
+
+- set `pipeline_aaa_config.compositing_params0` each frame
+- use arrow keys to control vignette strength and radius
+- use keypad plus/minus to control vignette softness
 
 Manual shader validation:
 
@@ -387,38 +369,33 @@ Manual shader validation:
 - custom compositor can read `uResolution`
 - custom compositor can read `uAAAParams`
 - custom compositor can read `uCompositingParams`
-- custom compositor can read an arbitrary `vec4` uniform
-- custom compositor can sample an arbitrary texture on stage 2
+- changing `compositing_params0` changes the final image
 
 ## 10. Risks and Constraints
 
-Uniform type support remains limited to what `UniformSetValue` already supports:
+The API exposes arbitrary values, not arbitrary uniforms. This is intentional.
 
-- float values are packed as vec4
-- `Vec2`, `Vec3`, and `Vec4` are backed by bgfx `Vec4` uniforms
-- matrices are backed by bgfx `Mat4` uniforms
+Limits:
+
+- 16 custom float slots are available
 - integer and boolean shader inputs should be encoded as floats
+- custom texture/sampler inputs are not covered
+- the shader must declare `uniform vec4 uCompositingParams[4]` if it wants to use the values
 
-The shader must declare every arbitrary uniform. This API does not make undeclared shader uniforms magically available.
+The number of slots should stay fixed for the first implementation. If a real project needs more, increase the array count before release rather than adding a dynamic uniform system.
 
-Avoid creating arbitrary `UniformSetValue` objects every frame in hot code when the fixed `uCompositingParams` slots are sufficient. `UniformSetValue` owns a bgfx uniform handle, so repeated creation has a cost.
-
-Do not let arbitrary sampler uniforms use stage 0 or 1. Those stages are required by the compositor input color and depth textures.
-
-Do not bind `pipeline.uniform_textures` to the final compositor by default. That would make sampler stage ownership ambiguous and could break user-provided compositor samplers.
+Do not bind `pipeline.uniform_textures` to the final compositor by default. That would make sampler stage ownership ambiguous and could break the color/depth inputs.
 
 ## 11. Minimal Patch Checklist
 
 1. Add `compositing_params0` through `compositing_params3` to `ForwardPipelineAAAConfig`.
-2. Add `compositing_uniform_values` and `compositing_uniform_textures` to `ForwardPipelineAAAConfig`.
-3. Add `u_compositingParams` to `ForwardPipelineAAA`.
-4. Create, validate, and destroy `u_compositingParams`.
-5. Before the final compositing `DrawTriangles`, call `SetUniforms(pipeline.uniform_values, {})`.
-6. Set `uCompositingParams`.
-7. Call `SetUniforms(aaa_config.compositing_uniform_values, aaa_config.compositing_uniform_textures)`.
-8. Update Lua and Python bindings for the new config fields, or bind the helper functions if vector member binding is not portable enough.
-9. Add `uniform vec4 uCompositingParams[4];` to the default compositing shader source.
-10. Audit and align `u_color`/`u_depth` versus `u_copyColor`/`u_copyDepth` naming in the compositing shader source.
-11. Add one C++, one Lua, and one Python smoke path or tutorial snippet.
+2. Add `u_compositingParams` to `ForwardPipelineAAA`.
+3. Create, validate, and destroy `u_compositingParams`.
+4. Set `uCompositingParams` before the final compositing draw.
+5. Call `SetUniforms(pipeline.uniform_values, {})` before the final compositing `DrawTriangles` call.
+6. Update Lua and Python bindings for the new `Vec4` config fields.
+7. Add `uniform vec4 uCompositingParams[4];` to the default compositing shader source.
+8. Serialize the new fields with backward-compatible JSON loading, or explicitly document them as runtime-only.
+9. Add one C++, one Lua, and one Python smoke path or tutorial snippet.
 
-This keeps the implementation local to the AAA config, the AAA final pass, the existing shader source, and the existing binding generator. It avoids new submit overloads and reuses the uniform abstractions already exposed to users.
+This keeps the implementation local to the AAA config, the AAA final pass, the existing shader source, and the existing binding generator. It avoids new submit overloads, avoids low-level uniform lists in `ForwardPipelineAAAConfig`, and preserves the current purpose-oriented API style.

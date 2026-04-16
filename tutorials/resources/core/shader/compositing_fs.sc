@@ -6,6 +6,9 @@ $input v_texcoord0
 SAMPLER2D(u_color, 0);
 SAMPLER2D(u_depth, 1);
 
+// [0].x: vignette strength, [0].y: vignette radius, [0].z: vignette softness
+uniform vec4 uCompositingParams[4];
+
 /*
 	tone-mapping operators implementation taken from https://www.shadertoy.com/view/lslGzl
 */
@@ -78,6 +81,18 @@ vec4 Sharpen(vec2 uv, float strength) {
 	return vec4(res.xyz, center.w);
 }
 
+vec3 ApplyVignette(vec3 color, vec2 uv) {
+	float strength = clamp(uCompositingParams[0].x, 0.0, 1.0);
+	float radius = max(uCompositingParams[0].y, 0.0001);
+	float softness = max(uCompositingParams[0].z, 0.0001);
+
+	vec2 pos = uv * 2.0 - 1.0;
+	pos.x *= uResolution.x / max(uResolution.y, 1.0);
+	float mask = 1.0 - smoothstep(radius, radius + softness, length(pos));
+
+	return color * mix(1.0, mask, strength);
+}
+
 void main() {
 #if 1
 	vec4 in_sample = Sharpen(v_texcoord0, uAAAParams[2].y);
@@ -100,6 +115,7 @@ void main() {
 	// gamma correction
 	float inv_gamma = uAAAParams[1].y;
 	color = pow(color, vec3_splat(inv_gamma));
+	color = ApplyVignette(color, v_texcoord0);
 
 	gl_FragColor = vec4(color, alpha);
 	gl_FragDepth = texture2D(u_depth, v_texcoord0).r;
