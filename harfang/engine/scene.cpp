@@ -2321,10 +2321,12 @@ SceneAnimRef Scene::GetSceneAnim(const char *name) const {
 SceneBoundAnim Scene::BindAnim(const SceneAnim &scene_anim) const {
 	SceneBoundAnim bound_anim;
 
-	if (anims.is_valid(scene_anim.scene_anim))
-		bound_anim.bound_scene_anim = BindSceneAnim(scene_anim.scene_anim);
-	else
-		warn("Invalid scene animation");
+	if (scene_anim.scene_anim != InvalidAnimRef) {
+		if (anims.is_valid(scene_anim.scene_anim))
+			bound_anim.bound_scene_anim = BindSceneAnim(scene_anim.scene_anim);
+		else
+			warn("Invalid scene animation");
+	}
 
 	for (const auto &i : scene_anim.node_anims)
 		bound_anim.bound_node_anims.push_back(BindNodeAnim(i.node, i.anim));

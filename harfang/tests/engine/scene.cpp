@@ -3,6 +3,8 @@
 #define TEST_NO_MAIN
 #include "acutest.h"
 
+#include <cstring>
+
 // somewhere along the line minwindef.h is included...
 #undef near
 #undef far
@@ -21,6 +23,7 @@
 
 #include "foundation/data.h"
 #include "foundation/data_rw_interface.h"
+#include "foundation/log.h"
 #include "foundation/math.h"
 
 using namespace hg;
@@ -193,6 +196,62 @@ static void test_LoadSaveEmptySceneBinary() {
 		TEST_CHECK(LoadSceneBinaryFromData(data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx) == true);
 		TEST_CHECK(scene.GetAllNodeCount() == 0);
 	}
+}
+
+struct SceneAnimLogCapture {
+	int invalid_scene_animation_warnings{0};
+};
+
+static void CaptureSceneAnimLog(const char *msg, int mask, const char *details, void *user) {
+	(void)details;
+
+	auto &capture = *reinterpret_cast<SceneAnimLogCapture *>(user);
+	if ((mask & LL_Warning) && msg && std::strcmp(msg, "Invalid scene animation") == 0)
+		++capture.invalid_scene_animation_warnings;
+}
+
+static void test_PlayNodeSceneAnimWithoutSceneAnimTrack() {
+	Scene scene;
+
+	auto node = scene.CreateNode("node");
+	node.SetTransform(scene.CreateTransform());
+
+	Anim node_anim;
+	node_anim.t_start = time_from_ms(0);
+	node_anim.t_end = time_from_ms(1000);
+	node_anim.vec3_tracks.push_back({"Position", {}});
+	SetKey(node_anim.vec3_tracks.back(), node_anim.t_start, Vec3::Zero);
+	SetKey(node_anim.vec3_tracks.back(), node_anim.t_end, Vec3::One);
+
+	SceneAnim scene_anim;
+	scene_anim.name = "node_anim";
+	scene_anim.t_start = node_anim.t_start;
+	scene_anim.t_end = node_anim.t_end;
+	scene_anim.node_anims.push_back({node.ref, scene.AddAnim(node_anim)});
+
+	const auto scene_anim_ref = scene.AddSceneAnim(scene_anim);
+
+	SceneAnimLogCapture capture;
+	set_log_hook(CaptureSceneAnimLog, &capture);
+	const auto play_ref = scene.PlayAnim(scene_anim_ref);
+	set_log_hook(nullptr, nullptr);
+
+	TEST_CHECK(play_ref != InvalidScenePlayAnimRef);
+	TEST_CHECK(capture.invalid_scene_animation_warnings == 0);
+
+	SceneAnim broken_scene_anim;
+	broken_scene_anim.name = "broken";
+	broken_scene_anim.scene_anim = scene.AddAnim({});
+	scene.DestroyAnim(broken_scene_anim.scene_anim);
+
+	const auto broken_scene_anim_ref = scene.AddSceneAnim(broken_scene_anim);
+
+	capture = {};
+	set_log_hook(CaptureSceneAnimLog, &capture);
+	scene.PlayAnim(broken_scene_anim_ref);
+	set_log_hook(nullptr, nullptr);
+
+	TEST_CHECK(capture.invalid_scene_animation_warnings == 1);
 }
 
 static void test_LoadSaveObject() {
@@ -717,6 +776,7 @@ void test_scene() {
 	test_DisableObjectNodes();
 	test_LoadSaveEmptyScene();
 	test_LoadSaveEmptySceneBinary();
+	test_PlayNodeSceneAnimWithoutSceneAnimTrack();
 	test_LoadSaveObject();
 	test_LoadSaveObjectBinary();
 	test_LoadSaveCamera();
