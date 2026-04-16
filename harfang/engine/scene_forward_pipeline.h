@@ -46,6 +46,10 @@ struct ForwardPipelineAAAConfig {
 	float exposure = 1.f, gamma = 2.2f;
 	float sharpen = 0.1f;
 	float dof_focus_point = 0.f, dof_focus_length = 0.f;
+	Vec4 compositing_params0 = Vec4::Zero;
+	Vec4 compositing_params1 = Vec4::Zero;
+	Vec4 compositing_params2 = Vec4::Zero;
+	Vec4 compositing_params3 = Vec4::Zero;
 
 	bool use_tonemapping = true;
 	float specular_weight = 1.f;
@@ -136,6 +140,7 @@ struct ForwardPipelineAAA {
 	// compositing
 	bgfx::UniformHandle u_color;
 	bgfx::UniformHandle u_depth;
+	bgfx::UniformHandle u_compositingParams;
 	bgfx::ProgramHandle compositing_prg;
 
 	// no compositing

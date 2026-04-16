@@ -3,8 +3,11 @@ $input v_texcoord0
 // HARFANG(R) Copyright (C) 2022 Emmanuel Julien, NWNC HARFANG. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 #include <forward_pipeline.sh>
 
-SAMPLER2D(u_copyColor, 0);
-SAMPLER2D(u_copyDepth, 1);
+SAMPLER2D(u_color, 0);
+SAMPLER2D(u_depth, 1);
+
+// [0].x: vignette strength, [0].y: vignette radius, [0].z: vignette softness
+uniform vec4 uCompositingParams[4];
 
 /*
 	tone-mapping operators implementation taken from https://www.shadertoy.com/view/lslGzl
@@ -61,11 +64,11 @@ vec3 Uncharted2ToneMapping(vec3 color, float exposure) {
 }
 
 vec4 Sharpen(vec2 uv, float strength) {
-	vec4 up = texture2D(u_copyColor, uv + vec2(0, 1) / uResolution.xy);
-	vec4 left = texture2D(u_copyColor, uv + vec2(-1, 0) / uResolution.xy);
-	vec4 center = texture2D(u_copyColor, uv);
-	vec4 right = texture2D(u_copyColor, uv + vec2(1, 0) / uResolution.xy);
-	vec4 down = texture2D(u_copyColor, uv + vec2(0, -1) / uResolution.xy);
+	vec4 up = texture2D(u_color, uv + vec2(0, 1) / uResolution.xy);
+	vec4 left = texture2D(u_color, uv + vec2(-1, 0) / uResolution.xy);
+	vec4 center = texture2D(u_color, uv);
+	vec4 right = texture2D(u_color, uv + vec2(1, 0) / uResolution.xy);
+	vec4 down = texture2D(u_color, uv + vec2(0, -1) / uResolution.xy);
 
 	float exposure = uAAAParams[1].x;
 	up.xyz = SimpleReinhardToneMapping(up.xyz, exposure);
@@ -78,6 +81,18 @@ vec4 Sharpen(vec2 uv, float strength) {
 	return vec4(res.xyz, center.w);
 }
 
+vec3 ApplyVignette(vec3 color, vec2 uv) {
+	float strength = clamp(uCompositingParams[0].x, 0.0, 1.0);
+	float radius = max(uCompositingParams[0].y, 0.0001);
+	float softness = max(uCompositingParams[0].z, 0.0001);
+
+	vec2 pos = uv * 2.0 - 1.0;
+	pos.x *= uResolution.x / max(uResolution.y, 1.0);
+	float mask = 1.0 - smoothstep(radius, radius + softness, length(pos));
+
+	return color * mix(1.0, mask, strength);
+}
+
 void main() {
 #if 1
 	vec4 in_sample = Sharpen(v_texcoord0, uAAAParams[2].y);
@@ -85,7 +100,7 @@ void main() {
 	vec3 color = in_sample.xyz;
 	float alpha = in_sample.w;
 #else
-	vec4 in_sample = texture2D(u_copyColor, v_texcoord0);
+	vec4 in_sample = texture2D(u_color, v_texcoord0);
 
 	vec3 color = in_sample.xyz;
 	float alpha = in_sample.w;
@@ -100,7 +115,8 @@ void main() {
 	// gamma correction
 	float inv_gamma = uAAAParams[1].y;
 	color = pow(color, vec3_splat(inv_gamma));
+	color = ApplyVignette(color, v_texcoord0);
 
 	gl_FragColor = vec4(color, alpha);
-	gl_FragDepth = texture2D(u_copyDepth, v_texcoord0).r;
+	gl_FragDepth = texture2D(u_depth, v_texcoord0).r;
 }
