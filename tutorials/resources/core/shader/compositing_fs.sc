@@ -3,8 +3,8 @@ $input v_texcoord0
 // HARFANG(R) Copyright (C) 2022 Emmanuel Julien, NWNC HARFANG. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 #include <forward_pipeline.sh>
 
-SAMPLER2D(u_copyColor, 0);
-SAMPLER2D(u_copyDepth, 1);
+SAMPLER2D(u_color, 0);
+SAMPLER2D(u_depth, 1);
 
 /*
 	tone-mapping operators implementation taken from https://www.shadertoy.com/view/lslGzl
@@ -61,11 +61,11 @@ vec3 Uncharted2ToneMapping(vec3 color, float exposure) {
 }
 
 vec4 Sharpen(vec2 uv, float strength) {
-	vec4 up = texture2D(u_copyColor, uv + vec2(0, 1) / uResolution.xy);
-	vec4 left = texture2D(u_copyColor, uv + vec2(-1, 0) / uResolution.xy);
-	vec4 center = texture2D(u_copyColor, uv);
-	vec4 right = texture2D(u_copyColor, uv + vec2(1, 0) / uResolution.xy);
-	vec4 down = texture2D(u_copyColor, uv + vec2(0, -1) / uResolution.xy);
+	vec4 up = texture2D(u_color, uv + vec2(0, 1) / uResolution.xy);
+	vec4 left = texture2D(u_color, uv + vec2(-1, 0) / uResolution.xy);
+	vec4 center = texture2D(u_color, uv);
+	vec4 right = texture2D(u_color, uv + vec2(1, 0) / uResolution.xy);
+	vec4 down = texture2D(u_color, uv + vec2(0, -1) / uResolution.xy);
 
 	float exposure = uAAAParams[1].x;
 	up.xyz = SimpleReinhardToneMapping(up.xyz, exposure);
@@ -85,7 +85,7 @@ void main() {
 	vec3 color = in_sample.xyz;
 	float alpha = in_sample.w;
 #else
-	vec4 in_sample = texture2D(u_copyColor, v_texcoord0);
+	vec4 in_sample = texture2D(u_color, v_texcoord0);
 
 	vec3 color = in_sample.xyz;
 	float alpha = in_sample.w;
@@ -102,5 +102,5 @@ void main() {
 	color = pow(color, vec3_splat(inv_gamma));
 
 	gl_FragColor = vec4(color, alpha);
-	gl_FragDepth = texture2D(u_copyDepth, v_texcoord0).r;
+	gl_FragDepth = texture2D(u_depth, v_texcoord0).r;
 }
