@@ -9,3 +9,4 @@ build
 dist
 commit_id
 *.DS_Store
+/tutorials/hg_lua
