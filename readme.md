@@ -2,11 +2,13 @@
 
 # HARFANG® 3D engine
 
+_Non official fork_
+
 [![PyPI](https://img.shields.io/pypi/v/harfang)](https://pypi.org/project/harfang)
 [![Downloads](https://static.pepy.tech/badge/harfang)](https://pepy.tech/project/harfang)
 [![Downloads](https://static.pepy.tech/badge/harfang/month)](https://pepy.tech/project/harfang)
 
-HARFANG®3D is an all-in-one 3D visualization library usable in C++, Python, Lua and Go.
+HARFANG®3D is an all-in-one 3D visualization library usable in C++, Python and Lua.
 #### Table of contents
 
 1. [About](#section_1)
