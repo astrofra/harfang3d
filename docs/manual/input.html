@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reading Input - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="active" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>The input system provides access to the HID devices connected to the host machine.</p>
+<h2 id="supported-device-classes">Supported Device Classes</h2>
+<p>All supported input device classes are utilized in the same manner. All devices connected to the host are identified by a unique name. There are two main functions, one to list available device names and one to read a specific device state.</p>
+<p>Wrapper classes are available to manage current and previous states to implement high-level functions such as pressed, released, etc. When the class update function is called the current state replaces the previous state and is then replace by the current state.</p>
+<p>The following table lists main clases and functions for all supported device classes.</p>
+<table>
+<thead>
+<tr>
+<th>Device Class</th>
+<th>List Devices</th>
+<th>Read State</th>
+<th>Wrapper Class</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Mouse</td>
+<td><a href="../api/cpython/functions.html#getmousenames">GetMouseNames</a></td>
+<td><a href="../api/cpython/functions.html#readmouse">ReadMouse</a></td>
+<td><a href="../api/cpython/classes.html#mouse">Mouse</a></td>
+</tr>
+<tr>
+<td>Keyboard</td>
+<td><a href="../api/cpython/functions.html#getkeyboardnames">GetKeyboardNames</a></td>
+<td><a href="../api/cpython/functions.html#readkeyboard">ReadKeyboard</a></td>
+<td><a href="../api/cpython/classes.html#keyboard">Keyboard</a></td>
+</tr>
+<tr>
+<td>Gamepad</td>
+<td><a href="../api/cpython/functions.html#getgamepadnames">GetGamepadNames</a></td>
+<td><a href="../api/cpython/functions.html#readgamepad">ReadGamepad</a></td>
+<td><a href="../api/cpython/classes.html#gamepad">Gamepad</a></td>
+</tr>
+<tr>
+<td>VR Controller</td>
+<td><a href="../api/cpython/functions.html#getvrcontrollernames">GetVRControllerNames</a></td>
+<td><a href="../api/cpython/functions.html#readvrcontroller">ReadVRController</a></td>
+<td><a href="../api/cpython/classes.html#vrcontroller">VRController</a></td>
+</tr>
+<tr>
+<td>VR Generic Tracker</td>
+<td><a href="../api/cpython/functions.html#getvrgenerictrackernames">GetVRGenericTrackerNames</a></td>
+<td><a href="../api/cpython/functions.html#readvrgenerictracker">ReadVRGenericTracker</a></td>
+<td><a href="../api/cpython/classes.html#vrgenerictracker">VRGenericTracker</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="reading-from-the-mouse-and-keyboard-devices">Reading from the Mouse and Keyboard devices</h2>
+<p>The main keyboard device connected to the host is always retrieved using the <code>default</code> name. All of the physical keyboard keys can be queried by using their corresponding <a href="../api/cpython/constants.html#key">Key</a>.</p>
+<p>The main mouse device connected to the host is always retrieved using the <code>default</code> name.</p>
+<h2 id="headless-application">Headless Application</h2>
+<p>Most input device require your application to open a window and will only return a valid state when your application window has focus.</p>
+<p>For headless applications, the device name <code>raw</code> can be used. A raw device will return a valid state even if the application does not have focus.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

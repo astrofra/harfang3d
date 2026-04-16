@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drawing to Views - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="active" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Views are an essential mechanism of the 3d rendering backend and must be thoroughly understood to perform any form of complex rendering.</p>
+<h2 id="overview">Overview</h2>
+<p>Views are refered to by index as an integer value between 0 and 255. There can be no more than 256 views defined.</p>
+<p>Each call to a drawing function such as <a href="../api/cpython/functions.html#drawlines">DrawLines</a> or <a href="../api/cpython/functions.html#drawmodel">DrawModel</a> is <em>queued</em> as multiple draw commands on the specified view. When <a href="../api/cpython/functions.html#frame">Frame</a> is called all views are processed in order, from the lowest to the highest id.</p>
+<p>Keep in mind that rendering is deferred and no actual drawing occurs immediately after calling a draw function.</p>
+<p>Drawing happens when <a href="../api/cpython/functions.html#frame">Frame</a> is called and all views are reset after that.</p>
+<h2 id="view-properties">View Properties</h2>
+<p>The following properties are specified <em>per view</em>:</p>
+<ul>
+<li>View and projection matrices set by <a href="../api/cpython/functions.html#setviewtransform">SetViewTransform</a>.</li>
+<li>Clipping rectangle set by <a href="../api/cpython/functions.html#setviewrect">SetViewRect</a>.</li>
+<li>Color/depth/stencil clear set by <a href="../api/cpython/functions.html#setviewclear">SetViewClear</a>.</li>
+<li>Draw command ordering set by <a href="../api/cpython/functions.html#setviewmode">SetViewMode</a>.</li>
+<li>Output buffer set by <a href="../api/cpython/functions.html#setviewframebuffer">SetViewFrameBuffer</a>.</li>
+</ul>
+<p>A view accepts a single value for each of these properties. <em>Multiple calls to change the same property of a view will override its current value.</em></p>
+<p>If you need to use different values for a view property you must use additional views even if all other properties remain unchanged.</p>
+<p>Views with no queued draw commands are skipped. If you need to force the processing of a view, use <a href="../api/cpython/functions.html#touch">Touch</a>.</p>
+<h2 id="draw-command-queue">Draw Command Queue</h2>
+<p>Draw commands queued on a view are processed according to the view mode, they are executed:</p>
+<ul>
+<li>In submission order if the view mode is <a href="../api/cpython/constants.html#viewmode-vm_sequential">VM_Sequential</a>.</li>
+<li>In ascending depth order if the view mode is <a href="../api/cpython/constants.html#viewmode-vm_depthascending">VM_DepthAscending</a>.</li>
+<li>In descending depth order if the view mode is <a href="../api/cpython/constants.html#viewmode-vm_depthdescending">VM_DepthDescending</a>.</li>
+</ul>
+<p>When the view mode is <a href="../api/cpython/constants.html#viewmode-vm_depthascending">VM_DepthAscending</a> or <a href="../api/cpython/constants.html#viewmode-vm_depthdescending">VM_DepthDescending</a>, the depth value used to sort draw commands is derived from the draw call <em>depth</em> parameter.</p>
+<p>When no depth is specified, 0 is implied.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

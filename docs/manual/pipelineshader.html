@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Writing a Pipeline Shader - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="active" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>A pipeline shader solves the problem of having a single shader source code accepting optional parameters.</p>
+<p>For example, a pipeline shader might accept a diffuse texture <em>or</em> a diffuse color. Having this level of flexibility in a single shader program is performance costly if done at runtime.</p>
+<p>Instead, <em>a pipeline shader abstracts a set of variants</em> each corresponding to a unique combination of its supported features.</p>
+<div class="toc">
+<ul>
+<li><a href="#features">Features</a></li>
+<li><a href="#pipeline-stages">Pipeline Stages</a></li>
+<li><a href="#feature-stages-combinations">Feature &amp; Stages Combinations</a></li>
+<li><a href="#writing-a-pipeline-shader">Writing a Pipeline Shader</a><ul>
+<li><a href="#user-uniforms">User Uniforms</a></li>
+<li><a href="#uniform-naming-convention">Uniform Naming Convention</a></li>
+</ul>
+</li>
+<li><a href="#interaction-with-materials">Interaction with Materials</a></li>
+</ul>
+</div>
+<h2 id="features">Features</h2>
+<p>A pipeline shader may declare one or more features it supports. Each feature corresponds to a set of exclusive values.</p>
+<p>For example, the <code>OptionalDiffuseMap</code> feature has two possible values:</p>
+<ol>
+<li>A texture is available and the diffuse attribute should be fetched from there.</li>
+<li>No texture is available and the diffuse attribute should be fetched from the uDiffuseColor uniform.</li>
+</ol>
+<p>To account for both scenarios in a static way, two variants of the pipeline shader will be compiled. The correct code path to execute in each variant is controlled by defines such as <code>USE_DIFFUSE_MAP=1</code>.</p>
+<h2 id="pipeline-stages">Pipeline Stages</h2>
+<p>The rendering pipeline might also require variants of the shader to be generated.</p>
+<p>Let's take a simple pipeline capable of rendering a model lit by a single light with optional shadow mapping. This pipeline must handle two possible scenarios:</p>
+<ol>
+<li>If the light has shadow mapping enabled it should generate a shadow map and render it as it draws models.</li>
+<li>Otherwise it may skip on the shadow map generation and draw models without accessing the shadow map.</li>
+</ol>
+<h2 id="feature-stages-combinations">Feature &amp; Stages Combinations</h2>
+<p>Continuing on the previous setup such a pipeline shader would produce <em>4 shader variants</em> when compiled:</p>
+<ul>
+<li>2 for the <code>OptionalDiffuseMap</code> feature (ie. we either have a diffuse map or we don't),</li>
+<li>2 for the pipeline stages (ie. one to render using the shadow map, the other without using it).</li>
+</ul>
+<p>The following matrix illustrates this scenario.</p>
+<table>
+<thead>
+<tr>
+<th>Stage/Feature</th>
+<th>USE_DIFFUSE_MAP=0</th>
+<th>USE_DIFFUSE_MAP=1</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Shadow pass</td>
+<td>0</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Light pass</td>
+<td>1</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<h2 id="writing-a-pipeline-shader">Writing a Pipeline Shader</h2>
+<p>A pipeline shader is a regular shader plus an extra definition file with the <code>.hps</code> extension.</p>
+<p>This file is a JSON file listing the supported features and additional uniforms.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;features&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;OptionalDiffuseMap&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;OptionalSpecularMap&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;OptionalNormalMap&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;OptionalLightMap&quot;</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>The following features are supported and have the following effect on the compilation process.</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>States</th>
+<th>Preprocessor Directive</th>
+<th>Uniform</th>
+<th>Recommended channel</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OptionalBaseColorOpacityMap</td>
+<td>2</td>
+<td>USE_BASE_COLOR_OPACITY_MAP=[1 or 0]</td>
+<td>uBaseOpacityMap</td>
+<td>0</td>
+</tr>
+<tr>
+<td>OptionalDiffuseMap</td>
+<td>2</td>
+<td>USE_DIFFUSE_MAP=[1 or 0]</td>
+<td>uDiffuseMap</td>
+<td>0</td>
+</tr>
+<tr>
+<td>OptionalOcclusionRoughnessMetalnessMap</td>
+<td>2</td>
+<td>USE_OCCLUSION_ROUGHNESS_METALNESS_MAP=[1 or 0]</td>
+<td>uOcclusionRoughnessMetalnessMap</td>
+<td>1</td>
+</tr>
+<tr>
+<td>OptionalSpecularMap</td>
+<td>2</td>
+<td>USE_SPECULAR_MAP=[1 or 0]</td>
+<td>uSpecularMap</td>
+<td>1</td>
+</tr>
+<tr>
+<td>OptionalNormalMap</td>
+<td>2</td>
+<td>USE_NORMAL_MAP=[1 or 0]</td>
+<td>uNormalMap</td>
+<td>2</td>
+</tr>
+<tr>
+<td>OptionalLightMap</td>
+<td>2</td>
+<td>USE_LIGHT_MAP=[1 or 0]</td>
+<td>uLightMap</td>
+<td>3</td>
+</tr>
+<tr>
+<td>OptionalSelfMap</td>
+<td>2</td>
+<td>USE_SELF_MAP=[1 or 0]</td>
+<td>uSelfMap</td>
+<td>4</td>
+</tr>
+<tr>
+<td>OptionalOpacityMap</td>
+<td>2</td>
+<td>USE_OPACITY_MAP=[1 or 0]</td>
+<td>uOpacityMap</td>
+<td>5</td>
+</tr>
+<tr>
+<td>OptionalAmbientMap</td>
+<td>2</td>
+<td>USE_AMBIENT_MAP=[1 or 0]</td>
+<td>uAmbientMap</td>
+<td>6</td>
+</tr>
+<tr>
+<td>OptionalReflectionMap</td>
+<td>2</td>
+<td>USE_REFLECTION_MAP=[1 or 0]</td>
+<td>uReflectionMap</td>
+<td>7</td>
+</tr>
+<tr>
+<td>NormalMapInWorldSpace</td>
+<td>2</td>
+<td>NORMAL_MAP_IN_WORLD_SPACE=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>DiffuseUV1</td>
+<td>2</td>
+<td>DIFFUSE_UV_CHANNEL=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>SpecularUV1</td>
+<td>2</td>
+<td>SPECULAR_UV_CHANNEL=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>AmbientUV1</td>
+<td>2</td>
+<td>AMBIENT_UV_CHANNEL=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>OptionalSkinning</td>
+<td>2</td>
+<td>ENABLE_SKINNING=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>OptionalAlphaCut</td>
+<td>2</td>
+<td>ENABLE_ALPHA_CUT=[1 or 0]</td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<p>Obviously, a shader declaring all possible features will generate a considerable amount of variants.</p>
+<p><em>Note:</em> For backward compatibility reasons <code>AMBIENT_UV_CHANNEL=1</code> is always defined when compiling a pipeline shader without the AmbientUV1 feature.</p>
+<h3 id="user-uniforms">User Uniforms</h3>
+<p>Along features you can specify custom uniforms in the pipeline shader definition file. Three uniform types are supported: <code>Vec4</code>, <code>Color</code> and <code>Sampler</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;uniforms&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                    </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uCutoff&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Vec4&quot;</span><span class="p">}</span>
+<span class="w">                </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Defining a custom uniform will not make it available in the scope of the pipeline shader, you still have to declare it in the shader source. Custom uniforms do not increase the amount of variants generated.</p>
+<p>When declaring a sampler uniform you need to specify the texture channel.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;uniforms&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                    </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uOcclusionMap&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Sampler&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;channel&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">}</span>
+<span class="w">                </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>You can also provide a default value for uniforms at this point.</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;uniforms&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">                    </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uCutoff&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Vec4&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mf">0.5</span><span class="p">,</span><span class="w"> </span><span class="mf">0.5</span><span class="p">,</span><span class="w"> </span><span class="mf">0.9</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">]},</span>
+<span class="w">                    </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uOcclusionMap&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Sampler&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;channel&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;texture.jpg&quot;</span><span class="p">}</span>
+<span class="w">                </span><span class="p">]</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h3 id="uniform-naming-convention">Uniform Naming Convention</h3>
+<p>Uniforms are named differently whether they originate from the Bgfx backend or not.</p>
+<ul>
+<li><code>uDiffuseMap/uLightMap/...</code> belong to the HARFANG pipeline,</li>
+<li><code>u_view/u_invView/...</code> belong to the BGFX backend.</li>
+</ul>
+<h2 id="interaction-with-materials">Interaction with Materials</h2>
+<p>When updating material uniform values or textures you must call <a href="../api/cpython/functions.html#updatematerialpipelineprogramvariant">UpdateMaterialPipelineProgramVariant</a> to update the pipeline shader variant used by the material.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

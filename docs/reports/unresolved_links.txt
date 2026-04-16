@@ -1,0 +1,3 @@
+api/cpython/functions.html: [SubmitModelToForwardPipeline]
+api/lua/functions.html: [SubmitModelToForwardPipeline]
+manual/scripting.html: [Scene_RemoveScript]

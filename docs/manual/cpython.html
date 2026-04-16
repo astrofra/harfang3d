@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harfang for CPython - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="active" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Harfang for Python is distributed as a wheel package <code>(.whl)</code> compatible with official builds of the CPython interpreter version 3.4 or newer.</p>
+<h2 id="installation">Installation</h2>
+<ul>
+<li>On Windows, install from the command line by typing <code>pip install harfang</code>.</li>
+<li>On Linux, download the wheel for your distribution then install from a terminal by typing <code>pip install /path/to/harfang.whl</code>.</li>
+</ul>
+<h2 id="testing-your-installation">Testing your Installation</h2>
+<p>Start the python interpreter and type <code>import harfang</code>, you should get an output similar to the following:</p>
+<div class="codehilite"><pre><span></span><code>Harfang 2.0.0 for CPython 3.2+ on windows-x64 (build ba08463ee9e6c0c93960230fb880c1d9b230610d Sep 30 2020 16:08:22)
+See https://www.harfang3d.com/license for licensing terms
+</code></pre></div>
+
+<h3 id="troubleshooting">Troubleshooting</h3>
+<blockquote>
+<p><em><code>pip install</code> fails with a message saying <code>harfang is not a supported wheel on this platform</code>.</em></p>
+<p>Make sure that your pip install is up to date. Outdated pip versions have been known to cause such problems.</p>
+<p><em>The dynamic library fails to load when importing the <code>harfang</code> module in Python.</em></p>
+<p>Make sure your system has the required runtime dependencies installed. It should have OpenAL and on Windows the Visual C++ 2017 redistributable installed.</p>
+<p><em><code>ImportError: DLL load failed: %1 is not a valid Win32 application.</code> error when importing the <code>harfang</code> module.</em></p>
+<p>This error usually happens when installing the incorrect version of Harfang for your Python version. For example when installing the 64 bit version of Harfang on a 32 bit install of the Python interpreter.</p>
+</blockquote>
+<h2 id="first-program">First Program</h2>
+<p>Let's write a simple test program, create a new file named <code>test.py</code> and paste the following code into it.</p>
+<div class="codehilite"><pre><span></span><code><span class="kn">import</span> <span class="nn">harfang</span> <span class="k">as</span> <span class="nn">hg</span>
+
+<span class="n">hg</span><span class="o">.</span><span class="n">InputInit</span><span class="p">()</span>
+<span class="n">hg</span><span class="o">.</span><span class="n">WindowSystemInit</span><span class="p">()</span>
+
+<span class="n">win</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">RenderInit</span><span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">,</span> <span class="n">hg</span><span class="o">.</span><span class="n">RF_None</span><span class="p">)</span>
+
+<span class="k">while</span> <span class="ow">not</span> <span class="n">hg</span><span class="o">.</span><span class="n">ReadKeyboard</span><span class="p">()</span><span class="o">.</span><span class="n">Key</span><span class="p">(</span><span class="n">hg</span><span class="o">.</span><span class="n">K_Escape</span><span class="p">):</span>
+    <span class="n">hg</span><span class="o">.</span><span class="n">SetViewRect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">400</span><span class="p">,</span> <span class="mi">300</span><span class="p">)</span>
+    <span class="n">hg</span><span class="o">.</span><span class="n">SetViewClear</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">hg</span><span class="o">.</span><span class="n">CF_Color</span><span class="p">,</span> <span class="n">hg</span><span class="o">.</span><span class="n">RGBA32</span><span class="p">(</span><span class="mi">96</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">255</span><span class="p">))</span>
+
+    <span class="n">hg</span><span class="o">.</span><span class="n">Touch</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">hg</span><span class="o">.</span><span class="n">Frame</span><span class="p">()</span>
+    <span class="n">hg</span><span class="o">.</span><span class="n">UpdateWindow</span><span class="p">(</span><span class="n">win</span><span class="p">)</span>
+
+<span class="n">hg</span><span class="o">.</span><span class="n">DestroyWindow</span><span class="p">(</span><span class="n">win</span><span class="p">)</span>
+</code></pre></div>
+
+<p>When executed, this program demonstrates how to create an output window, initialize the input and render systems and paint the whole window in blue until the escape key is pressed.</p>
+<p>In order to draw anything on screen we will need to create at least a shader and compile it before using it in our program, this process is documented in the <a href="assets.html">Resources &amp; Assets</a> page.</p>
+<p><a href="quickstart.html">Quickstart</a> documents how to quickly get the more interesting tutorial programs running.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Working with Scene - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="active" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>A scene is a 3d world populated with <a href="../api/cpython/classes.html#node">Node</a>.</p>
+<p>Nodes are container objects taking meaning through the use of components.</p>
+<h2 id="node-components">Node &amp; Components</h2>
+<p>Calling <a href="../api/cpython/classes.html#scene_createnode">Scene.CreateNode</a> returns an empty node with no component attached. In this state, it serves little to no purpose as it will not be drawn or implement any concrete behavior.</p>
+<h3 id="object">Object</h3>
+<p>In order to be drawn a node must provide two essential informations:</p>
+<ul>
+<li><em>A transformation:</em> This is done using <a href="../api/cpython/classes.html#node_settransform">Node.SetTransform</a> to assign it a <a href="../api/cpython/classes.html#transform">Transform</a> component.</li>
+<li><em>A visual representation:</em> This is done using <a href="../api/cpython/classes.html#node_setobject">Node.SetObject</a> to assign it an <a href="../api/cpython/classes.html#object">Object</a> component.</li>
+</ul>
+<p>The object component accepts a <a href="../api/cpython/classes.html#modelref">ModelRef</a> to a <a href="../api/cpython/classes.html#model">Model</a> and holds a local list of <a href="../api/cpython/classes.html#material">Material</a> used to draw the model. Each object component may hold different material definition for the same model.</p>
+<p>The same components can be assigned to multiple nodes.</p>
+<h3 id="camera">Camera</h3>
+<p>Assign the <a href="../api/cpython/classes.html#camera">Camera</a> component to nodes to turn them into observers into the scene.</p>
+<p>For more information on how this integrates with drawing a scene, see <a href="drawingscene.html">Drawing a Scene</a>.</p>
+<h3 id="light">Light</h3>
+<p>Assign the <a href="../api/cpython/classes.html#light">Light</a> component to nodes to turn them into light sources.</p>
+<h3 id="instance">Instance</h3>
+<p>Scenes can be instantiated in one another. This is useful to create multiple complex parts with their own animations or scripts from which you compose a larger world.</p>
+<p>To instantiate a scene use <a href="../api/cpython/classes.html#node_setinstance">Node.SetInstance</a> to assign an <a href="../api/cpython/classes.html#instance">Instance</a> component to a node. To perform explicit instantiation use <a href="../api/cpython/classes.html#node_setupinstancefromassets">Node.SetupInstanceFromAssets</a> or <a href="../api/cpython/classes.html#node_setupinstancefromfile">Node.SetupInstanceFromFile</a>.</p>
+<p><em>Note:</em> Instances are automatically setup when loading a scene.</p>
+<p>After instantiation, the instance content is held in the host scene. <a href="../api/cpython/classes.html#node_getinstancesceneview">Node.GetInstanceSceneView</a> can be used to access it in isolation from the host content via the returned <a href="../api/cpython/classes.html#sceneview">SceneView</a> object.</p>
+<h2 id="managing-scene-resources">Managing Scene Resources</h2>
+<p>Most scene resources are returned by value as generational references (see <a href="ownership.html">Ownership &amp; References</a>) wrapped into helper classes such as <a href="../api/cpython/classes.html#node">Node</a>, <a href="../api/cpython/classes.html#camera">Camera</a>, <a href="../api/cpython/classes.html#light">Light</a> or <a href="../api/cpython/classes.html#object">Object</a>.</p>
+<p>The scene has strong ownership of the resources it manages.</p>
+<p>Nodes are explicitely destroyed using <a href="../api/cpython/classes.html#scene_destroynode">Scene.DestroyNode</a> and components are implicitely destroyed using <a href="../api/cpython/classes.html#scene_garbagecollect">Scene.GarbageCollect</a>.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

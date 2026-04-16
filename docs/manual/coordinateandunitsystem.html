@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coordinates and Units System - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="active" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Harfang uses a left-handed coordinate system with the X axis pointing right, the Y axis pointing up and the Z axis pointing away from the viewer.
+For units, it uses the International System of Units (SI) or metric system:</p>
+<ul>
+<li>Distances are expressed in meters, see <a href="../api/cpython/functions.html#mtr">Mtr</a>, <a href="../api/cpython/functions.html#cm">Cm</a> and <a href="../api/cpython/functions.html#mm">Mm</a>.</li>
+<li>Angles are expressed in radians, see <a href="../api/cpython/functions.html#rad">Rad</a> and <a href="../api/cpython/functions.html#deg">Deg</a>.</li>
+</ul>
+<p>Time is internally stored in nanoseconds as a 64 bit integer, many functions are available to convert to and from different units of time:</p>
+<ul>
+<li><strong>Second:</strong> <a href="../api/cpython/functions.html#time_from_sec">time_from_sec</a>/<a href="../api/cpython/functions.html#time_to_sec">time_to_sec</a> and <a href="../api/cpython/functions.html#time_from_sec_f">time_from_sec_f</a>/<a href="../api/cpython/functions.html#time_to_sec_f">time_to_sec_f</a></li>
+<li><strong>Millisecond (10<sup>-3</sup>s):</strong> <a href="../api/cpython/functions.html#time_from_ms">time_from_ms</a>/<a href="../api/cpython/functions.html#time_to_ms">time_to_ms</a> and <a href="../api/cpython/functions.html#time_from_ms_f">time_from_ms_f</a>/<a href="../api/cpython/functions.html#time_to_ms_f">time_to_ms_f</a></li>
+<li><strong>Microsecond (10<sup>-6</sup>s):</strong> <a href="../api/cpython/functions.html#time_from_us">time_from_us</a>/<a href="../api/cpython/functions.html#time_to_us">time_to_us</a> and <a href="../api/cpython/functions.html#time_from_us_f">time_from_us_f</a>/<a href="../api/cpython/functions.html#time_to_us_f">time_to_us_f</a></li>
+<li><strong>Nanosecond (10<sup>-9</sup>s):</strong> <a href="../api/cpython/functions.html#time_from_ns">time_from_ns</a></li>
+</ul>
+<p><em>Note:</em> Storing time as integer is extremely important! As values in nanoseconds get very large, very fast, floating point representations will quickly loose precision due to quantization. If you really need time as a floating point value, you should perform fixed-point arithmetics on integer representation then convert the result to floating point as the very last step.</p>
+<p>The current system time can be queried using <a href="../api/cpython/functions.html#time_now">time_now</a>.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

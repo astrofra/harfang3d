@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Virtual Reality - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="active" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Virtual reality is supported through the OpenVR API on the Windows operating system.</p>
+<div class="toc">
+<ul>
+<li><a href="#prerequisites">Prerequisites</a></li>
+<li><a href="#openvr-api">OpenVR API</a><ul>
+<li><a href="#main-loop">Main Loop</a></li>
+<li><a href="#reading-input">Reading Input</a></li>
+</ul>
+</li>
+<li><a href="#performance-notes">Performance Notes</a></li>
+</ul>
+</div>
+<h2 id="prerequisites">Prerequisites</h2>
+<ul>
+<li>A compatible VR headset (HTC Vive, Occulus Rift or Mixed Reality compatible).</li>
+<li>SteamVR must be installed on your computer.</li>
+</ul>
+<h2 id="openvr-api">OpenVR API</h2>
+<p>Initialize OpenVR using <a href="../api/cpython/functions.html#openvrinit">OpenVRInit</a>, when done call <a href="../api/cpython/functions.html#openvrshutdown">OpenVRShutdown</a>. You can initialize and shutdown OpenVR multiple times throughout your program lifetime.</p>
+<p>Create two framebuffer to render both eyes to by calling <a href="../api/cpython/functions.html#openvrcreateeyeframebuffer">OpenVRCreateEyeFrameBuffer</a>. These buffers can be kept alive between a shutdown/init cycle of OpenVR.</p>
+<h3 id="main-loop">Main Loop</h3>
+<p>During your program main loop perform the following steps:</p>
+<ol>
+<li>Read the current VR state using <a href="../api/cpython/functions.html#openvrgetstate">OpenVRGetState</a>. This function takes the transformation of the actor body in the virtual world and returns a state object containing everything required to draw the left and right eye views.</li>
+<li>Use <a href="../api/cpython/functions.html#openvrstatetoviewstate">OpenVRStateToViewState</a> function to generate the left and right eye <a href="../api/cpython/classes.html#viewstate">ViewState</a>.</li>
+<li>For each eye:<ol>
+<li>Use <a href="../api/cpython/classes.html#openvreyeframebuffer_gethandle">OpenVREyeFrameBuffer.GetHandle</a> to retrieve a framebuffer handle.</li>
+<li>Use <a href="../api/cpython/functions.html#submitscenetopipeline">SubmitSceneToPipeline</a> to draw the scene to the eye framebuffer. To improve performance consider using the low-level APIs to draw the scene, see <a href="drawingscene.html">Drawing a Scene</a>.</li>
+</ol>
+</li>
+<li>Kick-off rendering by calling <a href="../api/cpython/functions.html#frame">Frame</a>.</li>
+<li>Submit eye framebuffers to the device using <a href="../api/cpython/functions.html#openvrsubmitframe">OpenVRSubmitFrame</a>.</li>
+</ol>
+<p>The following Python code implements the complete render loop to efficiently display a scene in VR.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">scene</span><span class="o">.</span><span class="n">Update</span><span class="p">(</span><span class="n">hg</span><span class="o">.</span><span class="n">TickClock</span><span class="p">())</span>
+
+<span class="n">vr_state</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">OpenVRGetState</span><span class="p">(</span><span class="n">cam</span><span class="o">.</span><span class="n">GetTransform</span><span class="p">()</span><span class="o">.</span><span class="n">GetWorld</span><span class="p">(),</span> <span class="n">cam</span><span class="o">.</span><span class="n">GetCamera</span><span class="p">()</span><span class="o">.</span><span class="n">GetZNear</span><span class="p">(),</span> <span class="n">cam</span><span class="o">.</span><span class="n">GetCamera</span><span class="p">()</span><span class="o">.</span><span class="n">GetZFar</span><span class="p">())</span>
+<span class="n">left</span><span class="p">,</span> <span class="n">right</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">OpenVRStateToViewState</span><span class="p">(</span><span class="n">vr_state</span><span class="p">)</span>
+<span class="n">vr_eye_rect</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">IntRect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">vr_state</span><span class="o">.</span><span class="n">width</span><span class="p">,</span> <span class="n">vr_state</span><span class="o">.</span><span class="n">height</span><span class="p">)</span>
+
+<span class="c1"># common, view-independent render data</span>
+<span class="n">vid</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">vid</span><span class="p">,</span> <span class="n">pass_ids</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">PrepareSceneForwardPipelineCommonRenderData</span><span class="p">(</span><span class="n">vid</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">render_data</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+
+<span class="c1"># view-dependent render data and submit</span>
+<span class="n">vid</span><span class="p">,</span> <span class="n">pass_ids</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">PrepareSceneForwardPipelineViewDependentRenderData</span><span class="p">(</span><span class="n">vid</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">render_data</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+<span class="n">vid</span><span class="p">,</span> <span class="n">pass_ids</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">SubmitSceneToForwardPipeline</span><span class="p">(</span><span class="n">vid</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">vr_eye_rect</span><span class="p">,</span> <span class="n">left</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">render_data</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">vr_left_fb</span><span class="o">.</span><span class="n">GetHandle</span><span class="p">())</span>
+
+<span class="n">vid</span><span class="p">,</span> <span class="n">pass_ids</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">PrepareSceneForwardPipelineViewDependentRenderData</span><span class="p">(</span><span class="n">vid</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">render_data</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+<span class="n">vid</span><span class="p">,</span> <span class="n">pass_ids</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">SubmitSceneToForwardPipeline</span><span class="p">(</span><span class="n">vid</span><span class="p">,</span> <span class="n">scene</span><span class="p">,</span> <span class="n">vr_eye_rect</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">pipeline</span><span class="p">,</span> <span class="n">render_data</span><span class="p">,</span> <span class="n">res</span><span class="p">,</span> <span class="n">vr_right_fb</span><span class="o">.</span><span class="n">GetHandle</span><span class="p">())</span>
+
+<span class="c1"># start rendering</span>
+<span class="n">hg</span><span class="o">.</span><span class="n">Frame</span><span class="p">()</span>
+
+<span class="c1"># submit to VR device</span>
+<span class="n">hg</span><span class="o">.</span><span class="n">OpenVRSubmitFrame</span><span class="p">(</span><span class="n">vr_left_fb</span><span class="p">,</span> <span class="n">vr_right_fb</span><span class="p">)</span>
+</code></pre></div>
+
+<h3 id="reading-input">Reading Input</h3>
+<p>Reading input from the VR controllers or trackers is done using the <a href="../api/cpython/functions.html#readvrcontroller">ReadVRController</a> and <a href="../api/cpython/functions.html#readvrgenerictracker">ReadVRGenericTracker</a> functions. See <a href="input.html">Reading Input</a> for more information on reading inputs in general.</p>
+<h2 id="performance-notes">Performance Notes</h2>
+<p>VR is extremely costly in terms of performance. Depending on the headset, the minumum required display refresh rate can vary between 90Hz and 120Hz.</p>
+<p>At least two different renders, one for both eyes, are required. You might occasionally need a third render to monitor the simulation from an external point of view.</p>
+<p>As a result of these requirements, keep in mind the following points:</p>
+<ul>
+<li>You should minimize the amount of work required per scene render. See <a href="drawingscene.html">Drawing a Scene</a> to learn how to use the low-level API to efficiently render a scene for multiple observers.</li>
+<li>Linear light shadow mapping is extremely costly. As they are view-dependent, PSSM splits must be drawn from scratch for each viewpoint. Consider using spot light shadow mapping which is not view-dependent and can be performed once for all viewpoints.</li>
+<li>Given the number of scene pass required, the triangle budget must kept under control and will usually be significantly lower than usual.</li>
+</ul>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

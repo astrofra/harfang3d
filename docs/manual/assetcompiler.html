@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compiling to Assets - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="active" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Compiling project resources into assets is done using the <code>assetc</code> command-line tool.</p>
+<p>Upon invocation, it will scan the input folder and compile all resources in a supported format to the output folder. Files in an unsupported format are copied unmodified to the output folder.</p>
+<p><em>It is very important that you treat the compiled output folder as entirely disposable</em> and <em>only ever</em> perform modifications in the input folder. Output assets will be different for each platform you compile to.</p>
+<p>Again, <em>do not ever work in the assets folder</em>.</p>
+<p>If you are unclear on the resources/assets distinction see <a href="assets.html">Resources &amp; Assets</a>.</p>
+<h2 id="drag-drop">Drag &amp; drop</h2>
+<p>The easiest way is to drag and drop the resources folder on the assetc executable:</p>
+<p><img alt="assetc drag &amp; drop" src="../images/docs/3.2.7/assetc.gif"></p>
+<h2 id="command-line">Command-Line</h2>
+<p>Since HARFANG 3.2.5, <code>assetc</code> is now included in both <em>Python</em> and <em>Lua</em> versions.</p>
+<h3 id="python">Python</h3>
+<p>In HARFANG Python 3.2.5 and above, <code>assetc</code> is packaged into the bdist wheel and can be invoked as a function of harfang.bin module.</p>
+<p>In this example, we will compile a folder called <code>resources</code> and target the <code>OpenGL</code> API:</p>
+<ul>
+<li>
+<p>From the command line:
+   <code>bash
+   python3 -m harfang.bin assetc resources -api GL</code></p>
+</li>
+<li>
+<p>As a Python module:
+   <code>python
+   import harfang.bin
+   harfang.bin.assetc('resources', '-api', 'GL')</code></p>
+</li>
+</ul>
+<h3 id="lua">Lua</h3>
+<p>In HARFANG Lua 3.2.5 and above, <code>assetc</code> is packaged along with the Lua extension and can be invoked as a function of harfang.bin.</p>
+<p>In this example, we will compile a folder called <code>resources</code> and target the <code>OpenGL</code> API:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">hg_bin</span> <span class="o">=</span> <span class="nb">require</span> <span class="s2">&quot;harfang.bin&quot;</span>
+<span class="n">hg_bin</span><span class="p">.</span><span class="n">assetc</span><span class="p">(</span><span class="s1">&#39;resources&#39;</span><span class="p">,</span> <span class="s1">&#39;-api&#39;</span><span class="p">,</span> <span class="s1">&#39;GL&#39;</span><span class="p">)</span>
+</code></pre></div>
+
+<h2 id="usage-in-detail">Usage in detail</h2>
+<p>If you need more control over the compilation options, the command line gets the following parameters:</p>
+<div class="codehilite"><pre><span></span><code><span class="n">assetc</span><span class="w"> </span><span class="o">&lt;</span><span class="n">input</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[</span><span class="n">output</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">daemon</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">platform</span><span class="w"> </span><span class="n">PLATFORM</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">api</span><span class="w"> </span><span class="n">API</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">defines</span><span class="w"> </span><span class="n">DEFINES</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">job</span><span class="w"> </span><span class="n">COUNT</span><span class="p">]</span>
+<span class="w">       </span><span class="p">[</span><span class="o">-</span><span class="n">toolchain</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">progress</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">log_to_std_out</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">debug</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">quiet</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">verbose</span><span class="p">]</span>
+</code></pre></div>
+
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Shortcut</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-input</code></td>
+<td></td>
+<td>Input project resources folder.</td>
+</tr>
+<tr>
+<td><code>-output</code></td>
+<td></td>
+<td>Output compiled assets folder. If unspecified, the input folder path suffixed with <code>_compiled</code> is used.</td>
+</tr>
+<tr>
+<td><code>-daemon</code></td>
+<td><code>-d</code></td>
+<td>Run the compiler in daemon mode. The compiler will constantly monitor the input folder and compile its content as it is modified.</td>
+</tr>
+<tr>
+<td><code>-platform</code></td>
+<td><code>-p</code></td>
+<td>Platform to target.</td>
+</tr>
+<tr>
+<td><code>-api</code></td>
+<td></td>
+<td>Graphics API to target. Some platforms (eg. PC) might support multiple graphics API (DX11, DX12, GL, ...).</td>
+</tr>
+<tr>
+<td><code>-defines</code></td>
+<td><code>-D</code></td>
+<td>Semicolon separated defines to pass to the shader compiler (eg. FLAG;VALUE=2).</td>
+</tr>
+<tr>
+<td><code>-job</code></td>
+<td><code>-j</code></td>
+<td>Maximum number of parallel job (0 - automatic).</td>
+</tr>
+<tr>
+<td><code>-toolchain</code></td>
+<td><code>-t</code></td>
+<td>Path to the toolchain folder.</td>
+</tr>
+<tr>
+<td><code>-progress</code></td>
+<td></td>
+<td>Output progress to the standard output.</td>
+</tr>
+<tr>
+<td><code>-log_to_std_out</code></td>
+<td><code>-l</code></td>
+<td>Log errors to the standard output.</td>
+</tr>
+<tr>
+<td><code>-debug</code></td>
+<td></td>
+<td>Compile in debug mode (eg. output debug informations in shader).</td>
+</tr>
+<tr>
+<td><code>-quiet</code></td>
+<td><code>-q</code></td>
+<td>Disable all build information but errors.</td>
+</tr>
+<tr>
+<td><code>-verbose</code></td>
+<td><code>-v</code></td>
+<td>Output additional information about the compilation process.</td>
+</tr>
+</tbody>
+</table>
+<p><em>Note:</em> When run in daemon mode <code>assetc</code> will not exit after its initial run and will keep watching the input folder. When a resource is modified it will automatically be compiled to the output folder.</p>
+<p>See <a href="gltf.html">Importing from GLTF</a> and <a href="fbx.html">Importing from FBX</a> to convert common 3d formats to Harfang resources.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playing Audio - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="active" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>The audio system can play back two kind of audio resource, sound and stream.</p>
+<ul>
+<li>A sound resource is played from memory, this is usually the most efficient resource to play. However, since it must fully be stored in memory longer audio samples are best streamed.</li>
+<li>A stream resource is read from storage in small increments as it is being played back by the audio backend. While it consumes less memory a stream is usually more performance taxing as it requires constant access to storage and CPU to decode.</li>
+</ul>
+<p>It is recommended to use sounds for short, ponctual effects and streams for background music or ambience.</p>
+<h2 id="playing-sound-and-stream">Playing Sound and Stream</h2>
+<p>The audio system manages a finite number of audio sources. A source can play a single audio sound or stream at a time. When initiating playback a free source is selected, if none is available the request fails and <a href="../api/cpython/constants.html#sourceref-src_invalid">SRC_Invalid</a> is returned.</p>
+<p>To playback a sound, load it first using <a href="../api/cpython/functions.html#loadwavsoundfile">LoadWAVSoundFile</a> for example, then pass the returned resource reference to <a href="../api/cpython/functions.html#playstereo">PlayStereo</a> or <a href="../api/cpython/functions.html#playspatialized">PlaySpatialized</a>, this in turn will return a reference to the audio source playback started on.</p>
+<p>To start streaming a sound file, call a streaming function such as <a href="../api/cpython/functions.html#streamwavfilestereo">StreamWAVFileStereo</a>.</p>
+<p>Each source has a set of independently configurable properties that can be specified using the <a href="../api/cpython/classes.html#stereosourcestate">StereoSourceState</a> and <a href="../api/cpython/classes.html#spatializedsourcestate">SpatializedSourceState</a> classes.</p>
+<p>When using spatialization all transformations are specified in world coordinates. Use <a href="../api/cpython/functions.html#setlistener">SetListener</a> to change the listener position in space.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

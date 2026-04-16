@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Physics - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="active" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Use physics to enable physically plausible interactions with your scene content.</p>
+<p>Different backends are supported such as Bullets Physics, NVIDIA PhysX and Newton Dynamics.</p>
+<div class="toc">
+<ul>
+<li><a href="#declaring-physics">Declaring Physics</a></li>
+<li><a href="#simulating-physics">Simulating Physics</a><ul>
+<li><a href="#running-the-simulation">Running the Simulation</a></li>
+<li><a href="#the-easy-way">The Easy Way</a></li>
+</ul>
+</li>
+<li><a href="#keeping-the-system-synchronized">Keeping the System Synchronized</a></li>
+<li><a href="#reading-physics-transformation">Reading Physics Transformation</a></li>
+</ul>
+</div>
+<h2 id="declaring-physics">Declaring Physics</h2>
+<p>To turn a node into a rigid body, create a <a href="../api/cpython/classes.html#rigidbody">RigidBody</a> component and assign it to the node using <a href="../api/cpython/classes.html#node_setrigidbody">Node.SetRigidBody</a>.</p>
+<p>To fully declare a rigid body you must attach at least one collision shape to its node. Create a <a href="../api/cpython/classes.html#collision">Collision</a> component and call <a href="../api/cpython/classes.html#node_setcollision">Node.SetCollision</a> to do so. You can attach multiple collision components to a single node.</p>
+<p>A rigid body can be of the following type:</p>
+<ul>
+<li><code>RBT_Dynamic</code>: Responds in a physically plausible manner to interaction with other rigid bodies. Its motion is fully controlled by the physics engine. A dynamic rigid body will automatically go to sleep and stop consuming simulation resources when it stops moving for a long enough period of time.</li>
+<li><code>RBT_Kinematic</code>: Follows the transformation of the node it belongs to. A kinematic body never goes to sleep automatically.</li>
+</ul>
+<p>See <a href="../api/cpython/classes.html#rigidbody_settype">RigidBody.SetType</a>.</p>
+<p>The rigid body intertia tensor is computed from its collision shape properties. A zero mass rigid body is considered infinitely heavy and cannot be moved.</p>
+<h2 id="simulating-physics">Simulating Physics</h2>
+<p>Create a physics backend such as <a href="../api/cpython/classes.html#scenebullet3physics">SceneBullet3Physics</a> and call <a href="../api/cpython/classes.html#scenebullet3physics_scenecreatephysicsfromassets">SceneBullet3Physics.SceneCreatePhysicsFromAssets</a> to create the physics states corresponding to the scene declaration.</p>
+<p><em>Note:</em> <a href="../api/cpython/classes.html#scenebullet3physics_scenecreatephysicsfromassets">SceneBullet3Physics.SceneCreatePhysicsFromAssets</a> means that if setting up the physics states requires access to an external resource, such as a mesh, it should be loaded from the assets system. If you are working from the filesystem, use <a href="../api/cpython/classes.html#scenebullet3physics_scenecreatephysicsfromfile">SceneBullet3Physics.SceneCreatePhysicsFromFile</a>.</p>
+<h3 id="running-the-simulation">Running the Simulation</h3>
+<p>This involves 3 steps on each update:</p>
+<ol>
+<li>Synchronize physics state with the scene declaration using <a href="../api/cpython/classes.html#scenebullet3physics_scenecreatephysicsfromassets">SceneBullet3Physics.SceneCreatePhysicsFromAssets</a>. Alternatively, you can use a more fine-grained approach using <a href="../api/cpython/classes.html#scenebullet3physics_nodecreatephysicsfromassets">SceneBullet3Physics.NodeCreatePhysicsFromAssets</a> to improve performance.</li>
+<li>Step the simulation using <a href="../api/cpython/classes.html#scenebullet3physics_stepsimulation">SceneBullet3Physics.StepSimulation</a>.</li>
+<li>Synchronize the updated physics transformations to the scene using <a href="../api/cpython/classes.html#scenebullet3physics_synctransformstoscene">SceneBullet3Physics.SyncTransformsToScene</a>.</li>
+</ol>
+<p><em>Note:</em> If you are using kinematic bodies you will also need to synchronize them from their node transformation on each update using <a href="../api/cpython/classes.html#scenebullet3physics_synctransformsfromscene">SceneBullet3Physics.SyncTransformsFromScene</a>.</p>
+<h3 id="the-easy-way">The Easy Way</h3>
+<p>While the low-level API offers the most flexibility most projects will use a straightforward implementation which is provided by the <a href="../api/cpython/functions.html#sceneupdatesystems">SceneUpdateSystems</a> function. This function handles all of the above steps and does the same for other systems you may use.</p>
+<p>When using a script system, this function will also dispatch collision events to it.</p>
+<h2 id="keeping-the-system-synchronized">Keeping the System Synchronized</h2>
+<p>Call the physics system garbage collect method (eg. <a href="../api/cpython/classes.html#scenebullet3physics_garbagecollect">SceneBullet3Physics.GarbageCollect</a>) on each update to ensure that destroyed nodes or components are properly removed. If you know that no node or component was destroyed during a particular update, not calling the garbage collector will save on performance.</p>
+<h2 id="reading-physics-transformation">Reading Physics Transformation</h2>
+<p>When a node is assigned a dynamic rigid body its transformation matrix is overriden by the physics system. Its transform component however, is not. Transform methods such as <a href="../api/cpython/classes.html#transform_setpos">Transform.SetPos</a> or <a href="../api/cpython/classes.html#transform_setrot">Transform.SetRot</a> will have no effect unless you explicitely synchronize the node to the physics system after using them.</p>
+<p><a href="../api/cpython/classes.html#transform_getworld">Transform.GetWorld</a> will return the transformation matrix as set by the physics system.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

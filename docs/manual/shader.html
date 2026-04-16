@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Writing a Shader - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="active" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<div class="toc">
+<ul>
+<li><a href="#shader-language-overview">Shader Language Overview</a></li>
+<li><a href="#data-flow">Data Flow</a></li>
+<li><a href="#writing-a-shader">Writing a Shader</a></li>
+<li><a href="#passing-constants-to-a-shader">Passing Constants to a Shader</a><ul>
+<li><a href="#predefined-uniforms">Predefined Uniforms</a></li>
+</ul>
+</li>
+</ul>
+</div>
+<h2 id="shader-language-overview">Shader Language Overview</h2>
+<p>Harfang uses <a href="https://bkaradzic.github.io/bgfx/index.html">bgfx</a> as its rendering system, the cross-platform shader language is based on <a href="https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.1.40.pdf">GLSL</a> with a few key differences:</p>
+<ul>
+<li>No <code>bool/int</code> uniforms, all uniforms must be <code>float</code>.</li>
+<li>Attributes and varyings can be accessed only from <code>main()</code> function.</li>
+<li>Must use <code>SAMPLER2D/3D/CUBE/etc.</code> macros instead of <code>sampler2D/3D/Cube/etc.</code> tokens.</li>
+<li>Must use <code>vec2/3/4_splat(&lt;value&gt;)</code> instead of <code>vec2/3/4(&lt;value&gt;)</code>.</li>
+<li>Must use <code>mtxFromCols/mtxFromRows</code> when constructing matrices in shaders.</li>
+<li>Must use <code>mul(x, y)</code> when multiplying vectors and matrices.</li>
+<li>Must use <code>varying.def.sc</code> to define input/output semantic and precision instead of using <code>attribute/in</code> and <code>varying/in/out</code>.</li>
+<li><code>$input/$output</code> tokens must appear at the begining of shader.</li>
+</ul>
+<h2 id="data-flow">Data Flow</h2>
+<p>In a shader, vertex attributes such as position or normal are send to the vertex shader as a stream of <strong>attributes</strong>. The vertex shader outputs are then interpolated across the rendered primitive and passed to the fragment shader as <strong>varyings</strong> to compute the final pixel color.</p>
+<h2 id="writing-a-shader">Writing a Shader</h2>
+<p>A shader is composed of 3 files: a definition file, the vertex and fragment source files:</p>
+<ul>
+<li><code>example_vs.sc</code>: Source for the vertex program.</li>
+<li><code>example_fs.sc</code>: Source for the fragment program.</li>
+<li><code>example_varying.def</code>: Shader definition file.</li>
+</ul>
+<p>Both the vertex and fragment program must declare a main function.</p>
+<div class="codehilite"><pre><span></span><code><span class="kt">void</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="p">...</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+
+<p>The shader definition file must list all inputs and outputs of the shader programs and associate them with standard semantics like <code>POSITION</code> or <code>NORMAL</code> (see <a href="https://docs.microsoft.com/fr-fr/windows/win32/direct3dhlsl/dx-graphics-hlsl-semantics?redirectedfrom=MSDN">HLSL Semantics</a> for a complete list).</p>
+<div class="codehilite"><pre><span></span><code><span class="kt">vec3</span><span class="w"> </span><span class="n">vNormal</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">NORMAL</span><span class="p">;</span>
+
+<span class="kt">vec3</span><span class="w"> </span><span class="n">a_position</span><span class="w">  </span><span class="o">:</span><span class="w"> </span><span class="n">POSITION</span><span class="p">;</span>
+<span class="kt">vec3</span><span class="w"> </span><span class="n">a_normal</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="n">NORMAL</span><span class="p">;</span>
+</code></pre></div>
+
+<p>In the vertex program use <code>$input</code> to declare an attribute and <code>$output</code> to declare a varying. <code>$input/$output</code> tokens must appear at the begining of the program.</p>
+<p>By convention attributes must be named one of the following: <code>a_position</code>, <code>a_normal</code>, <code>a_tangent</code>, <code>a_bitangent</code>, <code>a_color0</code>, <code>a_color1</code>, <code>a_color2</code>, <code>a_color3</code>, <code>a_indices</code>, <code>a_weight</code>, <code>a_texcoord0</code>, <code>a_texcoord1</code>, <code>a_texcoord2</code>, <code>a_texcoord3</code>, <code>a_texcoord4</code>, <code>a_texcoord5</code>, <code>a_texcoord6</code>, <code>a_texcoord7</code>, <code>i_data0</code>, <code>i_data1</code>, <code>i_data2</code>, <code>i_data3</code> or <code>i_data4</code>.</p>
+<p>The following vertex program declares that it takes two attributes as input and outputs to a single varying.</p>
+<div class="codehilite"><pre><span></span><code><span class="err">$</span><span class="kr">input</span><span class="w"> </span><span class="n">a_position</span><span class="p">,</span><span class="w"> </span><span class="n">a_normal</span>
+<span class="err">$</span><span class="kr">output</span><span class="w"> </span><span class="n">vNormal</span>
+
+<span class="cp">#include &lt;bgfx_shader.sh&gt;</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">vNormal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mul</span><span class="p">(</span><span class="n">u_model</span><span class="p">[</span><span class="mo">0</span><span class="p">],</span><span class="w"> </span><span class="kt">vec4</span><span class="p">(</span><span class="n">a_normal</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="mf">2.0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0</span><span class="p">)).</span><span class="n">xyz</span><span class="p">;</span>
+<span class="w">    </span><span class="nb">gl_Position</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mul</span><span class="p">(</span><span class="n">u_modelViewProj</span><span class="p">,</span><span class="w"> </span><span class="kt">vec4</span><span class="p">(</span><span class="n">a_position</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">));</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><strong>Note:</strong> Attributes and varyings can only be accessed from the shader main function.</p>
+<p>Outputs from the vertex program then become inputs to the fragment program. The fragment program outputs its result to standard GLSL variables such as <code>gl_FragColor</code> (see <a href="https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.1.40.pdf">GLSL Language Specifications</a>).</p>
+<div class="codehilite"><pre><span></span><code><span class="err">$</span><span class="kr">input</span><span class="w"> </span><span class="n">vNormal</span>
+
+<span class="cp">#include &lt;bgfx_shader.sh&gt;</span>
+
+<span class="kt">void</span><span class="w"> </span><span class="n">main</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kt">vec3</span><span class="w"> </span><span class="n">normal</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">normalize</span><span class="p">(</span><span class="n">vNormal</span><span class="p">);</span>
+<span class="w">    </span><span class="nb">gl_FragColor</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">vec4</span><span class="p">(</span><span class="n">normal</span><span class="p">.</span><span class="n">x</span><span class="p">,</span><span class="w"> </span><span class="n">normal</span><span class="p">.</span><span class="n">y</span><span class="p">,</span><span class="w"> </span><span class="n">normal</span><span class="p">.</span><span class="n">z</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<h2 id="passing-constants-to-a-shader">Passing Constants to a Shader</h2>
+<p>Constant values can be passed to a shader programs by using <strong>uniforms</strong>. This is done using <a href="../api/cpython/classes.html#uniformsetvalue">UniformSetValue</a> and <a href="../api/cpython/classes.html#uniformsettexture">UniformSetTexture</a>.</p>
+<h3 id="predefined-uniforms">Predefined Uniforms</h3>
+<p>The <code>bgfx_shader.sh</code> include file defines the following predefined uniforms.</p>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Symbol</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vec4</td>
+<td>u_viewRect</td>
+<td>View rectangle for current view, in pixels. (x, y, width, height)</td>
+</tr>
+<tr>
+<td>vec4</td>
+<td>u_viewTexel</td>
+<td>Inverse width and height. (1.0 / width, 1.0 / height, undef, undef)</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_view</td>
+<td>View matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_invView</td>
+<td>Inverse view matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_proj</td>
+<td>Projection matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_invProj</td>
+<td>Inverse projection matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_viewProj</td>
+<td>Concaneted view projection matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_invViewProj</td>
+<td>Concatenated inverted view projection matrix.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_model[BGFX_CONFIG_MAX_BONES]</td>
+<td>Array of model matrices.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_modelView</td>
+<td>Concatenated model view matrix, only the first model matrix from array is used.</td>
+</tr>
+<tr>
+<td>mat4</td>
+<td>u_modelViewProj</td>
+<td>Concatenated model view projection matrix.</td>
+</tr>
+<tr>
+<td>vec4</td>
+<td>u_alphaRef</td>
+<td>Alpha reference value for alpha test.</td>
+</tr>
+</tbody>
+</table>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

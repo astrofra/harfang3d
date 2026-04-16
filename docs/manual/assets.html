@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resources &amp; Assets - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="active" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>By convention, production files are called <strong>resources</strong> (eg. <em>the project resources</em>).</p>
+<p>Files issued from the compilation of production files for a specific target are called <strong>assets</strong> (eg. <em>the project assets for Windows PC</em>).</p>
+<div class="toc">
+<ul>
+<li><a href="#resource-formats">Resource Formats</a></li>
+<li><a href="#fine-tuning-resource-compilation">Fine-tuning Resource Compilation</a><ul>
+<li><a href="#texture">Texture</a></li>
+<li><a href="#geometry">Geometry</a></li>
+</ul>
+</li>
+<li><a href="#loading-assets-at-runtime">Loading Assets at Runtime</a></li>
+</ul>
+</div>
+<h2 id="resource-formats">Resource Formats</h2>
+<p>During development resources are stored in <em>production formats</em>, these formats are meant for editing. Before they can be loaded at runtime, resources must be compiled into their <em>runtime formats</em> as assets specific to the target platform.</p>
+<p>To compile a project resources use:</p>
+<div class="codehilite"><pre><span></span><code>assetc &lt;project_resources_folder&gt; [&lt;optional_project_assets_folder&gt;]
+</code></pre></div>
+
+<p>If no output folder is specified the input folder suffixed with <em>_compiled</em> is implied.</p>
+<p>Upon execution the assets compiler will scan the input folder and compile all supported resource types to assets. Unsupported resources are copied untransformed to the output folder.</p>
+<p>The following table lists all supported resource types, their production and runtime formats.</p>
+<table>
+<thead>
+<tr>
+<th>Resource Type</th>
+<th>Production Format</th>
+<th>Runtime Format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Texture</td>
+<td>jpg, png, tga, gif, bmp, psd, hdr, pic, pnm</td>
+<td>Platform-specific (eg. RAW, ETC1, ETC2, BCx as DDS, PVR or TEX)</td>
+</tr>
+<tr>
+<td>Shader</td>
+<td>GLSL-like meta language</td>
+<td>Platform-specific (eg. HLSL, GLSL)</td>
+</tr>
+<tr>
+<td>Pipeline Shader</td>
+<td>GLSL-like meta language</td>
+<td>Set of platform-specific shaders (eg. HLSL, GLSL)</td>
+</tr>
+<tr>
+<td>Geometry</td>
+<td>Intermediate binary format</td>
+<td>Packed index/vertex buffers</td>
+</tr>
+<tr>
+<td>Lua</td>
+<td>Lua script</td>
+<td>Lua bytecode as generated by <code>luac</code></td>
+</tr>
+<tr>
+<td>Physics</td>
+<td>JSON descriptor (see <a href="physics.html">Physics</a>)</td>
+<td>Backend specific binary</td>
+</tr>
+<tr>
+<td>Pathfinding</td>
+<td>JSON descriptor (see <a href="navigation.html">Navigation</a>)</td>
+<td>Backend specific binary</td>
+</tr>
+</tbody>
+</table>
+<p>One resource file may compile to multiple asset files.</p>
+<p>For more information, see <a href="assetcompiler.html">Compiling to Assets</a>.</p>
+<h2 id="fine-tuning-resource-compilation">Fine-tuning Resource Compilation</h2>
+<p>Most production formats need to be extended with additional information to control the compilation process. The asset compiler will look for an optional parameter file associated with each resource it compiles.</p>
+<p>These parameter files are JSON dictionaries of key-value named as the resource file they extend suffixed with the <code>.meta</code> extension. The following table lists supported keys per resource type.</p>
+<h3 id="texture">Texture</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Description</th>
+<th>Possible Values</th>
+<th>Default Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>Hint in case a specific compression is not specified.</td>
+<td><code>Standard</code>, <code>NormalMap</code></td>
+<td><code>Standard</code></td>
+</tr>
+<tr>
+<td><code>max-size</code></td>
+<td>Resize input if any axis exceeds the specified limit.</td>
+<td>-</td>
+<td>16384</td>
+</tr>
+<tr>
+<td><code>compression</code></td>
+<td>Explicit compression format.</td>
+<td><code>RAW</code>, <code>BC1</code>, <code>BC2</code>, <code>BC3</code>, <code>BC4</code>, <code>BC5</code>, <code>BC6H</code>, <code>BC7</code></td>
+<td><code>RAW</code></td>
+</tr>
+<tr>
+<td><code>generate-mips</code></td>
+<td>Generate mip levels.</td>
+<td><code>true</code>/<code>false</code></td>
+<td><code>true</code></td>
+</tr>
+<tr>
+<td><code>generate-probe</code></td>
+<td>For HDR latlong envmap, generate radiance/irradiance probes.</td>
+<td><code>true</code>/<code>false</code></td>
+<td><code>false</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="geometry">Geometry</h3>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Description</th>
+<th>Possible Values</th>
+<th>Default Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>cook-model</code></td>
+<td>Generate a model from this geometry.</td>
+<td><code>true</code>/<code>false</code></td>
+<td><code>true</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="loading-assets-at-runtime">Loading Assets at Runtime</h2>
+<p>All functions to load an asset type exist in at least two versions: one to load from the host filesystem and one to load from the assets packaging system. Here is a table listing both load functions for each asset type.</p>
+<table>
+<thead>
+<tr>
+<th>Asset Type</th>
+<th>Host Filesystem</th>
+<th>Assets Packaging System</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Texture</td>
+<td><a href="../api/cpython/functions.html#loadtexturefromfile">LoadTextureFromFile</a></td>
+<td><a href="../api/cpython/functions.html#loadtexturefromassets">LoadTextureFromAssets</a></td>
+</tr>
+<tr>
+<td>Shader</td>
+<td><a href="../api/cpython/functions.html#loadprogramfromfile">LoadProgramFromFile</a></td>
+<td><a href="../api/cpython/functions.html#loadprogramfromassets">LoadProgramFromAssets</a></td>
+</tr>
+<tr>
+<td>Pipeline Shader</td>
+<td><a href="../api/cpython/functions.html#loadpipelineprogramfromfile">LoadPipelineProgramFromFile</a></td>
+<td><a href="../api/cpython/functions.html#loadpipelineprogramfromassets">LoadPipelineProgramFromAssets</a></td>
+</tr>
+<tr>
+<td>Model</td>
+<td><a href="../api/cpython/functions.html#loadmodelfromfile">LoadModelFromFile</a></td>
+<td><a href="../api/cpython/functions.html#loadmodelfromassets">LoadModelFromAssets</a></td>
+</tr>
+<tr>
+<td>Pathfinding</td>
+<td><a href="../api/cpython/functions.html#loadnavmeshfromfile">LoadNavMeshFromFile</a></td>
+<td><a href="../api/cpython/functions.html#loadnavmeshfromassets">LoadNavMeshFromAssets</a></td>
+</tr>
+</tbody>
+</table>
+<p>Notice the change from the Geometry resource type to the Model asset type. A geometry holds much more information than its model counterpart which is optimized to only carry essential informations for displaying the input geometry accurately at runtime.</p>
+<p>When loading an asset from the host filesystem, you can use its absolute or relative path. When using relative path the host filesystem lookup rules apply.</p>
+<p><em>It is recommend to not load assets from the host filesystem as it might make it harder to properly locate assets on disk.</em></p>
+<p>A better option is to use the assets packaging system, a virtual filesystem to which you can connect multiple data sources:</p>
+<ul>
+<li>A folder from the host filesystem, sandboxed with only its content and the content of its subfolders accessible.</li>
+<li>A zip archive to store assets as a single file on disk.</li>
+</ul>
+<p>See <a href="../api/cpython/functions.html#addassetsfolder">AddAssetsFolder</a>/<a href="../api/cpython/functions.html#removeassetsfolder">RemoveAssetsFolder</a> and <a href="../api/cpython/functions.html#addassetspackage">AddAssetsPackage</a>/<a href="../api/cpython/functions.html#removeassetspackage">RemoveAssetsPackage</a>.</p>
+<p>Refer to <a href="assetcompiler.html">Compiling to Assets</a> for how to compile resources to assets.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

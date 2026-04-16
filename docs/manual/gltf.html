@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Importing from GLTF - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="active" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>The GLTF importer is a command-line tool to convert a GLTF file to Harfang resources. This tool supports converting scene graph, geometries, materials and animations.</p>
+<div class="toc">
+<ul>
+<li><a href="#command-line">Command-Line</a></li>
+<li><a href="#return-code">Return code</a></li>
+<li><a href="#examples">Examples</a></li>
+</ul>
+</div>
+<h2 id="command-line">Command-Line</h2>
+<div class="codehilite"><pre><span></span><code>gltf-import &lt;input&gt; [-out PATH] [-base-resource-path PATH] [-name SCENE_NAME] [-prefix PATH] [-shader PATH]
+            [-material-policy POLICY] [-geometry-policy POLICY] [-texture-policy POLICY] [-scene-policy POLICY]
+            [-geometry-scale FLOAT] [-recalculate-normal] [-recalculate-tangent] [-quiet] [-help]
+</code></pre></div>
+
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Shortcut</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-out</code></td>
+<td><code>-o</code></td>
+<td>Output directory for the converted resource files.</td>
+</tr>
+<tr>
+<td><code>-base-resource-path</code></td>
+<td></td>
+<td>Transform references to assets in this directory to be relative.</td>
+</tr>
+<tr>
+<td><code>-name</code></td>
+<td></td>
+<td>Scene name if not specified in the GLTF container.</td>
+</tr>
+<tr>
+<td><code>-prefix</code></td>
+<td></td>
+<td>Specify the file system prefix from which relative assets are to be loaded from.</td>
+</tr>
+<tr>
+<td><code>-shader</code></td>
+<td><code>-s</code></td>
+<td>Override the shader used by exported materials.</td>
+</tr>
+<tr>
+<td><code>-all-policy</code></td>
+<td></td>
+<td>All file type import policy.</td>
+</tr>
+<tr>
+<td><code>-material-policy</code></td>
+<td></td>
+<td>Material file import policy.</td>
+</tr>
+<tr>
+<td><code>-geometry-policy</code></td>
+<td></td>
+<td>Geometry file import policy.</td>
+</tr>
+<tr>
+<td><code>-texture-policy</code></td>
+<td></td>
+<td>Texture file import policy.</td>
+</tr>
+<tr>
+<td><code>-scene-policy</code></td>
+<td></td>
+<td>Scene file import policy.</td>
+</tr>
+<tr>
+<td><code>-geometry-scale</code></td>
+<td></td>
+<td>Factor used to scale exported geometries.</td>
+</tr>
+<tr>
+<td><code>-recalculate-normal</code></td>
+<td></td>
+<td>Recreate the vertex normals of exported geometries.</td>
+</tr>
+<tr>
+<td><code>-recalculate-tangent</code></td>
+<td></td>
+<td>Recreate the vertex tangent frames of exported geometries.</td>
+</tr>
+<tr>
+<td><code>-quiet</code></td>
+<td><code>-q</code></td>
+<td>Quiet output.</td>
+</tr>
+<tr>
+<td><code>-help</code></td>
+<td><code>-h</code></td>
+<td>Display help message.</td>
+</tr>
+</tbody>
+</table>
+<p>The following policies are available: <code>skip</code>, <code>overwrite</code>, <code>rename</code> and <code>skip_always</code>. The default policy is <code>skip</code>.</p>
+<h2 id="return-code">Return code</h2>
+<p>The executable returns <code>1</code> if no error occurred, <code>0</code> otherwise.</p>
+<p>To notify the caller about the conversion result the converter sends special markers to the standard output:</p>
+<ul>
+<li><code>[ImportScene: OK]</code> if the import succeeded.</li>
+<li><code>[ImportScene: KO]</code> if the import failed.</li>
+</ul>
+<h2 id="examples">Examples</h2>
+<p>Import <code>scene.gltf</code> to <code>./export</code>, overwrite existing geometry, skip everything else if it exists:</p>
+<div class="codehilite"><pre><span></span><code>gltf-import<span class="w"> </span>scene.gltf<span class="w"> </span>-o<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-texture-policy<span class="w"> </span>overwrite
+</code></pre></div>
+
+<p>Import <code>scene.gltf</code> to <code>./export</code>, only import scene, skip everything else:</p>
+<div class="codehilite"><pre><span></span><code>gltf-import<span class="w"> </span>scene.fbx<span class="w"> </span>-o<span class="w"> </span><span class="nb">export</span><span class="w"> </span>-material-policy<span class="w"> </span>skip_always<span class="w"> </span>-geometry-policy<span class="w"> </span>skip_always<span class="w"> </span>-texture-policy<span class="w"> </span>skip_always
+</code></pre></div>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>
