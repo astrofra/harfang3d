@@ -8,6 +8,10 @@ install(
 	COMPONENT
 		python)
 
+if(TARGET audio_xmp)
+	install(TARGETS audio_xmp RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX} LIBRARY DESTINATION ${CMAKE_INSTALL_PREFIX} COMPONENT python)
+endif()
+
 install_cppsdk_dependencies(${CMAKE_INSTALL_PREFIX} python)
 
 if(WIN32)

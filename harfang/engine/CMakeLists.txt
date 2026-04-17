@@ -3,6 +3,7 @@ set(HDRS
 	assets.h
 	assets_rw_interface.h
 	audio.h
+	audio_stream.h
 	audio_stream_interface.h
 	bloom.h
 	create_geometry.h
@@ -60,6 +61,7 @@ set(SRCS
 	assets.cpp
 	assets_rw_interface.cpp
 	audio.cpp
+	audio_stream.cpp
 	bloom.cpp
 	component.cpp
 	create_geometry.cpp

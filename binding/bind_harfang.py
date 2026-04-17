@@ -4262,14 +4262,27 @@ def bind_extras(gen):
 
 
 def bind_audio(gen):
+	gen.add_include('engine/audio_stream.h')
 	gen.add_include('engine/audio_stream_interface.h')
 	
 	gen.bind_named_enum('AudioFrameFormat', ['AFF_LPCM_44KHZ_S16_Mono', 'AFF_LPCM_48KHZ_S16_Mono', 'AFF_LPCM_44KHZ_S16_Stereo', 'AFF_LPCM_48KHZ_S16_Stereo'])
 
 	gen.typedef('AudioStreamRef', 'int')
 	gen.bind_variable('const AudioStreamRef InvalidAudioStreamRef')
+	gen.typedef('AudioTimestamp', 'int64_t')
 
 	gen.add_include('engine/audio.h')
+
+	audio_streamer = gen.begin_class('IAudioStreamer')
+	gen.bind_method(audio_streamer, 'Startup', 'int', [])
+	gen.bind_method(audio_streamer, 'Shutdown', 'void', [])
+	gen.bind_method(audio_streamer, 'Open', 'AudioStreamRef', ['const char *name'])
+	gen.bind_method(audio_streamer, 'Close', 'int', ['AudioStreamRef ref'])
+	gen.bind_method(audio_streamer, 'Seek', 'int', ['AudioStreamRef ref', 'AudioTimestamp t'])
+	gen.bind_method(audio_streamer, 'GetDuration', 'AudioTimestamp', ['AudioStreamRef ref'])
+	gen.bind_method(audio_streamer, 'GetTimeStamp', 'AudioTimestamp', ['AudioStreamRef ref'])
+	gen.bind_method(audio_streamer, 'IsEnded', 'int', ['AudioStreamRef ref'])
+	gen.end_class(audio_streamer)
 	
 	gen.bind_function('hg::AudioInit', 'bool', [])
 	gen.bind_function('hg::AudioShutdown', 'void', [])
@@ -4324,6 +4337,13 @@ static hg::SpatializedSourceState *__ConstructSpatializedSourceState(hg::Mat4 mt
 	gen.bind_function('hg::StreamOGGAssetStereo', 'hg::SourceRef', ['const char *name', 'const hg::StereoSourceState &state'], {'rval_constants_group': 'SourceRef'})
 	gen.bind_function('hg::StreamOGGFileSpatialized', 'hg::SourceRef', ['const char *path', 'const hg::SpatializedSourceState &state'], {'rval_constants_group': 'SourceRef'})
 	gen.bind_function('hg::StreamOGGAssetSpatialized', 'hg::SourceRef', ['const char *name', 'const hg::SpatializedSourceState &state'], {'rval_constants_group': 'SourceRef'})
+
+	gen.bind_function('hg::MakeAudioStreamer', 'IAudioStreamer', ['const char *module_path'])
+	gen.bind_function('hg::IsValid', 'bool', ['IAudioStreamer &streamer'])
+	gen.bind_function('hg::StreamAudioFileStereo', 'hg::SourceRef', ['IAudioStreamer &streamer', 'const char *path', 'const hg::StereoSourceState &state'], {'rval_constants_group': 'SourceRef'})
+	gen.bind_function('hg::StreamAudioFileSpatialized', 'hg::SourceRef', ['IAudioStreamer &streamer', 'const char *path', 'const hg::SpatializedSourceState &state'], {'rval_constants_group': 'SourceRef'})
+	gen.bind_function('hg::StreamModuleFileStereo', 'hg::SourceRef', ['const char *path', 'const hg::StereoSourceState &state'], {'rval_constants_group': 'SourceRef'})
+	gen.bind_function('hg::StreamModuleFileSpatialized', 'hg::SourceRef', ['const char *path', 'const hg::SpatializedSourceState &state'], {'rval_constants_group': 'SourceRef'})
 
 	gen.bind_function('hg::GetSourceDuration', 'hg::time_ns', ['hg::SourceRef source'], {'constants_group': {'source': 'SourceRef'}})
 	gen.bind_function('hg::GetSourceTimecode', 'hg::time_ns', ['hg::SourceRef source'], {'constants_group': {'source': 'SourceRef'}})

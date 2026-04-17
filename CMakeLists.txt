@@ -54,6 +54,7 @@ option(HG_USE_GLFW "Harfang: Use GLFW backend" ON)
 
 option(HG_ENABLE_BULLET3_SCENE_PHYSICS "Harfang: Scene physics using Bullet Dynamics" ON)
 option(HG_ENABLE_RECAST_DETOUR_API "Harfang: Enable Recast/Detour API" ON)
+option(HG_ENABLE_XMP_AUDIO "Harfang: Enable MOD/XM/S3M/IT audio streamer plugin" ON)
 
 option(HG_ENABLE_OPENVR_API "Harfang: Enable OpenVR API" OFF)
 option(HG_ENABLE_OPENXR_API "Harfang: Enable OpenXR API" OFF)
@@ -84,6 +85,8 @@ endif()
 if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 	message(STATUS "! Disabling GLFW since building for Emscripten")
 	set(HG_USE_GLFW OFF CACHE BOOL "Harfang: Use GLFW backend" FORCE)
+	message(STATUS "! Disabling XMP audio plugin since dynamic audio plugins are not supported for Emscripten")
+	set(HG_ENABLE_XMP_AUDIO OFF CACHE BOOL "Harfang: Enable MOD/XM/S3M/IT audio streamer plugin" FORCE)
 endif()
 
 if(HG_ENABLE_SRANIPAL_API AND MSVC)
@@ -347,6 +350,7 @@ add_subdirectory(extern)
 add_subdirectory(binding)
 
 add_subdirectory(harfang)
+add_subdirectory(plugins)
 
 if(NOT HG_BUILD_CPP_SDK)
 	set_target_properties(engine script foundation platform PROPERTIES EXCLUDE_FROM_ALL TRUE)  # [EJ] EXCLUDE_FROM_ALL is set to enable minimal build for docs only configuration
@@ -401,6 +405,7 @@ message(STATUS "Build AssetC: " ${HG_BUILD_ASSETC})
 message(STATUS "Build C++ SDK: " ${HG_BUILD_CPP_SDK})
 message(STATUS "Build documentation: " ${HG_BUILD_DOCS})
 message(STATUS "Build static documentation: " ${HG_BUILD_STATIC_DOCS})
+message(STATUS "Enable XMP audio plugin: " ${HG_ENABLE_XMP_AUDIO})
 
 message(STATUS "Build Lua extension: " ${HG_BUILD_HG_LUA})
 
@@ -432,6 +437,9 @@ endif()
 if(HG_ENABLE_RECAST_DETOUR_API)
 	message(STATUS " - RecastDetour")
 endif()
+if(HG_ENABLE_XMP_AUDIO)
+	message(STATUS " - XMPAudio")
+endif()
 
 message(STATUS "Use GLFW backend: " ${HG_USE_GLFW} " ${HG_GLFW_BACKEND}")
 message(STATUS "Fabgen dir: " ${HG_FABGEN_PATH})
@@ -446,6 +454,9 @@ message(STATUS "")
 # [WARNING] Don't forget to add any new shared library target to this list!
 if(NOT HG_BUILD_HARFANG_STATIC)
 	set(HG_SHARED_LIBRARY_TARGETS "hg::glfw;hg::libluadll")
+endif()
+if(HG_ENABLE_XMP_AUDIO)
+	list(APPEND HG_SHARED_LIBRARY_TARGETS hg::audio_xmp)
 endif()
 if(HG_ENABLE_OPENVR_API)
     list(APPEND HG_SHARED_LIBRARY_TARGETS OpenVR)
