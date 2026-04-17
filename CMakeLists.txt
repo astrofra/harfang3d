@@ -38,6 +38,7 @@ option(HG_BUILD_FBX_CONVERTER "Harfang: Build FBX converter" ON)
 option(HG_BUILD_GLTF_EXPORTER "Harfang: Build GLTF exporter" ON)
 option(HG_BUILD_GLTF_IMPORTER "Harfang: Build GLTF importer" ON)
 option(HG_BUILD_ASSETC "Harfang: Build AssetC" ON)
+option(HG_BUILD_FFMPEG_PLUGIN "Harfang: Build FFmpeg video stream plugin" OFF)
 
 option(HG_BUILD_CPP_SDK "Harfang: Build C++ SDK" OFF)
 option(HG_BUILD_TESTS "Harfang: Build Unit tests" OFF)
@@ -348,6 +349,10 @@ add_subdirectory(binding)
 
 add_subdirectory(harfang)
 
+if(HG_BUILD_FFMPEG_PLUGIN)
+	add_subdirectory(plugins/ffmpeg)
+endif()
+
 if(NOT HG_BUILD_CPP_SDK)
 	set_target_properties(engine script foundation platform PROPERTIES EXCLUDE_FROM_ALL TRUE)  # [EJ] EXCLUDE_FROM_ALL is set to enable minimal build for docs only configuration
 endif()
@@ -398,6 +403,7 @@ message(STATUS "Build FBX converter: " ${HG_BUILD_FBX_CONVERTER})
 message(STATUS "Build GLTF exporter: " ${HG_BUILD_GLTF_EXPORTER})
 message(STATUS "Build GLTF importer: " ${HG_BUILD_GLTF_IMPORTER})
 message(STATUS "Build AssetC: " ${HG_BUILD_ASSETC})
+message(STATUS "Build FFmpeg plugin: " ${HG_BUILD_FFMPEG_PLUGIN})
 message(STATUS "Build C++ SDK: " ${HG_BUILD_CPP_SDK})
 message(STATUS "Build documentation: " ${HG_BUILD_DOCS})
 message(STATUS "Build static documentation: " ${HG_BUILD_STATIC_DOCS})
