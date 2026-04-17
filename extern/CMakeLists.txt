@@ -147,6 +147,38 @@ target_include_directories(stb_vorbis PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_S
 
 install_cppsdk_external_target(stb_vorbis)
 
+# libxmp-lite
+if(HG_ENABLE_XMP_AUDIO)
+	include(${CMAKE_CURRENT_SOURCE_DIR}/libxmp-lite/cmake/libxmp-sources.cmake)
+	list(TRANSFORM LIBXMP_SRC_LIST PREPEND libxmp-lite/)
+
+	add_library(xmp_lite_static STATIC ${LIBXMP_SRC_LIST})
+	add_library(libxmp-lite::xmp_lite_static ALIAS xmp_lite_static)
+
+	if(MSVC)
+		set_target_properties(xmp_lite_static PROPERTIES OUTPUT_NAME libxmp-lite-static)
+	else()
+		set_target_properties(xmp_lite_static PROPERTIES OUTPUT_NAME xmp-lite)
+	endif()
+
+	set_target_properties(xmp_lite_static PROPERTIES C_STANDARD 90 POSITION_INDEPENDENT_CODE TRUE FOLDER "harfang/3rdparty")
+	target_include_directories(xmp_lite_static PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/libxmp-lite/include/libxmp-lite>)
+	target_compile_definitions(xmp_lite_static PUBLIC LIBXMP_STATIC PRIVATE LIBXMP_CORE_PLAYER)
+	if(MSVC)
+		target_compile_definitions(xmp_lite_static PRIVATE _USE_MATH_DEFINES)
+	else()
+		target_compile_definitions(xmp_lite_static PRIVATE _REENTRANT)
+	endif()
+	if(UNIX AND NOT APPLE)
+		target_link_libraries(xmp_lite_static PUBLIC m)
+	endif()
+
+	install_cppsdk_external_target(xmp_lite_static libxmp-lite)
+	if(HG_BUILD_CPP_SDK)
+		install(FILES libxmp-lite/include/libxmp-lite/xmp.h DESTINATION cppsdk/include/extern/libxmp-lite COMPONENT cppsdk)
+	endif()
+endif()
+
 # STB truetype
 add_library(stb_truetype STATIC stb_truetype/stb_truetype.c stb_truetype/stb_truetype.h)
 target_include_directories(stb_truetype PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/stb_truetype>)

@@ -21,6 +21,10 @@ install(
 	COMPONENT
 		python)
 
+if(TARGET audio_xmp)
+	install(TARGETS audio_xmp RUNTIME DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/harfang LIBRARY DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/harfang COMPONENT python)
+endif()
+
 install_cppsdk_dependencies(${CMAKE_CURRENT_BINARY_DIR}/harfang python)
 
 if(WIN32)

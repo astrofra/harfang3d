@@ -6,6 +6,21 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#ifndef AUDIO_STREAM_API
+#	ifndef AUDIO_STREAM_API_PREFIX
+#		ifdef __cplusplus
+#			define AUDIO_STREAM_API_PREFIX extern "C"
+#		else
+#			define AUDIO_STREAM_API_PREFIX
+#		endif
+#	endif
+#	if WIN32
+#		define AUDIO_STREAM_API AUDIO_STREAM_API_PREFIX __declspec(dllexport)
+#	else /* POSIX */
+#		define AUDIO_STREAM_API AUDIO_STREAM_API_PREFIX __attribute__((visibility("default")))
+#	endif
+#endif
+
 //
 enum AudioFrameFormat {
 	AFF_Unsupported,

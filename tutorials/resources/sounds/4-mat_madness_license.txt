@@ -1,0 +1,7 @@
+4-mat's madness.mod
+
+Author: Matthew Simmonds (4-Mat / Anarchy)
+Source: ftp://ftp.modland.com//pub/modules/Protracker/4-Mat/4-mat's%20madness.mod
+
+No explicit license information was available in the downloaded file or source
+path. This module is included as tutorial test data for MOD/XM streaming.

@@ -50,6 +50,7 @@ extern void test_window();
 extern void test_assets();
 extern void test_animation();
 extern void test_audio();
+extern void test_audio_stream();
 extern void test_meta();
 extern void test_picture();
 extern void test_video_stream();
@@ -108,6 +109,7 @@ TEST_LIST = {
 	{"engine.assets", test_assets},
 	{"engine.animation", test_animation},
 	{"engine.audio", test_audio},
+	{"engine.audio_stream", test_audio_stream},
 	{"engine.meta", test_meta},
 	{"engine.picture", test_picture},
 	{"engine.video_stream", test_video_stream},

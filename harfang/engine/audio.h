@@ -6,6 +6,7 @@
 #include <foundation/time.h>
 #include <foundation/vector3.h>
 
+#include <engine/audio_stream.h>
 #include <engine/audio_stream_interface.h>
 
 namespace hg {
@@ -66,6 +67,12 @@ SourceRef StreamOGGFileStereo(const char *path, const StereoSourceState &state);
 SourceRef StreamOGGAssetStereo(const char *name, const StereoSourceState &state);
 SourceRef StreamOGGFileSpatialized(const char *path, const SpatializedSourceState &state);
 SourceRef StreamOGGAssetSpatialized(const char *name, const SpatializedSourceState &state);
+
+SourceRef StreamAudioFileStereo(IAudioStreamer &streamer, const char *path, const StereoSourceState &state);
+SourceRef StreamAudioFileSpatialized(IAudioStreamer &streamer, const char *path, const SpatializedSourceState &state);
+
+SourceRef StreamModuleFileStereo(const char *path, const StereoSourceState &state);
+SourceRef StreamModuleFileSpatialized(const char *path, const SpatializedSourceState &state);
 
 //
 time_ns GetSourceDuration(SourceRef src_ref);

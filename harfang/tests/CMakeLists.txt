@@ -13,6 +13,20 @@ install(TARGETS DummyVideoStream
 	COMPONENT cppsdk
 )
 
+add_library(DummyAudioStream SHARED dummy_audio_stream.cpp)
+target_include_directories(DummyAudioStream PRIVATE ${CMAKE_SOURCE_DIR}/harfang ${CMAKE_CURRENT_BINARY_DIR})
+set_target_properties(DummyAudioStream PROPERTIES
+	PREFIX ""
+	FOLDER "harfang"
+	RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/data
+	LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/data
+)
+install(TARGETS DummyAudioStream
+	RUNTIME DESTINATION cppsdk/bin/$<CONFIG>/data
+	LIBRARY DESTINATION cppsdk/bin/$<CONFIG>/data
+	COMPONENT cppsdk
+)
+
 set(TEST_FOUNDATION_SRCS
 	foundation/cext.cpp
 	foundation/curve.cpp
@@ -60,6 +74,7 @@ set(TEST_ENGINE_SRCS
 	engine/assets.cpp
 	engine/animation.cpp
 	engine/audio.cpp
+	engine/audio_stream.cpp
 	engine/meta.cpp
 	engine/picture.cpp
 	engine/video_stream.cpp
@@ -78,6 +93,7 @@ add_executable(tests main.cpp utils.cpp utils.h ${TEST_FOUNDATION_SRCS} ${TEST_E
 target_link_libraries(tests PUBLIC engine foundation platform)
 target_include_directories(tests PRIVATE ../../extern/acutest)
 add_dependencies(tests DummyVideoStream)
+add_dependencies(tests DummyAudioStream)
 set_target_properties(tests PROPERTIES FOLDER "harfang")
 if(UNIX)
 	target_link_libraries(tests PRIVATE pthread)

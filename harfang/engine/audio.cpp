@@ -7,6 +7,7 @@
 #include "foundation/log.h"
 #include "foundation/timer.h"
 
+#include "engine/audio_stream.h"
 #include "engine/ogg_audio_stream.h"
 #include "engine/wav_audio_stream.h"
 
@@ -58,6 +59,10 @@ struct ALMixer {
 
 static ALMixer al_mixer;
 
+static IAudioStreamer g_module_audio_streamer{};
+static bool g_module_audio_streamer_load_attempted{false};
+static bool g_module_audio_streamer_started{false};
+
 //
 static bool CheckALSuccess(const char *file = "unknown", ALuint line = 0) {
 	switch (alGetError()) {
@@ -105,6 +110,38 @@ static bool EnsureALContextCurrent() {
 	if (al_mixer.context && alcGetCurrentContext() != al_mixer.context)
 		return alcMakeContextCurrent(al_mixer.context) == ALC_TRUE;
 	return true;
+}
+
+static const char *GetDefaultModuleAudioStreamerPath() {
+#if defined(_WIN32)
+	return "audio_xmp.dll";
+#elif defined(__APPLE__)
+	return "audio_xmp.dylib";
+#else
+	return "audio_xmp.so";
+#endif
+}
+
+static IAudioStreamer &GetModuleAudioStreamer() {
+	if (!g_module_audio_streamer_load_attempted) {
+		g_module_audio_streamer = MakeAudioStreamer(GetDefaultModuleAudioStreamerPath());
+		g_module_audio_streamer_load_attempted = true;
+
+		if (IsValid(g_module_audio_streamer)) {
+			g_module_audio_streamer_started = g_module_audio_streamer.Startup() != 0;
+		}
+	}
+
+	return g_module_audio_streamer;
+}
+
+static void ShutdownModuleAudioStreamer() {
+	if (g_module_audio_streamer_started && IsValid(g_module_audio_streamer))
+		g_module_audio_streamer.Shutdown();
+
+	g_module_audio_streamer = {};
+	g_module_audio_streamer_load_attempted = false;
+	g_module_audio_streamer_started = false;
 }
 
 //
@@ -300,6 +337,7 @@ void AudioShutdown() {
 	cancel_periodic(al_mixer.update);
 
 	StopAllSources();
+	ShutdownModuleAudioStreamer();
 
 	if (al_mixer.context) {
 		__AL_CALL(alDeleteSources(max_source, al_mixer.sources));
@@ -373,6 +411,9 @@ void UnloadSound(SoundRef snd_ref) {
 
 //
 static SoundRef LoadSound(IAudioStreamer streamer, const char *path) {
+	if (!IsValid(streamer))
+		return InvalidSoundRef;
+
 	const auto stream_ref = streamer.Open(path);
 	if (stream_ref == InvalidAudioStreamRef)
 		return InvalidSoundRef;
@@ -458,6 +499,9 @@ SourceRef PlaySpatialized(SoundRef snd_ref, const SpatializedSourceState &state)
 template <typename State> SourceRef Stream(IAudioStreamer streamer, const char *path, const State &state) {
 	std::lock_guard<std::mutex> lock(al_mixer.lock);
 
+	if (!IsValid(streamer))
+		return InvalidSourceRef;
+
 	const auto src_ref = GetFreeSourceRef();
 	if (src_ref == InvalidSourceRef)
 		return InvalidSourceRef;
@@ -486,6 +530,19 @@ SourceRef StreamOGGFileStereo(const char *path, const StereoSourceState &state) 
 SourceRef StreamOGGAssetStereo(const char *path, const StereoSourceState &state) { return Stream(MakeOGGAssetStreamer(), path, state); }
 SourceRef StreamOGGFileSpatialized(const char *path, const SpatializedSourceState &state) { return Stream(MakeOGGFileStreamer(), path, state); }
 SourceRef StreamOGGAssetSpatialized(const char *path, const SpatializedSourceState &state) { return Stream(MakeOGGAssetStreamer(), path, state); }
+
+SourceRef StreamAudioFileStereo(IAudioStreamer &streamer, const char *path, const StereoSourceState &state) { return Stream(streamer, path, state); }
+SourceRef StreamAudioFileSpatialized(IAudioStreamer &streamer, const char *path, const SpatializedSourceState &state) { return Stream(streamer, path, state); }
+
+SourceRef StreamModuleFileStereo(const char *path, const StereoSourceState &state) {
+	auto &streamer = GetModuleAudioStreamer();
+	return g_module_audio_streamer_started ? StreamAudioFileStereo(streamer, path, state) : InvalidSourceRef;
+}
+
+SourceRef StreamModuleFileSpatialized(const char *path, const SpatializedSourceState &state) {
+	auto &streamer = GetModuleAudioStreamer();
+	return g_module_audio_streamer_started ? StreamAudioFileSpatialized(streamer, path, state) : InvalidSourceRef;
+}
 
 //
 time_ns GetSourceTimecode(SourceRef src_ref) {
