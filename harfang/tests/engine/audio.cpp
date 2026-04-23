@@ -9,6 +9,7 @@
 
 #include <chrono>
 #include <thread>
+#include <vector>
 
 using namespace hg;
 
@@ -30,6 +31,52 @@ struct Audio {
 
 static void test_InitShutdown() {
 	Audio audio;
+}
+
+static std::vector<int16_t> make_square_pcm(size_t frame_count, size_t channel_count) {
+	std::vector<int16_t> samples(frame_count * channel_count);
+	for (size_t frame = 0; frame < frame_count; ++frame) {
+		const auto sample = ((frame / 32) % 2) ? int16_t(12000) : int16_t(-12000);
+		for (size_t channel = 0; channel < channel_count; ++channel)
+			samples[frame * channel_count + channel] = sample;
+	}
+	return samples;
+}
+
+static void test_LoadLPCM() {
+	Audio audio;
+
+	const auto mono = make_square_pcm(22050, 1);
+	const auto mono_snd = LoadLPCMSound(mono.data(), mono.size() * sizeof(mono[0]), AFF_LPCM_44KHZ_S16_Mono);
+	TEST_CHECK(mono_snd != InvalidSoundRef);
+
+	auto src = PlayStereo(mono_snd, {20.f, SR_Once, 0.f});
+	TEST_CHECK(src != InvalidSourceRef);
+	TEST_CHECK(GetSourceState(src) == SS_Playing);
+
+	while (GetSourceState(src) == SS_Playing)
+		std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	TEST_CHECK(GetSourceState(src) == SS_Stopped);
+
+	StopSource(src);
+	UnloadSound(mono_snd);
+
+	const auto stereo = make_square_pcm(12000, 2);
+	const auto stereo_snd = LoadLPCMSound(stereo.data(), stereo.size() * sizeof(stereo[0]), AFF_LPCM_48KHZ_S16_Stereo);
+	TEST_CHECK(stereo_snd != InvalidSoundRef);
+	UnloadSound(stereo_snd);
+}
+
+static void test_LoadLPCMRejectInvalid() {
+	Audio audio;
+
+	const auto mono = make_square_pcm(64, 1);
+	const auto mono_size = mono.size() * sizeof(mono[0]);
+
+	TEST_CHECK(LoadLPCMSound(nullptr, mono_size, AFF_LPCM_44KHZ_S16_Mono) == InvalidSoundRef);
+	TEST_CHECK(LoadLPCMSound(mono.data(), 0, AFF_LPCM_44KHZ_S16_Mono) == InvalidSoundRef);
+	TEST_CHECK(LoadLPCMSound(mono.data(), mono_size - 1, AFF_LPCM_44KHZ_S16_Mono) == InvalidSoundRef);
+	TEST_CHECK(LoadLPCMSound(mono.data(), mono_size, AFF_Unsupported) == InvalidSoundRef);
 }
 
 static void test_PlayWAV() {
@@ -170,6 +217,8 @@ static void test_PlayOGG() {
 
 void test_audio() { 
 	test_InitShutdown();
+	test_LoadLPCM();
+	test_LoadLPCMRejectInvalid();
 	test_PlayWAV();
 	test_StreamWAV();
 	test_Timestamps();

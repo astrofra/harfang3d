@@ -11,7 +11,7 @@ It is recommended to use sounds for short, ponctual effects and streams for back
 
 The audio system manages a finite number of audio sources. A source can play a single audio sound or stream at a time. When initiating playback a free source is selected, if none is available the request fails and [SRC_Invalid] is returned.
 
-To playback a sound, load it first using [LoadWAVSoundFile] for example, then pass the returned resource reference to [PlayStereo] or [PlaySpatialized], this in turn will return a reference to the audio source playback started on.
+To playback a sound, load it first using [LoadWAVSoundFile] or [LoadLPCMSound], then pass the returned resource reference to [PlayStereo] or [PlaySpatialized], this in turn will return a reference to the audio source playback started on.
 
 To start streaming a sound file, call a streaming function such as [StreamWAVFileStereo].
 

@@ -4297,6 +4297,12 @@ def bind_audio(gen):
 
 	gen.bind_function('hg::LoadOGGSoundFile', 'hg::SoundRef', ['const char *path'], {'rval_constants_group': 'SoundRef'})
 	gen.bind_function('hg::LoadOGGSoundAsset', 'hg::SoundRef', ['const char *name'], {'rval_constants_group': 'SoundRef'})
+	gen.insert_binding_code('''
+static hg::SoundRef _LoadLPCMSoundFromPtr(intptr_t ptr, size_t size, AudioFrameFormat format) {
+	return hg::LoadLPCMSound(reinterpret_cast<const void *>(ptr), size, format);
+}
+''')
+	gen.bind_function('hg::LoadLPCMSound', 'hg::SoundRef', ['intptr_t ptr', 'size_t size', 'AudioFrameFormat format'], {'route': route_lambda('_LoadLPCMSoundFromPtr'), 'rval_constants_group': 'SoundRef'})
 
 	gen.bind_function('hg::UnloadSound', 'void', ['hg::SoundRef snd'], {'constants_group': {'snd': 'SoundRef'}})
 

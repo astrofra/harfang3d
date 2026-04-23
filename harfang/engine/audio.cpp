@@ -400,12 +400,43 @@ static SoundRef GetFreeSoundRef() {
 	return snd_ref;
 }
 
+static bool IsValidPCMBuffer(const void *data, size_t size, AudioFrameFormat format) {
+	if (data == nullptr || size == 0 || format <= AFF_Unsupported || format >= AFF_Count)
+		return false;
+
+	const size_t bytes_per_frame = (AFF_ChannelCount[format] * AFF_Resolution[format]) / 8;
+	if (bytes_per_frame == 0 || (size % bytes_per_frame) != 0)
+		return false;
+
+	return AFF_ALFormat(format) != 0;
+}
+
+static bool UploadPCMBuffer(ALSound &sound, const void *pcm_buffer, size_t pcm_size, AudioFrameFormat pcm_format) {
+	if (!IsValidPCMBuffer(pcm_buffer, pcm_size, pcm_format))
+		return false;
+
+	ALuint buffer = AL_INVALID_VALUE;
+	alGenBuffers(1, &buffer);
+	if (!__AL_OK)
+		return false;
+
+	alBufferData(buffer, AFF_ALFormat(pcm_format), pcm_buffer, numeric_cast<ALsizei>(pcm_size), AFF_Frequency[pcm_format]);
+	if (!__AL_OK) {
+		__AL_CALL(alDeleteBuffers(1, &buffer));
+		return false;
+	}
+
+	sound.buffers.push_back(buffer);
+	return true;
+}
+
 void UnloadSound(SoundRef snd_ref) {
 	if (snd_ref < 0 || snd_ref >= sounds.size())
 		return;
 
 	auto &sound = sounds[snd_ref];
-	__AL_CALL(alDeleteBuffers(numeric_cast<ALsizei>(sound.buffers.size()), sound.buffers.data()));
+	if (!sound.buffers.empty())
+		__AL_CALL(alDeleteBuffers(numeric_cast<ALsizei>(sound.buffers.size()), sound.buffers.data()));
 	sound.buffers.clear();
 }
 
@@ -426,10 +457,11 @@ static SoundRef LoadSound(IAudioStreamer streamer, const char *path) {
 	AudioFrameFormat pcm_format;
 
 	while (streamer.GetFrame(stream_ref, &pcm_buffer, &pcm_size, &pcm_format)) {
-		sound.buffers.push_back(AL_INVALID_VALUE);
-		__AL_CALL(alGenBuffers(1, &sound.buffers.back()));
-		__AL_CALL(alBufferData(
-			sound.buffers.back(), AFF_ALFormat(pcm_format), (const ALvoid *)pcm_buffer, numeric_cast<ALsizei>(pcm_size), AFF_Frequency[pcm_format]));
+		if (pcm_size <= 0 || !UploadPCMBuffer(sound, reinterpret_cast<const void *>(pcm_buffer), static_cast<size_t>(pcm_size), pcm_format)) {
+			UnloadSound(snd_ref);
+			streamer.Close(stream_ref);
+			return InvalidSoundRef;
+		}
 	}
 
 	streamer.Close(stream_ref);
@@ -441,6 +473,19 @@ SoundRef LoadWAVSoundAsset(const char *name) { return LoadSound(MakeWAVAssetStre
 
 SoundRef LoadOGGSoundFile(const char *path) { return LoadSound(MakeOGGFileStreamer(), path); }
 SoundRef LoadOGGSoundAsset(const char *name) { return LoadSound(MakeOGGAssetStreamer(), name); }
+
+SoundRef LoadLPCMSound(const void *data, size_t size, AudioFrameFormat format) {
+	if (!IsValidPCMBuffer(data, size, format))
+		return InvalidSoundRef;
+
+	const auto snd_ref = GetFreeSoundRef();
+	auto &sound = sounds[snd_ref];
+
+	if (!UploadPCMBuffer(sound, data, size, format))
+		return InvalidSoundRef;
+
+	return snd_ref;
+}
 
 //
 static void ALChannelSetState(ALint src, const StereoSourceState &state, bool stream) {

@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cstddef>
+
 #include <foundation/matrix4.h>
 #include <foundation/time.h>
 #include <foundation/vector3.h>
@@ -48,6 +50,7 @@ SoundRef LoadWAVSoundAsset(const char *name);
 
 SoundRef LoadOGGSoundFile(const char *path);
 SoundRef LoadOGGSoundAsset(const char *name);
+SoundRef LoadLPCMSound(const void *data, size_t size, AudioFrameFormat format);
 
 void UnloadSound(SoundRef snd_ref);
 
