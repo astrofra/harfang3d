@@ -2774,6 +2774,7 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <div class="api-proto">IsValid(t: <a href="classes.html#texture">Texture</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(fb: <a href="classes.html#framebuffer">FrameBuffer</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(pipeline: <a href="classes.html#forwardpipelineaaa">ForwardPipelineAAA</a>) -&gt; <code>bool</code></div>
+<div class="api-proto">IsValid(streamer: <a href="classes.html#iaudiostreamer">IAudioStreamer</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(streamer: <a href="classes.html#ivideostreamer">IVideoStreamer</a>) -&gt; <code>bool</code></div>
 <div class="api-doc"><p>Test if a resource if valid.</p></div>
 </section>
@@ -2896,6 +2897,13 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <h2>LoadJsonFromFile <span class="api-kind">Function</span></h2>
 <div class="api-proto">LoadJsonFromFile(path: <code>str</code>) -&gt; <a href="classes.html#json">JSON</a></div>
 <div class="api-doc"><p>Load a JSON from the local filesystem.</p></div>
+</section>
+<section class="api-entry" id="loadlpcmsound">
+<h2>LoadLPCMSound <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadLPCMSound(ptr: <code>int</code>, size: <code>int</code>, format: <a href="constants.html#audioframeformat">AudioFrameFormat</a>) -&gt; <a href="constants.html#soundref">SoundRef</a></div>
+<div class="api-doc"><p>Load a sound from a decoded raw LPCM memory block and return a reference to it.</p>
+<p>The input pointer is borrowed only for the duration of the call. The audio data
+is copied to the audio backend before the function returns.</p></div>
 </section>
 <section class="api-entry" id="loadmodelfromassets">
 <h2>LoadModelFromAssets <span class="api-kind">Function</span></h2>
@@ -3080,6 +3088,11 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <h2>Log <span class="api-kind">Function</span></h2>
 <div class="api-proto">Log(msg: <code>str</code>) -&gt; <code>None</code></div>
 <div class="api-proto">Log(msg: <code>str</code>, details: <code>str</code>) -&gt; <code>None</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="makeaudiostreamer">
+<h2>MakeAudioStreamer <span class="api-kind">Function</span></h2>
+<div class="api-proto">MakeAudioStreamer(module_path: <code>str</code>) -&gt; <a href="classes.html#iaudiostreamer">IAudioStreamer</a></div>
 <div class="api-doc"></div>
 </section>
 <section class="api-entry" id="makeforwardpipelinelinearlight">
@@ -4422,6 +4435,26 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <h2>StopSource <span class="api-kind">Function</span></h2>
 <div class="api-proto">StopSource(source: <a href="constants.html#sourceref">SourceRef</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Stop a playing audio source.</p></div>
+</section>
+<section class="api-entry" id="streamaudiofilespatialized">
+<h2>StreamAudioFileSpatialized <span class="api-kind">Function</span></h2>
+<div class="api-proto">StreamAudioFileSpatialized(streamer: <a href="classes.html#iaudiostreamer">IAudioStreamer</a>, path: <code>str</code>, state: <a href="classes.html#spatializedsourcestate">SpatializedSourceState</a>) -&gt; <a href="constants.html#sourceref">SourceRef</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="streamaudiofilestereo">
+<h2>StreamAudioFileStereo <span class="api-kind">Function</span></h2>
+<div class="api-proto">StreamAudioFileStereo(streamer: <a href="classes.html#iaudiostreamer">IAudioStreamer</a>, path: <code>str</code>, state: <a href="classes.html#stereosourcestate">StereoSourceState</a>) -&gt; <a href="constants.html#sourceref">SourceRef</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="streammodulefilespatialized">
+<h2>StreamModuleFileSpatialized <span class="api-kind">Function</span></h2>
+<div class="api-proto">StreamModuleFileSpatialized(path: <code>str</code>, state: <a href="classes.html#spatializedsourcestate">SpatializedSourceState</a>) -&gt; <a href="constants.html#sourceref">SourceRef</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="streammodulefilestereo">
+<h2>StreamModuleFileStereo <span class="api-kind">Function</span></h2>
+<div class="api-proto">StreamModuleFileStereo(path: <code>str</code>, state: <a href="classes.html#stereosourcestate">StereoSourceState</a>) -&gt; <a href="constants.html#sourceref">SourceRef</a></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="streamoggassetspatialized">
 <h2>StreamOGGAssetSpatialized <span class="api-kind">Function</span></h2>

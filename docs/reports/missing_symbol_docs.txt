@@ -165,6 +165,15 @@ GetNodesInContact
 GetSceneForwardPipelineFog
 GetWindowContentScale
 HandsSide
+IAudioStreamer
+IAudioStreamer_Close
+IAudioStreamer_GetDuration
+IAudioStreamer_GetTimeStamp
+IAudioStreamer_IsEnded
+IAudioStreamer_Open
+IAudioStreamer_Seek
+IAudioStreamer_Shutdown
+IAudioStreamer_Startup
 IVideoStreamer
 IVideoStreamer_Close
 IVideoStreamer_FreeFrame
@@ -320,6 +329,7 @@ LuaObjectList_clear
 LuaObjectList_push_back
 LuaObjectList_reserve
 LuaObjectList_size
+MakeAudioStreamer
 MakeVertex
 MakeVideoStreamer
 Mat4List
@@ -685,6 +695,10 @@ SourceRepeat
 SourceState
 SpatializedSourceState_Constructor
 StereoSourceState_Constructor
+StreamAudioFileSpatialized
+StreamAudioFileStereo
+StreamModuleFileSpatialized
+StreamModuleFileStereo
 StreamOGGAssetSpatialized
 StreamOGGAssetStereo
 StreamOGGFileSpatialized

@@ -366,6 +366,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Use the geometry builder to programmatically create geometries. No optimization are performed by the geometry builder on the input data. To programmatically build a geometry for immediate display see ModelBuilder to directly build models."
   },
   {
+    "title": "IAudioStreamer",
+    "href": "api/cpython/classes.html#iaudiostreamer",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "ImDrawList",
     "href": "api/cpython/classes.html#imdrawlist",
     "kind": "class",
@@ -3882,6 +3888,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Load a JSON from the local filesystem."
   },
   {
+    "title": "LoadLPCMSound",
+    "href": "api/cpython/functions.html#loadlpcmsound",
+    "kind": "function",
+    "text": "Load a sound from a decoded raw LPCM memory block and return a reference to it. The input pointer is borrowed only for the duration of the call. The audio data is copied to the audio backend before the function returns."
+  },
+  {
     "title": "LoadModelFromAssets",
     "href": "api/cpython/functions.html#loadmodelfromassets",
     "kind": "function",
@@ -4064,6 +4076,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "Log",
     "href": "api/cpython/functions.html#log",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "MakeAudioStreamer",
+    "href": "api/cpython/functions.html#makeaudiostreamer",
     "kind": "function",
     "text": ""
   },
@@ -5388,6 +5406,30 @@ window.HG_SEARCH_INDEX = [
     "text": "Stop a playing audio source."
   },
   {
+    "title": "StreamAudioFileSpatialized",
+    "href": "api/cpython/functions.html#streamaudiofilespatialized",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamAudioFileStereo",
+    "href": "api/cpython/functions.html#streamaudiofilestereo",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamModuleFileSpatialized",
+    "href": "api/cpython/functions.html#streammodulefilespatialized",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamModuleFileStereo",
+    "href": "api/cpython/functions.html#streammodulefilestereo",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "StreamOGGAssetSpatialized",
     "href": "api/cpython/functions.html#streamoggassetspatialized",
     "kind": "function",
@@ -6484,6 +6526,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/classes.html#geometrybuilder",
     "kind": "class",
     "text": "Use the geometry builder to programmatically create geometries. No optimization are performed by the geometry builder on the input data. To programmatically build a geometry for immediate display see ModelBuilder to directly build models."
+  },
+  {
+    "title": "IAudioStreamer",
+    "href": "api/lua/classes.html#iaudiostreamer",
+    "kind": "class",
+    "text": ""
   },
   {
     "title": "ImDrawList",
@@ -10002,6 +10050,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Load a JSON from the local filesystem."
   },
   {
+    "title": "LoadLPCMSound",
+    "href": "api/lua/functions.html#loadlpcmsound",
+    "kind": "function",
+    "text": "Load a sound from a decoded raw LPCM memory block and return a reference to it. The input pointer is borrowed only for the duration of the call. The audio data is copied to the audio backend before the function returns."
+  },
+  {
     "title": "LoadModelFromAssets",
     "href": "api/lua/functions.html#loadmodelfromassets",
     "kind": "function",
@@ -10184,6 +10238,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "Log",
     "href": "api/lua/functions.html#log",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "MakeAudioStreamer",
+    "href": "api/lua/functions.html#makeaudiostreamer",
     "kind": "function",
     "text": ""
   },
@@ -11506,6 +11566,30 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#stopsource",
     "kind": "function",
     "text": "Stop a playing audio source."
+  },
+  {
+    "title": "StreamAudioFileSpatialized",
+    "href": "api/lua/functions.html#streamaudiofilespatialized",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamAudioFileStereo",
+    "href": "api/lua/functions.html#streamaudiofilestereo",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamModuleFileSpatialized",
+    "href": "api/lua/functions.html#streammodulefilespatialized",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "StreamModuleFileStereo",
+    "href": "api/lua/functions.html#streammodulefilestereo",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "StreamOGGAssetSpatialized",
