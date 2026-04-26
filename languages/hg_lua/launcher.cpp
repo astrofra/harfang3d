@@ -1,11 +1,15 @@
 // HARFANG(R) Copyright (C) 2026 NWNC. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 
+#include "assets_bridge.h"
+
 #include <engine/assets.h>
+#include <engine/assets_internal.h>
 
 #include <foundation/data.h>
 #include <foundation/dir.h>
 #include <foundation/file.h>
 #include <foundation/path_tools.h>
+#include <foundation/string.h>
 
 #include <json/json.hpp>
 
@@ -15,6 +19,7 @@ extern "C" {
 #include <lualib.h>
 }
 
+#include <cctype>
 #include <iostream>
 #include <set>
 #include <string>
@@ -32,18 +37,39 @@ namespace {
 
 using json = nlohmann::json;
 
+constexpr uint32_t kZipLocalHeaderMagic = 0x04034b50u;
+constexpr uint32_t kZipEmptyArchiveMagic = 0x06054b50u;
+constexpr uint32_t kZipSpannedArchiveMagic = 0x08074b50u;
+constexpr uint32_t kGameStartEnhancedMagic = 0x4E415244u;
+constexpr uint32_t kGameStartLegacyMagic = 0x4E415243u;
+
+enum class LauncherAssetsSource { None, Folder, Zip, GameStart };
+
+struct LauncherAssetsConfig {
+	std::string logical_data_path = "data";
+	std::string archive_root;
+	bool pass_mode_argument = false;
+};
+
 struct LauncherConfig {
 	std::string entry;
 	std::vector<std::string> args;
+	LauncherAssetsConfig assets;
 };
 
 struct MountedAssets {
+	LauncherAssetsSource source = LauncherAssetsSource::None;
+	std::string cwd;
 	std::string folder_path;
 	std::string package_path;
 };
 
+static std::string g_launcher_archive_root;
+
 std::vector<std::string> MakeAssetPathCandidates(const std::string &name);
 bool ResolveAssetName(const std::string &name, std::string &resolved_name);
+bool NormalizeRelativeAssetPath(const std::string &path, std::string &normalized);
+bool JoinArchivePath(const std::string &prefix, const std::string &suffix, std::string &joined);
 
 std::string GetExecutablePath() {
 #if defined(_WIN32)
@@ -59,8 +85,42 @@ std::string GetExecutablePath() {
 #endif
 }
 
-void PrintError(const std::string &message) {
-	std::cerr << "launcher: " << message << std::endl;
+void PrintError(const std::string &message) { std::cerr << "launcher: " << message << std::endl; }
+
+const char *GetAssetsSourceName(LauncherAssetsSource source) {
+	switch (source) {
+		case LauncherAssetsSource::Folder:
+			return "folder";
+		case LauncherAssetsSource::Zip:
+			return "zip";
+		case LauncherAssetsSource::GameStart:
+			return "gamestart";
+		default:
+			return "none";
+	}
+}
+
+bool IsDriveLetterPath(const std::string &path) { return path.size() >= 2 && std::isalpha(static_cast<unsigned char>(path[0])) != 0 && path[1] == ':'; }
+
+bool IsZipMagic(uint32_t magic) { return magic == kZipLocalHeaderMagic || magic == kZipEmptyArchiveMagic || magic == kZipSpannedArchiveMagic; }
+
+LauncherAssetsSource DetectArchiveSourceType(const std::string &path) {
+	hg::ScopedFile file(hg::Open(path.c_str(), true));
+	if (!file)
+		return LauncherAssetsSource::None;
+
+	uint8_t bytes[4] = {};
+	if (hg::Read(file.f, bytes, sizeof(bytes)) != sizeof(bytes))
+		return LauncherAssetsSource::None;
+
+	const uint32_t magic = static_cast<uint32_t>(bytes[0]) | (static_cast<uint32_t>(bytes[1]) << 8) | (static_cast<uint32_t>(bytes[2]) << 16) |
+						   (static_cast<uint32_t>(bytes[3]) << 24);
+
+	if (IsZipMagic(magic))
+		return LauncherAssetsSource::Zip;
+	if (magic == kGameStartEnhancedMagic || magic == kGameStartLegacyMagic)
+		return LauncherAssetsSource::GameStart;
+	return LauncherAssetsSource::None;
 }
 
 std::string JsonValueToArg(const json &value) {
@@ -110,31 +170,57 @@ bool ParseConfig(const std::string &content, const std::string &source, Launcher
 				config.args.push_back(JsonValueToArg(arg));
 		}
 
+		if (js.contains("assets")) {
+			if (!js["assets"].is_object()) {
+				error = "'assets' must be a JSON object";
+				return false;
+			}
+
+			const auto &assets = js["assets"];
+			if (assets.contains("logical_data_path")) {
+				if (!assets["logical_data_path"].is_string()) {
+					error = "'assets.logical_data_path' must be a string";
+					return false;
+				}
+				config.assets.logical_data_path = assets["logical_data_path"].get<std::string>();
+			}
+
+			if (assets.contains("archive_root")) {
+				if (!assets["archive_root"].is_string()) {
+					error = "'assets.archive_root' must be a string";
+					return false;
+				}
+				config.assets.archive_root = assets["archive_root"].get<std::string>();
+			}
+
+			if (assets.contains("pass_mode_argument")) {
+				if (!assets["pass_mode_argument"].is_boolean()) {
+					error = "'assets.pass_mode_argument' must be a boolean";
+					return false;
+				}
+				config.assets.pass_mode_argument = assets["pass_mode_argument"].get<bool>();
+			}
+		}
+
+		std::string normalized_logical_path;
+		if (!NormalizeRelativeAssetPath(config.assets.logical_data_path, normalized_logical_path) || normalized_logical_path.empty()) {
+			error = "'assets.logical_data_path' must be a relative path inside the asset root";
+			return false;
+		}
+		config.assets.logical_data_path = normalized_logical_path;
+
+		std::string normalized_archive_root;
+		if (!NormalizeRelativeAssetPath(config.assets.archive_root, normalized_archive_root)) {
+			error = "'assets.archive_root' must be a relative archive path";
+			return false;
+		}
+		config.assets.archive_root = normalized_archive_root;
+
 		return true;
 	} catch (const json::exception &e) {
 		error = "invalid JSON in " + source + ": " + e.what();
 		return false;
 	}
-}
-
-bool LoadTextFile(const std::string &path, std::string &content, std::string &error) {
-	content = hg::FileToString(path.c_str());
-	if (content.empty() && !hg::Exists(path.c_str())) {
-		error = "file not found: " + path;
-		return false;
-	}
-	return true;
-}
-
-bool LoadTextAsset(const std::string &name, std::string &content, std::string &error) {
-	std::string resolved_name;
-	if (!ResolveAssetName(name, resolved_name)) {
-		error = "asset not found: " + name;
-		return false;
-	}
-
-	content = hg::AssetToString(resolved_name.c_str());
-	return true;
 }
 
 std::vector<std::string> MakeAssetPathCandidates(const std::string &name) {
@@ -165,6 +251,130 @@ bool ResolveAssetName(const std::string &name, std::string &resolved_name) {
 		return true;
 	}
 
+	return false;
+}
+
+bool NormalizeRelativeAssetPath(const std::string &path, std::string &normalized) {
+	std::string value = path;
+	hg::replace_all(value, "\\", "/");
+
+	if (!value.empty() && (value[0] == '/' || IsDriveLetterPath(value)))
+		return false;
+
+	std::vector<std::string> segments;
+	for (const auto &segment : hg::split(value, "/")) {
+		if (segment.empty() || segment == ".")
+			continue;
+
+		if (segment == "..") {
+			if (segments.empty())
+				return false;
+			segments.pop_back();
+			continue;
+		}
+
+		if (IsDriveLetterPath(segment))
+			return false;
+
+		segments.push_back(segment);
+	}
+
+	normalized = hg::join(segments.begin(), segments.end(), "/");
+	return true;
+}
+
+bool JoinArchivePath(const std::string &prefix, const std::string &suffix, std::string &joined) {
+	std::vector<std::string> segments = prefix.empty() ? std::vector<std::string>() : hg::split(prefix, "/");
+	const auto min_depth = segments.size();
+
+	std::string value = suffix;
+	hg::replace_all(value, "\\", "/");
+
+	if (!value.empty() && (value[0] == '/' || IsDriveLetterPath(value)))
+		return false;
+
+	for (const auto &segment : hg::split(value, "/")) {
+		if (segment.empty() || segment == ".")
+			continue;
+
+		if (segment == "..") {
+			if (segments.size() <= min_depth)
+				return false;
+			segments.pop_back();
+			continue;
+		}
+
+		if (IsDriveLetterPath(segment))
+			return false;
+
+		segments.push_back(segment);
+	}
+
+	joined = hg::join(segments.begin(), segments.end(), "/");
+	return true;
+}
+
+std::vector<std::string> MakeLauncherAssetCandidates(const std::string &name, const std::string &archive_root) {
+	std::set<std::string> unique;
+
+	for (const auto &candidate : MakeAssetPathCandidates(name))
+		unique.insert(candidate);
+
+	if (!archive_root.empty()) {
+		std::string prefixed_name;
+		if (JoinArchivePath(archive_root, name, prefixed_name)) {
+			for (const auto &candidate : MakeAssetPathCandidates(prefixed_name))
+				unique.insert(candidate);
+		}
+	}
+
+	return {unique.begin(), unique.end()};
+}
+
+bool ResolveLauncherAssetName(const std::string &name, const std::string &archive_root, std::string &resolved_name) {
+	for (const auto &candidate : MakeLauncherAssetCandidates(name, archive_root)) {
+		if (!hg::IsAssetFile(candidate.c_str()))
+			continue;
+
+		resolved_name = candidate;
+		return true;
+	}
+
+	return false;
+}
+
+bool NormalizeResolverInputPath(const std::string &path, const std::string &cwd, std::string &normalized) {
+	normalized = hg::CleanPath(path);
+	if (normalized.empty())
+		return false;
+
+	const auto clean_cwd = hg::CleanPath(cwd);
+	if (hg::IsPathAbsolute(normalized)) {
+		if (!hg::PathStartsWith(normalized, clean_cwd))
+			return false;
+		normalized = hg::PathStripPrefix(normalized, clean_cwd);
+	}
+
+	return NormalizeRelativeAssetPath(normalized, normalized);
+}
+
+bool LoadLauncherConfigAsset(const MountedAssets &mounted_assets, std::string &resolved_name, std::string &content, std::string &error) {
+	std::vector<std::string> candidates = {"bootstrap.json", "launcher.json"};
+	if (mounted_assets.source != LauncherAssetsSource::Folder) {
+		candidates.push_back("data/bootstrap.json");
+		candidates.push_back("data/launcher.json");
+	}
+
+	for (const auto &candidate : candidates) {
+		if (!ResolveAssetName(candidate, resolved_name))
+			continue;
+
+		content = hg::AssetToString(resolved_name.c_str());
+		return true;
+	}
+
+	error = mounted_assets.source == LauncherAssetsSource::Folder ? "asset not found: bootstrap.json or launcher.json"
+																 : "asset not found: bootstrap.json, launcher.json, data/bootstrap.json, or data/launcher.json";
 	return false;
 }
 
@@ -274,7 +484,7 @@ int AssetSearcher(lua_State *L) {
 
 	for (const auto &candidate : {base_name + ".lua", base_name + "/init.lua"}) {
 		std::string resolved_name;
-		if (!ResolveAssetName(candidate, resolved_name))
+		if (!ResolveLauncherAssetName(candidate, g_launcher_archive_root, resolved_name))
 			continue;
 
 		const auto source = hg::AssetToData(resolved_name.c_str());
@@ -323,11 +533,11 @@ bool RunLoadedChunk(lua_State *L, const std::string &script_name, const std::vec
 	return true;
 }
 
-bool RunEntryPoint(lua_State *L, const MountedAssets &mounted_assets, const std::string &entry_name, const std::vector<std::string> &args) {
-	if (hg::IsPathAbsolute(entry_name)) {
-		CreateArgTable(L, entry_name, args);
+bool RunEntryPoint(lua_State *L, const MountedAssets &mounted_assets, const LauncherConfig &config) {
+	if (hg::IsPathAbsolute(config.entry)) {
+		CreateArgTable(L, config.entry, config.args);
 
-		const auto status = luaL_loadfile(L, entry_name.c_str());
+		const auto status = luaL_loadfile(L, config.entry.c_str());
 		if (status != LUA_OK) {
 			const auto *message = lua_tostring(L, -1);
 			PrintError(message != nullptr ? message : "unknown Lua error");
@@ -335,12 +545,12 @@ bool RunEntryPoint(lua_State *L, const MountedAssets &mounted_assets, const std:
 			return false;
 		}
 
-		return RunLoadedChunk(L, entry_name, args);
+		return RunLoadedChunk(L, config.entry, config.args);
 	}
 
 	std::string resolved_name;
-	if (!ResolveAssetName(entry_name, resolved_name)) {
-		PrintError("entry script not found in mounted assets: " + entry_name);
+	if (!ResolveLauncherAssetName(config.entry, config.assets.archive_root, resolved_name)) {
+		PrintError("entry script not found in mounted assets: " + config.entry);
 		return false;
 	}
 
@@ -355,23 +565,80 @@ bool RunEntryPoint(lua_State *L, const MountedAssets &mounted_assets, const std:
 		return false;
 	}
 
-	return RunLoadedChunk(L, display_path, args);
+	return RunLoadedChunk(L, display_path, config.args);
 }
 
+bool InstallArchiveFolderResolver(const MountedAssets &mounted_assets, const LauncherConfig &config) {
+	if (mounted_assets.source == LauncherAssetsSource::Folder || mounted_assets.package_path.empty()) {
+		hg::ClearAssetsFolderResolver();
+		return true;
+	}
+
+	const auto cwd = mounted_assets.cwd;
+	const auto archive_path = mounted_assets.package_path;
+	const auto logical_data_path = config.assets.logical_data_path;
+	const auto archive_root = config.assets.archive_root;
+
+	hg::SetAssetsFolderResolver([cwd, archive_path, logical_data_path, archive_root](const std::string &path, hg::AssetsFolderResolution &resolution) {
+		std::string normalized_input;
+		if (!NormalizeResolverInputPath(path, cwd, normalized_input))
+			return false;
+
+		if (normalized_input != logical_data_path && !hg::starts_with(normalized_input, logical_data_path + "/"))
+			return false;
+
+		std::string suffix;
+		if (normalized_input.size() > logical_data_path.size())
+			suffix = normalized_input.substr(logical_data_path.size() + 1);
+
+		std::string archive_prefix;
+		if (!JoinArchivePath(archive_root, suffix, archive_prefix))
+			return false;
+
+		resolution.logical_path = normalized_input;
+		resolution.archive_path = archive_path;
+		resolution.archive_prefix = archive_prefix;
+		return true;
+	});
+
+	return true;
+}
+
+bool SyncLuaAssetsState(const MountedAssets &mounted_assets, const LauncherConfig &config) {
+	return hg_lua_sync_launcher_assets(mounted_assets.folder_path.c_str(), mounted_assets.package_path.c_str(), mounted_assets.cwd.c_str(),
+		config.assets.logical_data_path.c_str(), config.assets.archive_root.c_str());
+}
+
+void UnsyncLuaAssetsState(const MountedAssets &mounted_assets) { hg_lua_unsync_launcher_assets(mounted_assets.folder_path.c_str(), mounted_assets.package_path.c_str()); }
+
 bool MountLauncherAssets(const std::string &cwd, MountedAssets &mounted_assets) {
+	mounted_assets.cwd = cwd;
+
 	const auto data_dir = hg::PathJoin(cwd, "data");
-	const auto data_zip = hg::PathJoin(cwd, "data.zip");
-
-	if (hg::IsDir(data_dir.c_str()) && hg::AddAssetsFolder(data_dir.c_str()))
+	if (hg::IsDir(data_dir.c_str()) && hg::AddAssetsFolder(data_dir.c_str())) {
+		mounted_assets.source = LauncherAssetsSource::Folder;
 		mounted_assets.folder_path = data_dir;
+		return true;
+	}
 
-	if (hg::Exists(data_zip.c_str()) && hg::AddAssetsPackage(data_zip.c_str()))
-		mounted_assets.package_path = data_zip;
+	for (const auto &filename : {"data.zip", "data.gsa", "data.nac"}) {
+		const auto archive_path = hg::PathJoin(cwd, filename);
+		if (!hg::Exists(archive_path.c_str()))
+			continue;
+		if (!hg::AddAssetsPackage(archive_path.c_str()))
+			continue;
 
-	return !mounted_assets.folder_path.empty() || !mounted_assets.package_path.empty();
+		mounted_assets.source = DetectArchiveSourceType(archive_path);
+		mounted_assets.package_path = archive_path;
+		return true;
+	}
+
+	return false;
 }
 
 void UnmountLauncherAssets(const MountedAssets &mounted_assets) {
+	hg::ClearAssetsFolderResolver();
+
 	if (!mounted_assets.folder_path.empty())
 		hg::RemoveAssetsFolder(mounted_assets.folder_path.c_str());
 	if (!mounted_assets.package_path.empty())
@@ -384,32 +651,59 @@ int LauncherMain() {
 	const auto cwd = hg::GetCurrentWorkingDirectory();
 	MountedAssets mounted_assets;
 	if (!MountLauncherAssets(cwd, mounted_assets)) {
-		PrintError("missing data source in current working directory: expected data/ or data.zip");
+		PrintError("missing data source in current working directory: expected data/, data.zip, data.gsa, or data.nac");
 		return 1;
 	}
 
-	std::string config_content, error;
-	if (!LoadTextAsset("launcher.json", config_content, error)) {
+	std::string config_content, config_asset_name, error;
+	if (!LoadLauncherConfigAsset(mounted_assets, config_asset_name, config_content, error)) {
 		PrintError(error);
 		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
 
+	const auto config_source = ResolveAssetDisplayPath(mounted_assets, config_asset_name);
 	LauncherConfig config;
-	const auto config_source = ResolveAssetDisplayPath(mounted_assets, "launcher.json");
 	if (!ParseConfig(config_content, config_source, config, error)) {
 		PrintError(error);
 		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
 
+	if (mounted_assets.source != LauncherAssetsSource::Folder && config.assets.archive_root.empty()) {
+		std::string inferred_archive_root;
+		if (!NormalizeRelativeAssetPath(hg::CutFileName(config_asset_name), inferred_archive_root)) {
+			PrintError("invalid inferred archive root from configuration path: " + config_source);
+			UnmountLauncherAssets(mounted_assets);
+			return 1;
+		}
+		config.assets.archive_root = inferred_archive_root;
+	}
+
+	if (!InstallArchiveFolderResolver(mounted_assets, config)) {
+		PrintError("failed to install archive assets resolver");
+		UnmountLauncherAssets(mounted_assets);
+		return 1;
+	}
+
+	if (!SyncLuaAssetsState(mounted_assets, config)) {
+		PrintError("failed to synchronize launcher assets with the Lua module");
+		UnsyncLuaAssetsState(mounted_assets);
+		UnmountLauncherAssets(mounted_assets);
+		return 1;
+	}
+
+	if (config.assets.pass_mode_argument)
+		config.args.push_back(std::string("--assets-source=") + GetAssetsSourceName(mounted_assets.source));
+
 	const auto exe_path = GetExecutablePath();
 	const auto exe_dir = exe_path.empty() ? cwd : hg::CutFilePath(exe_path);
-	const auto data_dir = hg::PathJoin(cwd, "data");
+	const auto data_dir = hg::PathJoin(cwd, config.assets.logical_data_path);
 
 	auto *L = luaL_newstate();
 	if (L == nullptr) {
 		PrintError("failed to create Lua state");
+		UnsyncLuaAssetsState(mounted_assets);
 		UnmountLauncherAssets(mounted_assets);
 		return 1;
 	}
@@ -417,6 +711,7 @@ int LauncherMain() {
 	luaL_openlibs(L);
 	ConfigurePackagePaths(L, exe_dir, data_dir);
 	InstallAssetSearcher(L);
+	g_launcher_archive_root = config.assets.archive_root;
 
 	lua_pushstring(L, mounted_assets.folder_path.c_str());
 	lua_setglobal(L, "LAUNCHER_DATA_DIR");
@@ -424,9 +719,13 @@ int LauncherMain() {
 	lua_setglobal(L, "LAUNCHER_DATA_PACKAGE");
 	lua_pushstring(L, config_source.c_str());
 	lua_setglobal(L, "LAUNCHER_CONFIG_PATH");
+	lua_pushstring(L, GetAssetsSourceName(mounted_assets.source));
+	lua_setglobal(L, "LAUNCHER_ASSETS_SOURCE");
 
-	const auto ok = RunEntryPoint(L, mounted_assets, config.entry, config.args);
+	const auto ok = RunEntryPoint(L, mounted_assets, config);
+	g_launcher_archive_root.clear();
 	lua_close(L);
+	UnsyncLuaAssetsState(mounted_assets);
 	UnmountLauncherAssets(mounted_assets);
 	return ok ? 0 : 1;
 }

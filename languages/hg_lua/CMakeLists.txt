@@ -13,9 +13,12 @@ add_custom_command(
 		"Generating Harfang binding for Lua extension")
 
 add_library(hg_lua SHARED
+	assets_bridge.cpp
+	assets_bridge.h
 	${CMAKE_CURRENT_BINARY_DIR}/binding/bind_Lua.cpp
 	${CMAKE_CURRENT_BINARY_DIR}/binding/bind_Lua.h
 	${CMAKE_CURRENT_BINARY_DIR}/binding/fabgen.h)
+target_compile_definitions(hg_lua PRIVATE HG_LUA_BUILD_DLL)
 target_include_directories(hg_lua PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
 target_link_libraries(hg_lua engine foundation platform)
 set_target_properties(hg_lua PROPERTIES OUTPUT_NAME "harfang" PREFIX "" DEBUG_POSTFIX "")
@@ -30,7 +33,7 @@ set(_hg_lua_launcher_includes
 	${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
 	${CMAKE_CURRENT_SOURCE_DIR}/../../extern
 	${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
-set(_hg_lua_launcher_libs engine foundation platform jsonhpp libluadll)
+set(_hg_lua_launcher_libs hg_lua engine foundation platform jsonhpp libluadll)
 
 add_executable(launcher launcher.cpp)
 target_include_directories(launcher

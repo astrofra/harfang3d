@@ -90,7 +90,7 @@ set(TEST_PLATFORM_SRCS
 )
 
 add_executable(tests main.cpp utils.cpp utils.h ${TEST_FOUNDATION_SRCS} ${TEST_ENGINE_SRCS} ${TEST_PLATFORM_SRCS} ${TEST_SCRIPT_SRCS})
-target_link_libraries(tests PUBLIC engine foundation platform)
+target_link_libraries(tests PUBLIC engine foundation platform PRIVATE miniz)
 target_include_directories(tests PRIVATE ../../extern/acutest)
 add_dependencies(tests DummyVideoStream)
 add_dependencies(tests DummyAudioStream)
