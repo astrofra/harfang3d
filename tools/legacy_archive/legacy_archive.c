@@ -1,10 +1,10 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 /*
-    Standalone command-line tool for legacy GameStart nArchive packages.
-    Based on the GameStart cooker/archive behavior originally authored by
+    Standalone command-line tool for legacy nArchive packages.
+    Based on the Legacy cooker/archive behavior originally authored by
     Emmanuel Julien (https://github.com/ejulien/) and adapted for HARFANG
-    from the gamestart-legacy-cooker reference implementation.
+    from the legacy-cooker reference implementation.
 
     Provides four subcommands: info, list, unpack, pack.
 */
@@ -445,7 +445,7 @@ static int scan_archive(const char *path, GsArchive *archive, char *err, size_t 
         archive->size_padding = 0;
     } else {
         fclose(file);
-        set_error(err, err_size, "invalid GameStart archive magic 0x%08x", magic);
+        set_error(err, err_size, "invalid Legacy archive magic 0x%08x", magic);
         return 0;
     }
 
@@ -1362,7 +1362,7 @@ static int list_cmd(const char *archive_path, int names_only, int as_json, const
 }
 
 static void usage(void) {
-    printf("usage: gamestart_archive <command> [options]\n\n");
+    printf("usage: legacy_archive <command> [options]\n\n");
     printf("Commands:\n");
     printf("  info <archive>\n");
     printf("  list [--json] [-n|--names-only] [--include PATTERN] <archive>\n");

@@ -40,10 +40,10 @@ using json = nlohmann::json;
 constexpr uint32_t kZipLocalHeaderMagic = 0x04034b50u;
 constexpr uint32_t kZipEmptyArchiveMagic = 0x06054b50u;
 constexpr uint32_t kZipSpannedArchiveMagic = 0x08074b50u;
-constexpr uint32_t kGameStartEnhancedMagic = 0x4E415244u;
-constexpr uint32_t kGameStartLegacyMagic = 0x4E415243u;
+constexpr uint32_t kLegacyEnhancedMagic = 0x4E415244u;
+constexpr uint32_t kLegacyLegacyMagic = 0x4E415243u;
 
-enum class LauncherAssetsSource { None, Folder, Zip, GameStart };
+enum class LauncherAssetsSource { None, Folder, Zip, Legacy };
 
 struct LauncherAssetsConfig {
 	std::string logical_data_path = "data";
@@ -93,8 +93,8 @@ const char *GetAssetsSourceName(LauncherAssetsSource source) {
 			return "folder";
 		case LauncherAssetsSource::Zip:
 			return "zip";
-		case LauncherAssetsSource::GameStart:
-			return "gamestart";
+		case LauncherAssetsSource::Legacy:
+			return "legacy";
 		default:
 			return "none";
 	}
@@ -118,8 +118,8 @@ LauncherAssetsSource DetectArchiveSourceType(const std::string &path) {
 
 	if (IsZipMagic(magic))
 		return LauncherAssetsSource::Zip;
-	if (magic == kGameStartEnhancedMagic || magic == kGameStartLegacyMagic)
-		return LauncherAssetsSource::GameStart;
+	if (magic == kLegacyEnhancedMagic || magic == kLegacyLegacyMagic)
+		return LauncherAssetsSource::Legacy;
 	return LauncherAssetsSource::None;
 }
 

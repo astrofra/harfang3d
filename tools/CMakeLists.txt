@@ -1,5 +1,5 @@
-if(HG_BUILD_GAMESTART_ARCHIVE)
-	add_subdirectory(gamestart_archive)
+if(HG_BUILD_LEGACY_ARCHIVE)
+	add_subdirectory(legacy_archive)
 endif()
 
 if(HG_BUILD_ASSETC)

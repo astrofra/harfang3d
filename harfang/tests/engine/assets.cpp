@@ -22,7 +22,7 @@ using namespace hg;
 
 namespace {
 
-constexpr uint32_t kGameStartEnhancedMagic = 0x4E415244u;
+constexpr uint32_t kLegacyEnhancedMagic = 0x4E415244u;
 
 struct TestArchiveEntry {
 	std::string path;
@@ -151,11 +151,11 @@ void WriteZipArchive(const std::string &path, const std::vector<TestArchiveEntry
 	TEST_CHECK(mz_zip_writer_end(&archive) != MZ_FALSE);
 }
 
-void WriteGameStartArchive(const std::string &path, const std::vector<TestArchiveEntry> &entries) {
+void WriteLegacyArchive(const std::string &path, const std::vector<TestArchiveEntry> &entries) {
 	File file = OpenWrite(path.c_str());
 	TEST_CHECK(IsValid(file) == true);
 
-	WriteU32LE(file, kGameStartEnhancedMagic);
+	WriteU32LE(file, kLegacyEnhancedMagic);
 	WriteU32LE(file, 4);
 	WriteU32LE(file, 0);
 
@@ -257,7 +257,7 @@ void test_assets() {
 		TempDirectory dir;
 		const auto archive_path = PathJoin(dir.path, "data.gsa");
 
-		WriteGameStartArchive(archive_path, {
+		WriteLegacyArchive(archive_path, {
 			{"raw.txt", "raw payload", false},
 			{"nested/compressed.txt", "compressed payload", true},
 		});
@@ -279,7 +279,7 @@ void test_assets() {
 		TempDirectory dir;
 		const auto archive_path = PathJoin(dir.path, "bad.gsa");
 
-		WriteGameStartArchive(archive_path, {
+		WriteLegacyArchive(archive_path, {
 			{"../escape.txt", "bad", false},
 		});
 
@@ -325,7 +325,7 @@ void test_assets() {
 	{
 		TempDirectory dir;
 		const auto archive_path = PathJoin(dir.path, "virtual.gsa");
-		WriteGameStartArchive(archive_path, {
+		WriteLegacyArchive(archive_path, {
 			{"data/root.txt", "gsa root", false},
 			{"data/scenes/scene.txt", "gsa scene", true},
 		});

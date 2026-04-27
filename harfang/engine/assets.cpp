@@ -31,11 +31,11 @@ namespace {
 constexpr uint32_t kZipLocalHeaderMagic = 0x04034b50u;
 constexpr uint32_t kZipEmptyArchiveMagic = 0x06054b50u;
 constexpr uint32_t kZipSpannedArchiveMagic = 0x08074b50u;
-constexpr uint32_t kGameStartEnhancedMagic = 0x4E415244u;
-constexpr uint32_t kGameStartLegacyMagic = 0x4E415243u;
+constexpr uint32_t kLegacyEnhancedMagic = 0x4E415244u;
+constexpr uint32_t kLegacyLegacyMagic = 0x4E415243u;
 constexpr uint64_t kMaxArchiveEntrySize = 512ull * 1024ull * 1024ull;
 
-enum class ArchiveKind { Unknown, Zip, GameStart };
+enum class ArchiveKind { Unknown, Zip, Legacy };
 enum class FolderSourceType { Local, Archive };
 
 struct AssetContainer {
@@ -153,14 +153,14 @@ struct RawBinaryFile {
 	FILE *handle = nullptr;
 };
 
-struct GameStartEntry {
+struct LegacyEntry {
 	uint8_t method = 0;
 	uint32_t length = 0;
 	uint32_t compressed_length = 0;
 	uint64_t data_offset = 0;
 };
 
-struct GameStartMetadata {
+struct LegacyMetadata {
 	uint32_t revision = 0;
 	uint32_t offset_padding = 0;
 	uint32_t size_padding = 0;
@@ -250,8 +250,8 @@ bool AlignRead(const RawBinaryFile &file, uint32_t alignment, uint64_t file_size
 	return true;
 }
 
-struct GameStartAssetContainer final : AssetContainer {
-	GameStartAssetContainer(const std::string &filename) : AssetContainer(ArchiveKind::GameStart, filename) {}
+struct LegacyAssetContainer final : AssetContainer {
+	LegacyAssetContainer(const std::string &filename) : AssetContainer(ArchiveKind::Legacy, filename) {}
 
 	bool Initialize(std::string &error) {
 		const auto info = GetFileInfo(filename.c_str());
@@ -272,18 +272,18 @@ struct GameStartAssetContainer final : AssetContainer {
 			return false;
 		}
 
-		if (magic == kGameStartEnhancedMagic) {
+		if (magic == kLegacyEnhancedMagic) {
 			metadata.revision = 1;
 			if (!ReadU32LE(file, metadata.offset_padding) || !ReadU32LE(file, metadata.size_padding)) {
 				error = "truncated enhanced archive header";
 				return false;
 			}
-		} else if (magic == kGameStartLegacyMagic) {
+		} else if (magic == kLegacyLegacyMagic) {
 			metadata.revision = 0;
 			metadata.offset_padding = 0;
 			metadata.size_padding = 0;
 		} else {
-			error = format("invalid GameStart archive magic 0x%1").arg(static_cast<int>(magic)).str();
+			error = format("invalid Legacy archive magic 0x%1").arg(static_cast<int>(magic)).str();
 			return false;
 		}
 
@@ -450,16 +450,16 @@ struct GameStartAssetContainer final : AssetContainer {
 
 	std::string DisplayPath(const std::string &archive_path) const override { return filename + ":" + archive_path; }
 
-	GameStartMetadata metadata;
-	std::map<std::string, GameStartEntry> entries;
+	LegacyMetadata metadata;
+	std::map<std::string, LegacyEntry> entries;
 };
 
 const char *GetArchiveKindName(ArchiveKind kind) {
 	switch (kind) {
 		case ArchiveKind::Zip:
 			return "ZIP";
-		case ArchiveKind::GameStart:
-			return "GameStart";
+		case ArchiveKind::Legacy:
+			return "Legacy";
 		default:
 			return "archive";
 	}
@@ -485,8 +485,8 @@ bool DetectArchiveKind(const std::string &path, ArchiveKind &kind, std::string &
 		return true;
 	}
 
-	if (magic == kGameStartEnhancedMagic || magic == kGameStartLegacyMagic) {
-		kind = ArchiveKind::GameStart;
+	if (magic == kLegacyEnhancedMagic || magic == kLegacyLegacyMagic) {
+		kind = ArchiveKind::Legacy;
 		return true;
 	}
 
@@ -537,11 +537,11 @@ bool GetOrCreateArchiveContainer(const std::string &path, std::shared_ptr<AssetC
 			container = std::move(zip);
 			break;
 		}
-		case ArchiveKind::GameStart: {
-			auto gamestart = std::make_shared<GameStartAssetContainer>(path);
-			if (!gamestart->Initialize(error))
+		case ArchiveKind::Legacy: {
+			auto legacy = std::make_shared<LegacyAssetContainer>(path);
+			if (!legacy->Initialize(error))
 				return false;
-			container = std::move(gamestart);
+			container = std::move(legacy);
 			break;
 		}
 		default:
