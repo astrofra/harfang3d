@@ -1,3 +1,7 @@
+if(HG_BUILD_GAMESTART_ARCHIVE)
+	add_subdirectory(gamestart_archive)
+endif()
+
 if(HG_BUILD_ASSETC)
 	add_subdirectory(assetc)
 endif()
