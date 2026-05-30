@@ -108,11 +108,12 @@ https://dev.harfang3d.com/releases
 <a name="subsection_3b"></a>
 ## Building
 
-1. Clone the `Harfang 3D` repository including its submodules.
+1. Clone the `Harfang 3D` repository including its remaining submodules.
     ```
     git clone --recursive -j8 https://github.com/harfang3d/harfang3d.git
     cd harfang3d
     ```
+    The BGFX stack (`extern/bgfx/bgfx`, `extern/bgfx/bimg`, `extern/bgfx/bx`) is vendored directly in-tree; see `extern/bgfx/VENDORED.md`.
 
 1. Create build directory. Note that the described directory layout is not mandatory.
     ```
@@ -297,4 +298,3 @@ There are numerous ways to help Harfang grow its community:
 ![alt text](https://raw.githubusercontent.com/harfang3d/image-storage/main/portfolio/3.2.6/marine-melodies-screenshot_1280.png)
 
 *(Marine Melodies, by Resistance Norway)*
-
