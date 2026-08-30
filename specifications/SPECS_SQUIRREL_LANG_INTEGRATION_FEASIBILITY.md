@@ -2,7 +2,7 @@
 
 Date: 2026-08-30
 
-Re-evaluation of the 2026-04-15 draft after FABGen gained a working Squirrel backend.
+Re-evaluation of the 2026-04-15 draft after FABGen gained a working Squirrel backend and after revisiting the public-interpreter packaging target.
 
 ## Executive Summary
 
@@ -19,6 +19,12 @@ The main change is that FABGen Squirrel support is no longer hypothetical. The r
 
 The local FABGen progress notes reported a validated Squirrel suite at `30 run, 0 failed, 0 skipped` on Sunday, August 30, 2026, and that same full suite was re-run successfully during this re-evaluation with the same result. The backend already covers the core binding surface needed for Harfang to start integration work: functions, classes, enums, inheritance, operators, sequences, `std::vector`, `std::map<std::string, int>`, `std::function<>` callbacks, extern types, `std::future`, type-info export, and embedded/non-embedded module initialization.
 
+The second important change is about packaging. Stock Squirrel does not provide a Lua-style native-module loader for `.dll` / `.so`, but if Harfang vendors Squirrel, adding one is practical and aligns well with the existing FABGen export model. In other words:
+
+- unmodified stock `sq.exe` is not enough,
+- a Harfang-provided vendored `hg_squirrel` interpreter with native-module loading is feasible,
+- that interpreter can load a Harfang Squirrel module DLL through a stable exported entry point.
+
 This changes the project classification:
 
 - Before: greenfield language-backend effort plus engine integration.
@@ -26,13 +32,14 @@ This changes the project classification:
 
 The remaining work is still substantial, but the critical path has moved. The primary risk is no longer "can FABGen support Squirrel classes at all?"; it is "how much Harfang-specific integration and API shaping is required to expose Squirrel cleanly and maintainably?"
 
-The recommended first gate is now concrete:
+The recommended first public gate is now concrete:
 
 1. make `harfang3d/binding/bind_harfang.py` generate under `--squirrel`,
-2. compile the embedded binding,
-3. prove one end-to-end `SceneSquirrelVM` callback path.
+2. compile the non-embedded Harfang Squirrel module DLL,
+3. vendor Squirrel and add a native-module loader to the interpreter,
+4. run a simple tutorial through `require("harfang")`.
 
-If that gate passes, the rest of the project is an integration program, not a feasibility gamble.
+That gives a useful red line much earlier than embedded scene-VM work. `SceneSquirrelVM` should be treated as phase 2.
 
 ## What Changed Since April 15, 2026
 
@@ -63,6 +70,8 @@ What is now present in FABGen:
   - `std::function<>` through Squirrel closures
 
 This does not prove full Harfang generation yet, but it removes the original "backend from scratch" assumption.
+
+The `sqmodule_<module>(v)` export is especially important for public packaging because it gives Harfang a clean ABI for a custom Squirrel native-module loader.
 
 ## Current Lua Integration In Harfang
 
@@ -116,6 +125,66 @@ The embedded-host contract is now clearer than it was in April. `FABGen/tests.py
 
 That is a credible basis for both a Harfang launcher and a `SceneSquirrelVM`.
 
+## Vendored Native Module Loading
+
+If the goal is to let the Squirrel interpreter load native Harfang bindings the way Lua users expect, then vendorizing Squirrel is the right move.
+
+### Stock Squirrel Limitation
+
+The stock `sq.exe` source currently does a very small amount of setup:
+
+1. open a VM,
+2. register the built-in blob, IO, system, math, and string libraries,
+3. load and execute a script.
+
+There is no built-in `require()` equivalent that searches for native modules and loads a `.dll` / `.so`.
+
+### Why A Harfang Loader Is Practical
+
+This limitation is not architectural. It is simply absent from the stock runtime surface.
+
+Harfang can vendor Squirrel and add either:
+
+- a `require(name)` implementation, or
+- a lower-level `loadmodule(path)` plus a small script-side `require()`.
+
+That custom loader can rely on the ABI already emitted by FABGen in non-embedded mode:
+
+- `extern "C" _DLL_EXPORT_ SQRESULT sqmodule_<module>(HSQUIRRELVM v)`
+
+The generated function creates the module object and leaves it on the Squirrel stack, which is exactly what a native loader needs.
+
+### Recommended Loader Model
+
+Recommended public behavior:
+
+1. `require("harfang")` resolves the logical module name against a Harfang-defined script path and native path.
+2. For script modules:
+   - try `.nut`
+   - optionally try compiled `.cnut`
+3. For native modules:
+   - try `.dll` on Windows
+   - try `.so` on Linux
+   - try `.dylib` on macOS
+4. Load the dynamic library with the host OS API.
+5. Resolve `sqmodule_<module_name>`.
+6. Call it with the current `HSQUIRRELVM`.
+7. Cache the returned module object in a hidden loaded-module table.
+8. Return the cached module on subsequent `require()` calls.
+
+That gives Harfang the Lua-like public entry point it needs without requiring embedded scene-VM integration first.
+
+### Harfang Packaging Consequence
+
+With that model, the public target becomes:
+
+- a vendored `hg_squirrel` interpreter executable,
+- a generated non-embedded Harfang Squirrel module DLL,
+- a Harfang-defined module search path,
+- optional helpers such as `include(path)` for script composition.
+
+This is feasible and, for the first milestone, simpler than integrating Squirrel into the engine scene runtime.
+
 ## Current Harfang Delta
 
 The missing pieces are now mostly in `harfang3d`, not in FABGen.
@@ -157,7 +226,12 @@ The public toolchain is still Lua-only:
 - `tools/assetc/CMakeLists.txt` only installs `luac` into the asset toolchain.
 - `languages/hg_lua` exists; there is no `languages/hg_squirrel` yet.
 
-For Squirrel, the phase-1 asset policy should remain:
+For the public Squirrel target, the packaging work now has two distinct parts:
+
+- vendor and build the Squirrel interpreter itself,
+- package Harfang as a loadable Squirrel native module.
+
+For script assets, the phase-1 policy should remain:
 
 1. accept `.nut` source files,
 2. copy them unchanged into compiled assets,
@@ -192,14 +266,14 @@ However, the baseline capabilities Harfang needs are already present:
 The remaining FABGen-specific concerns are narrower:
 
 - The class `from_c` path currently expects the generated module to be bound into the Squirrel root table.
-  This is acceptable for Harfang, but `SceneSquirrelVM` and the public launcher must honor it explicitly.
+  This is acceptable for Harfang, and a vendored `require("harfang")` implementation can satisfy it explicitly by binding the loaded module into the root table before returning it.
 
 - The public Squirrel backend does not currently export a Lua-style helper equivalent to `hg_lua_get_wrapped_object_type_tag(L, idx)`.
   If Harfang wants `SquirrelObject` to mirror `LuaObject::PushForeign()` across multiple VMs, FABGen will likely need one small additional public helper for wrapped-object type-tag extraction.
   If Harfang accepts same-VM semantics first, this can be deferred.
 
 - The generated release helper `gen_release_<module>(v)` is mandatory for safe shutdown when C++ holds captured Squirrel callbacks.
-  Harfang must build this into VM teardown from day one.
+  Harfang must build this into VM teardown from day one for embedded use, and should also honor it in the vendored interpreter when the public module exposes callback-capturing APIs.
 
 ## Public API Differences From Lua
 
@@ -263,14 +337,17 @@ The remaining risks are now:
 - API divergence due to single-return semantics.
   The packed-array policy for multiple outs is a real user-facing difference and will affect docs, examples, and migration guidance.
 
-- Loader story.
-  Lua has a mature `require` story in Harfang today. Squirrel still needs a Harfang-defined launcher or host integration story.
+- Native loader policy.
+  The main question is no longer whether Squirrel can load DLLs at all; it can, if Harfang vendors the interpreter. The real decisions are module naming, search-path behavior, cache semantics, and whether Harfang ever unloads native modules before process exit.
+
+- Public interpreter versus embedded VM sequencing.
+  The vendored `hg_squirrel` interpreter is now the fastest public red line. `SceneSquirrelVM` remains useful, but it should not block the first milestone.
 
 - Asset policy.
   Runtime `.nut` loading is low risk. Bytecode should remain out of scope for phase 1.
 
 - Security posture.
-  Registering the full Squirrel IO/system libraries exposes filesystem and process access. Harfang should define whether the embedded scene VM is "full" or "safe by default".
+  Registering the full Squirrel IO/system libraries already exposes filesystem and process access. Adding native `.dll` / `.so` loading increases the trust boundary further. Harfang should treat the public interpreter as trusted-code tooling, not as a sandbox.
 
 ## Effort Estimate
 
@@ -278,37 +355,46 @@ Revised engineering estimate:
 
 | Work item | Estimate |
 | --- | ---: |
-| Vendor/build Squirrel in `extern`, add CMake options, add VM teardown contract | 2-4 days |
-| Make `bind_harfang.py --squirrel` generate and compile, fix exposed Harfang/FABGen gaps | 1-2 weeks |
-| Implement `SquirrelObject`, `squirrel_vm`, `SceneSquirrelVM`, and scene-system overloads | 2-4 weeks |
-| Add Squirrel branches in the Harfang binding script and adapt script-object APIs | 1-2 weeks |
-| Add `assetc` `.nut` support, `languages/hg_squirrel`, launcher, docs, and examples | 1-3 weeks |
+| Vendor/build Squirrel in `extern` and add a native-module loader to the interpreter | 4-7 days |
+| Make `bind_harfang.py --squirrel` generate and compile as a non-embedded native module, fix exposed Harfang/FABGen gaps | 1-2 weeks |
+| Add `languages/hg_squirrel`, package search paths, bootstrap scripts, docs, and example ports | 4-7 days |
+| Optional phase 2: implement `SquirrelObject`, `squirrel_vm`, `SceneSquirrelVM`, and scene-system overloads | 2-4 weeks |
 
 Revised total:
 
-- Embedded scene-scripting proof of viability: about 3-5 engineer-weeks.
-- Solid public integration with docs/tooling: about 6-10 engineer-weeks.
+- Public `hg_squirrel` red line with DLL loading and simple tutorial ports: about 2-4 engineer-weeks.
+- Full embedded scene-scripting integration afterward: an additional 3-5 engineer-weeks.
 
-That is materially lower-risk than the original 10-18 engineer-week estimate because the language backend is no longer a greenfield item.
+That is materially lower-risk than the original 10-18 engineer-week estimate because the language backend is no longer a greenfield item, and because the public interpreter milestone can now be split cleanly from embedded scene scripting.
 
 ## Recommended Implementation Plan
 
-1. Add Squirrel as a third-party dependency and make a minimal VM smoke test build in Harfang.
-2. Extend `harfang3d/binding/bind_harfang.py` for Squirrel in the most obvious places first:
+1. Add Squirrel as a third-party dependency and vendor the interpreter build into a new `languages/hg_squirrel` target.
+2. Add a Harfang-defined native-module loader to the vendored Squirrel runtime:
+   - `require()` or `loadmodule()`
+   - module search paths
+   - loaded-module cache
+   - `sqmodule_<module>` symbol resolution
+3. Extend `harfang3d/binding/bind_harfang.py` for Squirrel in the most obvious places first:
    - `bind_std_vector()`
    - `expand_std_vector_proto()`
    - non-embedded setup/free code
-3. Generate the embedded Harfang binding with `--squirrel --embedded --prefix hg_squirrel`.
-4. Fix the concrete generator or binding-script gaps exposed by that first generation/compile pass.
-5. Implement `SquirrelObject` and `squirrel_vm.*`, including a mandatory `gen_release_harfang(v)` call before `sq_close(v)`.
-6. Implement `SceneSquirrelVM` and add the `SceneSquirrelVM` overload family in `scene_systems.*`.
-7. Port the core Lua scene tests to Squirrel and prove at least:
+4. Generate the non-embedded Harfang binding with `--squirrel --prefix hg_squirrel` and compile it as a native module DLL.
+5. Fix the concrete generator or binding-script gaps exposed by that first generation/compile pass.
+6. Port the first public tutorials to Squirrel and validate the red line:
+   - `basic_loop.lua`
+   - `draw_and_create_model_no_pipeline.lua`
+7. Add `.nut` passthrough support to `assetc`; defer Squirrel bytecode.
+8. Only after the public DLL-loading line is stable, start phase 2 embedded runtime work:
+   - implement `SquirrelObject` and `squirrel_vm.*`
+   - honor `gen_release_harfang(v)` before `sq_close(v)`
+   - implement `SceneSquirrelVM`
+   - add `SceneSquirrelVM` overloads in `scene_systems.*`
+9. Port the core Lua scene tests to Squirrel and prove at least:
    - one scene script,
    - one node script,
    - one callback path,
    - one `GetScriptValue` / `SetScriptValue` path.
-8. Add `.nut` passthrough support to `assetc`; defer Squirrel bytecode.
-9. Add `languages/hg_squirrel` and a Harfang launcher/host integration.
 10. Document Squirrel-specific API differences instead of trying to hide them everywhere.
 
 ## Conclusion
@@ -316,6 +402,13 @@ That is materially lower-risk than the original 10-18 engineer-week estimate bec
 The April 15, 2026 conclusion should be revised.
 
 Squirrel integration in Harfang is still a medium integration project, but it is no longer blocked on inventing a language backend. `FABGen/lang/squirrel.py` and its companion Squirrel support code substantially de-risk the original plan.
+
+If Harfang accepts vendorizing Squirrel, the public path becomes clearer:
+
+- build a vendored `hg_squirrel` interpreter,
+- add a native-module loader,
+- load the Harfang binding DLL through `require("harfang")`,
+- use that as the first public milestone.
 
 The dominant remaining work is now in Harfang itself:
 
@@ -325,7 +418,7 @@ The dominant remaining work is now in Harfang itself:
 - decide how much Lua parity is worth preserving where Squirrel semantics differ,
 - package and document the result.
 
-The correct next milestone is no longer a generic backend prototype. It is a concrete Harfang checkpoint: generate `bind_hg_squirrel`, compile it, and run one end-to-end scene callback. If that succeeds, the project should be considered technically viable with manageable integration risk.
+The correct next milestone is no longer a generic backend prototype. It is a concrete public Harfang checkpoint: generate the non-embedded Squirrel binding, load it from a vendored Squirrel interpreter, and run a simple tutorial through `require("harfang")`. If that succeeds, the public packaging strategy should be considered technically viable. Embedded scene scripting can then follow as phase 2.
 
 ## Sources
 
@@ -351,6 +444,11 @@ The correct next milestone is no longer a generic backend prototype. It is a con
   - `FABGen/lib/squirrel/stl.py`
   - `FABGen/lang/lua.py`
   - `FABGen/tests.py`
+
+- Local Squirrel runtime code and docs inspected:
+  - `%TEMP%/fabgen_squirrel_ref2/sq/sq.c`
+  - `%TEMP%/fabgen_squirrel_ref2/doc/source/stdlib/introduction.rst`
+  - `%TEMP%/fabgen_squirrel_ref2/doc/source/stdlib/stdiolib.rst`
 
 - FABGen local progress notes inspected:
   - `FABGen/specifications/SQUIRREL_MVP_TESTS_AND_BINDING_2026-08-29.md`
