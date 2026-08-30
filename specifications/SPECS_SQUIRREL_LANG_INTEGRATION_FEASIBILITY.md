@@ -25,6 +25,8 @@ The second important change is about packaging. Stock Squirrel does not provide 
 - a Harfang-provided vendored `hg_squirrel` interpreter with native-module loading is feasible,
 - that interpreter can load a Harfang Squirrel module DLL through a stable exported entry point.
 
+As of Sunday, August 30, 2026, that vendoring step is no longer theoretical in the local branch. The Squirrel source tree is now present at `harfang3d/extern/squirrel`, populated from upstream commit `f9267f2` dated February 28, 2026.
+
 This changes the project classification:
 
 - Before: greenfield language-backend effort plus engine integration.
@@ -36,8 +38,10 @@ The recommended first public gate is no longer hypothetical. It was reached loca
 
 1. `harfang3d/binding/bind_harfang.py` now generates under `--squirrel`,
 2. the non-embedded Harfang Squirrel module DLL compiles,
-3. a vendored `hg_squirrel` interpreter with native-module loading builds,
-4. an installed package containing `hg_squirrel.exe`, `harfang.dll`, `squirrel.dll`, `sqstdlib.dll`, `glfw3.dll`, and `lua54.dll` runs a smoke script through `require("harfang")` and `include()`.
+3. a vendored `hg_squirrel` interpreter with native-module loading builds from `harfang3d/extern/squirrel`,
+4. an installed package containing `hg_squirrel.exe`, `harfang.dll`, `squirrel.dll`, `sqstdlib.dll`, `glfw3.dll`, and `lua54.dll` runs a smoke script through `require("harfang")` and `include()`,
+5. the packaged `assetc.exe` copies a `.nut` file unchanged into compiled assets,
+6. `rebuild_hg_squirrel.bat` rebuilds and installs the full package using the vendored default path, with no external `SQUIRREL_DIR`.
 
 That proves the public red line is technically viable. `SceneSquirrelVM` should be treated as phase 2.
 
@@ -215,7 +219,8 @@ The public binding milestone is now partially in place:
 - `bind_std_vector()` now emits Squirrel array-to-`std::vector<T>` adapters,
 - `expand_std_vector_proto()` now expands Squirrel-friendly overload names,
 - `bind_harfang.py --squirrel` now generates and compiles as a non-embedded module,
-- `languages/hg_squirrel` now exists with a launcher, install rules, `bin.nut`, and first tutorial ports.
+- `languages/hg_squirrel` now exists with a launcher, install rules, `bin.nut`, a Windows rebuild helper, and first tutorial ports,
+- `extern/squirrel` is now vendored in-tree and recorded in `extern/versions.txt`.
 
 What is still missing in the binding layer is the embedded and cross-VM side:
 
@@ -223,17 +228,17 @@ What is still missing in the binding layer is the embedded and cross-VM side:
 - `bind_lua_scene_vm()` still only binds `hg::SceneLuaVM`,
 - `bind_scene_systems()` still only exposes the `SceneLuaVM` overload families.
 
-### Asset Compiler and Packaging Work Still Missing
+### Asset Compiler and Packaging State
 
-The asset toolchain is still Lua-only:
+The asset toolchain now has a minimal phase-1 Squirrel policy:
 
-- `tools/assetc/assetc.cpp` only special-cases `.lua` and `luac`.
-- `tools/assetc/CMakeLists.txt` only installs `luac` into the asset toolchain.
-- `languages/hg_squirrel` now exists for the public runtime, but `assetc` still has no `.nut` passthrough policy.
+- `tools/assetc/assetc.cpp` special-cases `.nut` as `AssetType::Squirrel` and copies it unchanged.
+- `tools/assetc/CMakeLists.txt` still only installs `luac` as a script compiler, which is acceptable because phase 1 intentionally keeps Squirrel as source.
+- The packaged `assetc.exe` under `hg_squirrel/harfang/assetc` was smoke-tested locally on Sunday, August 30, 2026 with a `.nut` input/output match.
 
 For the public Squirrel target, the packaging work now has two distinct parts:
 
-- vendor and build the Squirrel interpreter itself,
+- keep the vendored Squirrel interpreter build reproducible in-tree,
 - package Harfang as a loadable Squirrel native module.
 
 For script assets, the phase-1 policy should remain:
@@ -363,30 +368,31 @@ Revised engineering estimate:
 
 | Work item | Estimate |
 | --- | ---: |
-| Vendor/build Squirrel in `extern` and add a native-module loader to the interpreter | 4-7 days |
+| Vendor/build Squirrel in `extern` and add a native-module loader to the interpreter | achieved locally on Sunday, August 30, 2026 |
 | Make `bind_harfang.py --squirrel` generate and compile as a non-embedded native module, fix exposed Harfang/FABGen gaps | 1-2 weeks |
 | Add `languages/hg_squirrel`, package search paths, bootstrap scripts, docs, and example ports | 4-7 days |
 | Optional phase 2: implement `SquirrelObject`, `squirrel_vm`, `SceneSquirrelVM`, and scene-system overloads | 2-4 weeks |
 
-Revised total:
+Revised total as of Sunday, August 30, 2026:
 
-- Public `hg_squirrel` red line with DLL loading, installable packaging, and non-interactive smoke validation: achieved locally on Sunday, August 30, 2026.
-- Remaining public productization work (`assetc` `.nut` support, broader tutorial/runtime validation, docs, packaging polish): about 1-2 engineer-weeks.
+- Public `hg_squirrel` red line with in-tree vendored Squirrel, DLL loading, installable packaging, non-interactive smoke validation, and packaged `assetc` `.nut` passthrough: achieved locally.
+- Remaining public productization work (broader tutorial/runtime validation, docs, packaging polish): about 1-2 engineer-weeks.
 - Full embedded scene-scripting integration afterward: an additional 3-5 engineer-weeks.
 
 That is materially lower-risk than the original 10-18 engineer-week estimate because the language backend is no longer a greenfield item, and because the public interpreter milestone can now be split cleanly from embedded scene scripting.
 
 ## Recommended Implementation Plan
 
-1. Vendor Squirrel in-tree rather than through a temporary external path, and preserve the current public `hg_squirrel` launcher model:
+1. Keep Squirrel vendored in-tree and preserve the current public `hg_squirrel` launcher model:
    - `require()` native-module loading
    - module search paths
    - loaded-module cache
    - `include()` for script composition
 2. Keep the current public package stable:
    - install `hg_squirrel.exe`, `harfang.dll`, `squirrel.dll`, `sqstdlib.dll`, `glfw3.dll`, and `lua54.dll`
+   - keep `rebuild_hg_squirrel.bat` aligned with `rebuild_hg_lua.bat`
    - keep the launcher shutdown order safe by unloading native modules only after `sq_close()`
-3. Add `.nut` passthrough support to `assetc`; defer Squirrel bytecode.
+3. Keep `.nut` passthrough support in `assetc`; defer Squirrel bytecode.
 4. Run the first public tutorial ports end-to-end in the packaged runtime:
    - `basic_loop.nut`
    - `draw_and_create_model_no_pipeline.nut`
@@ -410,7 +416,7 @@ The April 15, 2026 conclusion should be revised.
 
 Squirrel integration in Harfang is still a medium integration project, but it is no longer blocked on inventing a language backend. `FABGen/lang/squirrel.py` and its companion Squirrel support code substantially de-risk the original plan.
 
-If Harfang accepts vendorizing Squirrel, the public path is no longer just clearer; it is already demonstrated locally:
+With Squirrel now vendored in-tree locally, the public path is no longer just clearer; it is already demonstrated locally:
 
 - build a vendored `hg_squirrel` interpreter,
 - add a native-module loader,
@@ -425,15 +431,18 @@ The dominant remaining work is now in Harfang itself:
 - decide how much Lua parity is worth preserving where Squirrel semantics differ,
 - package and document the result.
 
-The concrete public checkpoint has already been demonstrated locally on Sunday, August 30, 2026: generate the non-embedded Squirrel binding, load it from a vendored Squirrel interpreter, and run a script through `require("harfang")` plus `include()`. That means the public packaging strategy should now be considered technically viable. Embedded scene scripting can follow as phase 2.
+The concrete public checkpoint has already been demonstrated locally on Sunday, August 30, 2026: generate the non-embedded Squirrel binding, load it from the vendored in-tree Squirrel interpreter, run a script through `require("harfang")` plus `include()`, and rebuild the package through `rebuild_hg_squirrel.bat` without an external Squirrel checkout. That means the public packaging strategy should now be considered technically viable. Embedded scene scripting can follow as phase 2.
 
 ## Sources
 
 - Harfang local code inspected:
   - `harfang3d/binding/bind_harfang.py`
+  - `harfang3d/extern/versions.txt`
+  - `harfang3d/extern/squirrel/CMakeLists.txt`
   - `harfang3d/languages/hg_squirrel/CMakeLists.txt`
   - `harfang3d/languages/hg_squirrel/launcher.cpp`
   - `harfang3d/languages/hg_squirrel/bin.nut`
+  - `harfang3d/rebuild_hg_squirrel.bat`
   - `harfang3d/tutorials/basic_loop.nut`
   - `harfang3d/tutorials/draw_and_create_model_no_pipeline.nut`
   - `harfang3d/harfang/script/lua_vm.h`
@@ -458,6 +467,7 @@ The concrete public checkpoint has already been demonstrated locally on Sunday, 
   - `FABGen/tests.py`
 
 - Local Squirrel runtime code and docs inspected:
+  - `harfang3d/extern/squirrel/*`
   - `%TEMP%/fabgen_squirrel_ref2/sq/sq.c`
   - `%TEMP%/fabgen_squirrel_ref2/doc/source/stdlib/introduction.rst`
   - `%TEMP%/fabgen_squirrel_ref2/doc/source/stdlib/stdiolib.rst`
@@ -478,3 +488,15 @@ The concrete public checkpoint has already been demonstrated locally on Sunday, 
   - `link.exe /dump /dependents .../harfang.dll` identified `lua54.dll` as a required packaged dependency
   - `.../install-hg-squirrel-20260830/hg_squirrel/hg_squirrel.exe .codex_tmp/squirrel_smoke/smoke_require.nut`
   - observed result: `hg_squirrel smoke ok`
+  - `.../tools/assetc/RelWithDebInfo/assetc.exe -verbose -toolchain .../assetc/toolchains/host-windows-x64-target-windows-x64 .codex_tmp/assetc_nut_smoke/input .codex_tmp/assetc_nut_smoke/output`
+  - observed result: `Squirrel script 'scripts/test.nut'` compiled as a copied source asset
+  - `cmd /c "set BUILD_DIR=...build-hg-squirrel-min&& set INSTALL_DIR=...install-rebuild-hg-squirrel-20260830&& set FABGEN_DIR=...\\FABGen&& set SQUIRREL_DIR=%TEMP%\\fabgen_squirrel_ref2&& harfang3d\\rebuild_hg_squirrel.bat RelWithDebInfo"`
+  - observed result: `HG Squirrel + AssetC rebuild ok.`
+  - `.../install-rebuild-hg-squirrel-20260830/hg_squirrel/harfang/assetc/assetc.exe -verbose .codex_tmp/assetc_nut_smoke/input .codex_tmp/assetc_nut_smoke/output_pkg`
+  - observed result: `.codex_tmp/assetc_nut_smoke/output_pkg/scripts/test.nut` matched the input byte-for-byte
+  - `cmd /c "set BUILD_DIR=...build-hg-squirrel-vendored&& set INSTALL_DIR=...install-hg-squirrel-vendored-20260830&& set FABGEN_DIR=...\\FABGen&& harfang3d\\rebuild_hg_squirrel.bat RelWithDebInfo"`
+  - observed result: `Checking Squirrel path - ok` using the default `harfang3d/extern/squirrel` vendor tree, followed by `HG Squirrel + AssetC rebuild ok.`
+  - `.../install-hg-squirrel-vendored-20260830/hg_squirrel/hg_squirrel.exe .codex_tmp/squirrel_smoke/smoke_require.nut`
+  - observed result: `hg_squirrel smoke ok`
+  - `.../install-hg-squirrel-vendored-20260830/hg_squirrel/harfang/assetc/assetc.exe -verbose .codex_tmp/assetc_nut_smoke/input .codex_tmp/assetc_nut_smoke/output_pkg_vendored`
+  - observed result: `.codex_tmp/assetc_nut_smoke/output_pkg_vendored/scripts/test.nut` matched the input byte-for-byte

@@ -15,6 +15,7 @@ openal-soft                     1.22.0
 openal-soft-hrtf                ???
 openvr                          1.16.8 
 recastnavigation                57610fa (10/21/2019)
+squirrel                        f9267f2 (02/28/2026)
 sranipal                        ???
 stb_image                       2.27
 stb_image_write                 1.16
