@@ -9,6 +9,7 @@ _Non official fork_
 [![Downloads](https://static.pepy.tech/badge/harfang/month)](https://pepy.tech/project/harfang)
 
 HARFANG®3D is an all-in-one 3D visualization library usable in C++, Python and Lua.
+This fork currently ships Lua and Squirrel support. CPython build support remains present in-tree, but is not guaranteed in recent builds.
 #### Table of contents
 
 1. [About](#section_1)
@@ -64,9 +65,14 @@ Audio API
 
 Languages supported
 * C++
-* Python _(3.2+)_
 * Lua _(5.4)_
+* Squirrel _(3.2+, `hg_squirrel` runtime and launcher support)_
+* Python _(CPython, build support present but not guaranteed in recent builds)_
 * Go _(1+, experimental)_
+
+Binding status notes
+* Squirrel support is available in this fork through `HG_BUILD_HG_SQUIRREL`, the `hg_squirrel` package, and the `hg_squirrel` / `launcher_squirrel` executables.
+* Python support still exists in-tree through `HG_BUILD_HG_PYTHON`, but recent builds may fail or may not ship validated Python artifacts depending on platform and branch state.
 <a name="subsection_1b"></a>
 ## Screenshots
 
@@ -167,7 +173,8 @@ https://dev.harfang3d.com/releases
         * `HG_BUILD_GLTF_EXPORTER`      : Build GLTF exporter (default: __ON__).
     * __Bindings__
         * `HG_BUILD_HG_LUA`     : Build Harfang LUA module (default: __OFF__).
-        * `HG_BUILD_HG_PYTHON`  : Build Harfang Python module (wheel) (default: __OFF__).
+        * `HG_BUILD_HG_SQUIRREL`: Build Harfang Squirrel extension and launcher package (default: __OFF__).
+        * `HG_BUILD_HG_PYTHON`  : Build Harfang Python module (wheel) (default: __OFF__, recent builds not guaranteed).
         * `HG_BUILD_HG_GO`      : Build Harfang GO module (default: __OFF__).
         
     &nbsp;    
@@ -182,6 +189,7 @@ https://dev.harfang3d.com/releases
     * `cppsdk` : Harfang C++ SDK.
     * `hg_python` : Harfang Python module.
     * `hg_lua` : Harfang LUA module.
+    * `hg_squirrel` : Harfang Squirrel runtime, native module and launchers.
     * `hg_go` : Harfang Go module.
     * `assetc` : Asset compiler.
     * `assimp_converter` : Assimp 3D model converter.

@@ -1,6 +1,8 @@
 .title Harfang for CPython
 
-Harfang for Python is distributed as a wheel package `(.whl)` compatible with official builds of the CPython interpreter version 3.4 or newer.
+Harfang for Python can be distributed as a wheel package `(.whl)` compatible with official builds of the CPython interpreter version 3.4 or newer.
+
+Recent builds of this fork do not guarantee working Python binaries or wheel artifacts on every platform/configuration. Treat CPython support as best-effort and validate it against the exact build you plan to ship or use locally.
 
 ## Installation
 

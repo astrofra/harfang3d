@@ -19,6 +19,7 @@
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="cpython.html">Harfang for CPython</a></li>
 <li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li><a class="" href="squirrel.html">Harfang for Squirrel</a></li>
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="quickstart.html">Quickstart</a></li>
 <li class="doc-nav-spacer"></li>
@@ -59,9 +60,16 @@
 <li><a class="" href="../api/lua/functions.html">Functions</a></li>
 <li><a class="" href="../api/lua/constants.html">Constants</a></li>
 </ul>
+<div class="doc-nav-title">API Squirrel</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/squirrel/classes.html">Classes</a></li>
+<li><a class="" href="../api/squirrel/functions.html">Functions</a></li>
+<li><a class="" href="../api/squirrel/constants.html">Constants</a></li>
+</ul>
 </aside>
 <main class="doc-content">
 <p>Scripts can be used to extend the behavior of nodes and scenes.</p>
+<p>This page documents the current embedded scripting workflow centered on <a href="../api/cpython/classes.html#sceneluavm">SceneLuaVM</a>. Harfang also ships a public Squirrel runtime package for host-side scripting through <code>hg_squirrel</code>, but embedded scene scripting remains Lua-oriented for now.</p>
 <div class="toc">
 <ul>
 <li><a href="#host-vs-embedded-vm">Host vs. Embedded VM</a></li>
@@ -77,7 +85,7 @@
 </div>
 <h2 id="host-vs-embedded-vm">Host vs. Embedded VM</h2>
 <p>When using Harfang from a scripting language it can be difficult to differentiate between parts of your program running on you main script VM and parts of your program running on one of the supported embedded VMs.</p>
-<p>We differentiate between those VMs by using the term <em>host VM</em> and <em>embedded VM</em>. For example, you may write a program in CPython which declares a scene extended using Lua scripts. In this case, CPython is the <em>host VM</em> and Lua is the <em>embedded VM</em>.</p>
+<p>We differentiate between those VMs by using the term <em>host VM</em> and <em>embedded VM</em>. For example, you may write a program in CPython, Lua or Squirrel and declare a scene extended using Lua scripts. In that case, the language running your application is the <em>host VM</em> and Lua is the <em>embedded VM</em>.</p>
 <h2 id="declaring-scripts">Declaring Scripts</h2>
 <p>Create a <a href="../api/cpython/classes.html#script">Script</a> component and assign it to a node or scene using <a href="../api/cpython/classes.html#node_setscript">Node.SetScript</a> or <a href="../api/cpython/classes.html#scene_setscript">Scene.SetScript</a>. Set the path to the script source using <a href="../api/cpython/classes.html#script_setpath">Script.SetPath</a>.</p>
 <h2 id="creating-evaluating-scripts">Creating &amp; Evaluating Scripts</h2>
@@ -120,7 +128,7 @@
 <ul>
 <li><em>OnDestroy()</em>: A script component is about to be destroyed and its memory released.</li>
 <li><em>OnAttachToScene(scene, slot_idx)</em>: A script component was attached to a Scene slot as a result of calling <a href="../api/cpython/classes.html#scene_setscript">Scene.SetScript</a>.</li>
-<li><em>OnDetachFromScene(scene, slot_idx)</em>: A script component was detached from a Scene slot as a result of calling [Scene_RemoveScript].</li>
+<li><em>OnDetachFromScene(scene, slot_idx)</em>: A script component was detached from a Scene slot as a result of clearing that slot through <a href="../api/cpython/classes.html#scene_setscript">Scene.SetScript</a>.</li>
 <li><em>OnUpdate(Scene scene, time_ns dt)</em>: Called during a scene update.</li>
 <li><em>OnSubmitSceneToForwardPipeline(ViewId base_view_id, Scene scene, Rect rect, ViewState view_state, ForwardPipeline pipeline, PipelineResources, FramebufferHandle fb)</em>: Called at the end of a scene submission to the forward pipeline.</li>
 </ul>

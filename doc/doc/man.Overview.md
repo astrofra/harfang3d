@@ -12,6 +12,10 @@ The installation instructions for each supported language are found in the follo
 * [man.Lua]
 * [man.Squirrel]
 
+The Squirrel runtime is available in this repository through the `hg_squirrel` package and launchers.
+
+CPython build support also remains in-tree, but successful Python builds and packaged artifacts are not guaranteed in recent builds of this fork.
+
 ## Getting Help
 
 * For generic programming issues:
