@@ -353,6 +353,9 @@ The remaining risks are now:
 - Native loader policy.
   The main question is no longer whether Squirrel can load DLLs at all; it can, if Harfang vendors the interpreter. The real decisions are module naming, search-path behavior, cache semantics, and whether Harfang ever unloads native modules before process exit.
 
+- Auxiliary native module parity.
+  Tutorial dependencies that currently exist only as Lua native modules need Squirrel-specific equivalents. In practice `harfang3d/tutorials/hg_lua/say.dll` should become a Harfang Squirrel native module DLL, for example `say.dll` exporting `sqmodule_say(HSQUIRRELVM)`, so `audio_play_tts_say.nut` can use the same packaged `require("say")` flow as `require("harfang")`.
+
 - Public interpreter versus embedded VM sequencing.
   The vendored `hg_squirrel` interpreter is now the fastest public red line. `SceneSquirrelVM` remains useful, but it should not block the first milestone.
 
@@ -396,19 +399,23 @@ That is materially lower-risk than the original 10-18 engineer-week estimate bec
 4. Run the first public tutorial ports end-to-end in the packaged runtime:
    - `basic_loop.nut`
    - `draw_and_create_model_no_pipeline.nut`
+   - extend that validation to audio tutorials, noting that `audio_play_tts_say` additionally requires a Squirrel-native `say.dll`
 5. Decide whether the public launcher should call an exported module release helper before `sq_close()`.
    The generated `gen_release_<module>(v)` function exists, but it is not currently exported with a C ABI for dynamic lookup.
-6. Only after the public DLL-loading line is stable, start phase 2 embedded runtime work:
+6. Add Squirrel-native companion modules for tutorial dependencies that are currently Lua-only:
+   - port `harfang3d/tutorials/hg_lua/say.dll` to a Squirrel Harfang module DLL
+   - keep the user-facing entry point as `require("say")` in `hg_squirrel`
+7. Only after the public DLL-loading line is stable, start phase 2 embedded runtime work:
    - implement `SquirrelObject` and `squirrel_vm.*`
    - honor `gen_release_harfang(v)` before `sq_close(v)`
    - implement `SceneSquirrelVM`
    - add `SceneSquirrelVM` overloads in `scene_systems.*`
-7. Port the core Lua scene tests to Squirrel and prove at least:
+8. Port the core Lua scene tests to Squirrel and prove at least:
    - one scene script,
    - one node script,
    - one callback path,
    - one `GetScriptValue` / `SetScriptValue` path.
-8. Document Squirrel-specific API differences instead of trying to hide them everywhere.
+9. Document Squirrel-specific API differences instead of trying to hide them everywhere.
 
 ## Conclusion
 

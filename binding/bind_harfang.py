@@ -1936,6 +1936,104 @@ static PyObject *__LuaObjectToPyObject(hg::SceneLuaVM *vm, const hg::LuaObject &
 
 		gen.bind_method(vm, 'Pack', 'hg::LuaObject', ['PyObject *o'], {'route': route_lambda('__PyObjectToLuaObject')})
 		gen.bind_method(vm, 'Unpack', 'PyObject *', ['const hg::LuaObject &o'], {'route': route_lambda('__LuaObjectToPyObject')})
+	elif gen.get_language() == 'Squirrel':
+		gen.insert_binding_code('''
+extern "C" {
+#include "lua.h"
+}
+
+// from bind_Lua.h
+struct hg_lua_type_info {
+	uint32_t type_tag;
+	const char *c_type;
+	const char *bound_name;
+
+	bool (*check)(lua_State *L, int index);
+	void (*to_c)(lua_State *L, int index, void *out);
+	int (*from_c)(lua_State *L, void *obj, OwnershipPolicy policy);
+};
+
+// return a type info from its type tag
+hg_lua_type_info *hg_lua_get_bound_type_info(uint32_t type_tag);
+// return a type info from its type name
+hg_lua_type_info *hg_lua_get_c_type_info(const char *type);
+// returns the typetag of a userdata object on the stack, nullptr if not a Fabgen object
+uint32_t hg_lua_get_wrapped_object_type_tag(lua_State *L, int idx);
+
+static hg::LuaObject __SquirrelObjectToLuaObject(hg::SceneLuaVM *vm, const FABGenSquirrelValue &o) {
+	lua_State *L = vm->GetL();
+
+	switch (o.kind) {
+	case FABGenSquirrelValue::Null:
+	case FABGenSquirrelValue::Unsupported:
+		lua_pushnil(L);
+		break;
+	case FABGenSquirrelValue::Integer:
+		lua_pushinteger(L, o.integer_value);
+		break;
+	case FABGenSquirrelValue::Float:
+		lua_pushnumber(L, o.float_value);
+		break;
+	case FABGenSquirrelValue::Bool:
+		lua_pushboolean(L, o.bool_value ? 1 : 0);
+		break;
+	case FABGenSquirrelValue::String:
+		lua_pushlstring(L, o.string_value.data(), o.string_value.size());
+		break;
+	case FABGenSquirrelValue::Object:
+		if (const auto lua_info = hg_lua_get_bound_type_info(o.type_tag))
+			lua_info->from_c(L, o.object_value, Copy);
+		else
+			lua_pushnil(L);
+		break;
+	}
+
+	return hg::Pop(L);
+}
+
+static FABGenSquirrelValue __LuaObjectToSquirrelObject(hg::SceneLuaVM *vm, const hg::LuaObject &lua_obj) {
+	(void)vm;
+
+	FABGenSquirrelValue out;
+	auto L = lua_obj.L();
+
+	lua_obj.Push();
+
+	if (lua_isnil(L, -1)) {
+		out.kind = FABGenSquirrelValue::Null;
+	} else if (lua_isinteger(L, -1)) {
+		out.kind = FABGenSquirrelValue::Integer;
+		out.integer_value = static_cast<SQInteger>(lua_tointeger(L, -1));
+	} else if (lua_isnumber(L, -1)) {
+		out.kind = FABGenSquirrelValue::Float;
+		out.float_value = static_cast<SQFloat>(lua_tonumber(L, -1));
+	} else if (lua_isboolean(L, -1)) {
+		out.kind = FABGenSquirrelValue::Bool;
+		out.bool_value = lua_toboolean(L, -1) == 1;
+	} else if (lua_isstring(L, -1)) {
+		size_t length = 0;
+		const char *value = lua_tolstring(L, -1, &length);
+		out.kind = FABGenSquirrelValue::String;
+		out.string_value.assign(value, length);
+	} else if (auto type_tag = hg_lua_get_wrapped_object_type_tag(L, -1)) {
+		if (const auto lua_info = hg_lua_get_bound_type_info(type_tag)) {
+			void *obj = nullptr;
+			lua_info->to_c(L, -1, &obj);
+			if (obj != nullptr) {
+				out.kind = FABGenSquirrelValue::Object;
+				out.object_value = obj;
+				out.type_tag = type_tag;
+			}
+		}
+	}
+
+	lua_pop(L, 1);
+	return out;
+}
+''')
+
+		gen.bind_method(vm, 'Pack', 'hg::LuaObject', ['const FABGenSquirrelValue &o'], {'route': route_lambda('__SquirrelObjectToLuaObject')})
+		gen.bind_method(vm, 'Unpack', 'FABGenSquirrelValue', ['const hg::LuaObject &o'], {'route': route_lambda('__LuaObjectToSquirrelObject')})
 
 	gen.end_class(vm)
 

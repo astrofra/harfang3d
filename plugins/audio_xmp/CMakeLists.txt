@@ -10,3 +10,7 @@ install_cppsdk_target(audio_xmp)
 if(HG_BUILD_HG_LUA)
 	install(TARGETS audio_xmp RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
 endif()
+
+if(HG_BUILD_HG_SQUIRREL)
+	install(TARGETS audio_xmp RUNTIME DESTINATION hg_squirrel LIBRARY DESTINATION hg_squirrel COMPONENT squirrel)
+endif()
