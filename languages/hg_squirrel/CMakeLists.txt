@@ -20,9 +20,12 @@ add_custom_command(
 		"Generating Harfang binding for Squirrel extension")
 
 add_library(hg_squirrel SHARED
+	assets_bridge.cpp
+	assets_bridge.h
 	${HG_SQUIRREL_BINDING_DIR}/bind_Squirrel.cpp
 	${HG_SQUIRREL_BINDING_DIR}/bind_Squirrel.h
 	${HG_SQUIRREL_BINDING_DIR}/fabgen.h)
+target_compile_definitions(hg_squirrel PRIVATE HG_SQUIRREL_BUILD_DLL)
 target_include_directories(hg_squirrel PUBLIC ${HG_SQUIRREL_PATH}/include)
 target_link_libraries(hg_squirrel engine foundation platform squirrel)
 set_target_properties(hg_squirrel PROPERTIES OUTPUT_NAME "harfang" PREFIX "" DEBUG_POSTFIX "" FOLDER "harfang/languages")
@@ -43,7 +46,7 @@ set(_hg_squirrel_app_launcher_includes
 set(_hg_squirrel_app_launcher_sources
 	launcher_app.cpp
 	../launcher_app_common.cpp)
-set(_hg_squirrel_app_launcher_libs engine foundation platform jsonhpp squirrel sqstdlib ${CMAKE_DL_LIBS})
+set(_hg_squirrel_app_launcher_libs hg_squirrel engine foundation platform jsonhpp squirrel sqstdlib ${CMAKE_DL_LIBS})
 
 add_executable(launcher_squirrel ${_hg_squirrel_app_launcher_sources})
 target_include_directories(launcher_squirrel PUBLIC ${_hg_squirrel_app_launcher_includes})

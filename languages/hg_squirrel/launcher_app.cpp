@@ -1,5 +1,6 @@
 // HARFANG(R) Copyright (C) 2026 NWNC. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 
+#include "assets_bridge.h"
 #include "../launcher_app_common.h"
 
 #include <engine/assets.h>
@@ -581,6 +582,15 @@ bool SetRootString(HSQUIRRELVM v, const SQChar *key, const std::string &value) {
 	return true;
 }
 
+bool SyncSquirrelAssetsState(const MountedAssets &mounted_assets, const LauncherConfig &config) {
+	return hg_squirrel_sync_launcher_assets(mounted_assets.folder_path.c_str(), mounted_assets.package_path.c_str(), mounted_assets.cwd.c_str(),
+		config.assets.logical_data_path.c_str(), config.assets.archive_root.c_str());
+}
+
+void UnsyncSquirrelAssetsState(const MountedAssets &mounted_assets) {
+	hg_squirrel_unsync_launcher_assets(mounted_assets.folder_path.c_str(), mounted_assets.package_path.c_str());
+}
+
 bool RunEntryPoint(HSQUIRRELVM v, const LauncherConfig &config, SQInteger &retval) {
 	if (IsAbsolutePath(config.entry)) {
 		const ScriptContext context{ScriptSource::FileSystem, NormalizePath(config.entry), NormalizePath(config.entry)};
@@ -659,6 +669,13 @@ int LauncherMain() {
 		return 1;
 	}
 
+	if (!SyncSquirrelAssetsState(mounted_assets, config)) {
+		PrintError("failed to synchronize launcher assets with the Squirrel module");
+		UnsyncSquirrelAssetsState(mounted_assets);
+		hg::launcher_app::UnmountLauncherAssets(mounted_assets);
+		return 1;
+	}
+
 	if (config.assets.pass_mode_argument)
 		config.args.push_back(std::string("--assets-source=") + hg::launcher_app::GetAssetsSourceName(mounted_assets.source));
 
@@ -678,6 +695,7 @@ int LauncherMain() {
 	HSQUIRRELVM vm = sq_open(1024);
 	if (!vm) {
 		PrintError("failed to create Squirrel VM");
+		UnsyncSquirrelAssetsState(mounted_assets);
 		g_launcher_archive_root.clear();
 		g_mounted_assets = MountedAssets{};
 		hg::launcher_app::UnmountLauncherAssets(mounted_assets);
@@ -694,6 +712,7 @@ int LauncherMain() {
 		!SetRootString(vm, _SC("LAUNCHER_ASSETS_SOURCE"), hg::launcher_app::GetAssetsSourceName(mounted_assets.source))) {
 		sq_close(vm);
 		ReleaseNativeModules();
+		UnsyncSquirrelAssetsState(mounted_assets);
 		g_launcher_archive_root.clear();
 		g_mounted_assets = MountedAssets{};
 		hg::launcher_app::UnmountLauncherAssets(mounted_assets);
@@ -708,6 +727,7 @@ int LauncherMain() {
 	g_script_context_stack.clear();
 	g_script_search_paths.clear();
 	g_native_search_paths.clear();
+	UnsyncSquirrelAssetsState(mounted_assets);
 	g_launcher_archive_root.clear();
 	g_mounted_assets = MountedAssets{};
 	hg::launcher_app::UnmountLauncherAssets(mounted_assets);

@@ -47,6 +47,7 @@ option(HG_BUILD_TESTS "Harfang: Build Unit tests" OFF)
 option(HG_BUILD_DOCS "Harfang: Build documentation" OFF)
 option(HG_BUILD_STATIC_DOCS "Harfang: Build static HTML documentation" OFF)
 option(HG_BUILD_DOCS_WITH_DOXYGEN "Harfang: Require Doxygen for documentation builds" OFF)
+option(HG_BUILD_LAUNCHER_TESTS "Harfang: Build launcher regression tests" OFF)
 
 option(HG_BUILD_HG_LUA "Harfang: Build Harfang Lua extension" OFF)
 option(HG_BUILD_HG_SQUIRREL "Harfang: Build Harfang Squirrel 3.2+ extension" OFF)
@@ -225,6 +226,10 @@ endif()
 
 if(HG_BUILD_DOCS_WITH_DOXYGEN)
 	find_package(Doxygen REQUIRED)
+endif()
+
+if(HG_BUILD_LAUNCHER_TESTS)
+	include(CTest)
 endif()
 
 # -----------------------------------------------------------------------------
