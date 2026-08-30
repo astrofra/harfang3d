@@ -10,15 +10,6 @@
 	path = extern/glfw
 	url = https://github.com/glfw/glfw.git
 	branch = 3.3.7
-[submodule "extern/bgfx/bgfx"]
-	path = extern/bgfx/bgfx
-	url = https://github.com/bkaradzic/bgfx
-[submodule "extern/bgfx/bx"]
-	path = extern/bgfx/bx
-	url = https://github.com/bkaradzic/bx
-[submodule "extern/bgfx/bimg"]
-	path = extern/bgfx/bimg
-	url = https://github.com/bkaradzic/bimg
 [submodule "extern/cmft"]
 	path = extern/cmft
 	url = https://github.com/ejulien/cmft.git

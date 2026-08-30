@@ -11,6 +11,7 @@ std::string to_string(const void *v);
 
 inline std::string to_string(const std::string &v) { return v; }
 inline std::string to_string(const char *v) { return v ? v : "(nullptr)"; }
+inline std::string to_string(char *v) { return v ? v : "(nullptr)"; }
 
 template <typename T> std::string to_string(T v) { return std::to_string(v); }
 
