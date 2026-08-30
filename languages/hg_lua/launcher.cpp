@@ -11,6 +11,8 @@
 #include <foundation/path_tools.h>
 #include <foundation/string.h>
 
+#include <platform/window_system.h>
+
 #include <json/json.hpp>
 
 extern "C" {
@@ -51,10 +53,15 @@ struct LauncherAssetsConfig {
 	bool pass_mode_argument = false;
 };
 
+struct LauncherRuntimeConfig {
+	bool hidpi = true;
+};
+
 struct LauncherConfig {
 	std::string entry;
 	std::vector<std::string> args;
 	LauncherAssetsConfig assets;
+	LauncherRuntimeConfig runtime;
 };
 
 struct MountedAssets {
@@ -199,6 +206,22 @@ bool ParseConfig(const std::string &content, const std::string &source, Launcher
 					return false;
 				}
 				config.assets.pass_mode_argument = assets["pass_mode_argument"].get<bool>();
+			}
+		}
+
+		if (js.contains("runtime")) {
+			if (!js["runtime"].is_object()) {
+				error = "'runtime' must be a JSON object";
+				return false;
+			}
+
+			const auto &runtime = js["runtime"];
+			if (runtime.contains("hidpi")) {
+				if (!runtime["hidpi"].is_boolean()) {
+					error = "'runtime.hidpi' must be a boolean";
+					return false;
+				}
+				config.runtime.hidpi = runtime["hidpi"].get<bool>();
 			}
 		}
 
@@ -679,6 +702,8 @@ int LauncherMain() {
 		}
 		config.assets.archive_root = inferred_archive_root;
 	}
+
+	hg::SetHiDPIMode(config.runtime.hidpi ? hg::HDPIM_Enabled : hg::HDPIM_Disabled);
 
 	if (!InstallArchiveFolderResolver(mounted_assets, config)) {
 		PrintError("failed to install archive assets resolver");

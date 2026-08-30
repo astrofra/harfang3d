@@ -2702,8 +2702,11 @@ Window *RenderInit(const char *window_title, int width, int height, bgfx::Render
 
 	reset_flags |= BGFX_RESET_FLIP_AFTER_RENDER | BGFX_RESET_FLUSH_AFTER_RENDER | BGFX_RESET_MAXANISOTROPY;
 
+	int effective_width = width, effective_height = height;
+	GetWindowClientSize(win, effective_width, effective_height);
+
 	if (reset_flags)
-		bgfx::reset(width, height, reset_flags, format);
+		bgfx::reset(effective_width, effective_height, reset_flags, format);
 
 	if (debug_flags)
 		bgfx::setDebug(debug_flags);

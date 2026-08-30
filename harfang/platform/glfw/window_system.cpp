@@ -61,7 +61,58 @@ static void ErrorCallback(int error_code, const char *description) { error(descr
 
 static bool glfw_initialized = false;
 
+#if defined(GLFW_WIN32)
+namespace {
+
+enum HGProcessDpiAwareness {
+	HG_PROCESS_DPI_UNAWARE = 0,
+	HG_PROCESS_SYSTEM_DPI_AWARE = 1,
+	HG_PROCESS_PER_MONITOR_DPI_AWARE = 2
+};
+
+using SetProcessDpiAwarenessContextFn = BOOL(WINAPI *)(HANDLE);
+using SetProcessDpiAwarenessFn = HRESULT(WINAPI *)(int);
+
+#ifndef DPI_AWARENESS_CONTEXT_UNAWARE
+#define DPI_AWARENESS_CONTEXT_UNAWARE ((HANDLE)-1)
+#endif
+
+#ifndef DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED
+#define DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED ((HANDLE)-5)
+#endif
+
+void ConfigureWindowsHiDPIMode() {
+	if (GetHiDPIMode() != HDPIM_Disabled)
+		return;
+
+	if (auto user32 = GetModuleHandleA("user32.dll")) {
+		if (auto set_awareness_context = reinterpret_cast<SetProcessDpiAwarenessContextFn>(GetProcAddress(user32, "SetProcessDpiAwarenessContext"))) {
+			if (set_awareness_context(DPI_AWARENESS_CONTEXT_UNAWARE_GDISCALED) || set_awareness_context(DPI_AWARENESS_CONTEXT_UNAWARE))
+				return;
+		}
+	}
+
+	if (auto shcore = LoadLibraryA("shcore.dll")) {
+		if (auto set_awareness = reinterpret_cast<SetProcessDpiAwarenessFn>(GetProcAddress(shcore, "SetProcessDpiAwareness"))) {
+			const auto hr = set_awareness(HG_PROCESS_DPI_UNAWARE);
+			FreeLibrary(shcore);
+			if (SUCCEEDED(hr))
+				return;
+		} else {
+			FreeLibrary(shcore);
+		}
+	}
+
+	warn("Failed to switch process DPI awareness to unaware mode; HiDPI disable may remain incomplete on Windows");
+}
+
+} // namespace
+#endif // GLFW_WIN32
+
 void WindowSystemInit() {
+#if defined(GLFW_WIN32)
+	ConfigureWindowsHiDPIMode();
+#endif
 	glfwSetErrorCallback(ErrorCallback);
 	int ret = glfwInit();
 	__RASSERT_MSG__(ret == GLFW_TRUE, "Failed to initialize window system");
@@ -208,7 +259,7 @@ static Window *NewGLFWWindow(int width, int height, int bpp, const GLFWmonitor *
 	glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_TRUE);
 	//	glfwWindowHint(GLFW_SRGB_CAPABLE, GLFW_TRUE);
 #if (GLFW_VERSION_MAJOR >= 3) && (GLFW_VERSION_MINOR >= 3)
-	glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+	glfwWindowHint(GLFW_SCALE_TO_MONITOR, GetHiDPIMode() == HDPIM_Enabled ? GLFW_TRUE : GLFW_FALSE);
 #endif
 	GLFWwindow *window = glfwCreateWindow(width, height, g_default_window_title, const_cast<GLFWmonitor *>(monitor), NULL);
 

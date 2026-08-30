@@ -7,6 +7,11 @@ namespace hg {
 
 static std::vector<const Window*> open_window_list;
 static Signal<void(const Window *)>::Connection new_window_connection, destroy_window_connection;
+static HiDPIMode g_hi_dpi_mode = HDPIM_Enabled;
+
+void SetHiDPIMode(HiDPIMode mode) { g_hi_dpi_mode = mode; }
+
+HiDPIMode GetHiDPIMode() { return g_hi_dpi_mode; }
 
 void ConnectWindowSystemSignals() {
 	new_window_connection = new_window_signal.Connect([](const Window *w) { push_back_unique(open_window_list, w); });

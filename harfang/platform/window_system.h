@@ -57,8 +57,17 @@ std::vector<Monitor *> GetMonitors();
 /// Window visibility
 enum WindowVisibility { WV_Windowed, WV_Undecorated, WV_Fullscreen, WV_Hidden, WV_FullscreenMonitor1, WV_FullscreenMonitor2, WV_FullscreenMonitor3 };
 
+/// Runtime HiDPI policy for window-system backends.
+enum HiDPIMode : uint8_t { HDPIM_Enabled, HDPIM_Disabled };
+
 /// Window
 struct Window;
+
+/// Set the runtime HiDPI policy.
+/// Call this before WindowSystemInit() to affect subsequently created windows.
+void SetHiDPIMode(HiDPIMode mode);
+/// Return the current runtime HiDPI policy.
+HiDPIMode GetHiDPIMode();
 
 /// Must be called from the main thread.
 void WindowSystemInit();
