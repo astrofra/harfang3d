@@ -49,6 +49,7 @@ option(HG_BUILD_STATIC_DOCS "Harfang: Build static HTML documentation" OFF)
 option(HG_BUILD_DOCS_WITH_DOXYGEN "Harfang: Require Doxygen for documentation builds" OFF)
 
 option(HG_BUILD_HG_LUA "Harfang: Build Harfang Lua extension" OFF)
+option(HG_BUILD_HG_SQUIRREL "Harfang: Build Harfang Squirrel 3.2+ extension" OFF)
 option(HG_BUILD_HG_PYTHON "Harfang: Build Harfang CPython 3.2+ extension" OFF)
 option(HG_BUILD_HG_GO "Harfang: Build Harfang Go extension" OFF)
 
@@ -69,6 +70,17 @@ if(EXISTS ${HG_FABGEN_PATH})
 	message(CHECK_PASS "ok")
 else()
 	message(FATAL_ERROR "unable to access ${HG_FABGEN_PATH}")
+endif()
+
+set(HG_SQUIRREL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/extern/squirrel" CACHE PATH "Harfang: Path to Squirrel source tree")
+if(HG_BUILD_HG_SQUIRREL)
+	message(CHECK_START "Checking Squirrel path")
+	if(EXISTS ${HG_SQUIRREL_PATH})
+		get_filename_component(HG_SQUIRREL_PATH ${HG_SQUIRREL_PATH} REALPATH)
+		message(CHECK_PASS "ok")
+	else()
+		message(FATAL_ERROR "unable to access ${HG_SQUIRREL_PATH}")
+	endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -416,6 +428,7 @@ message(STATUS "Build static documentation: " ${HG_BUILD_STATIC_DOCS})
 message(STATUS "Enable XMP audio plugin: " ${HG_ENABLE_XMP_AUDIO})
 
 message(STATUS "Build Lua extension: " ${HG_BUILD_HG_LUA})
+message(STATUS "Build Squirrel extension: " ${HG_BUILD_HG_SQUIRREL})
 
 message(STATUS "Build CPython module: " ${HG_BUILD_HG_PYTHON})
 if(HG_BUILD_HG_PYTHON)

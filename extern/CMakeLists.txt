@@ -139,6 +139,47 @@ target_include_directories(libluadll PUBLIC $<INSTALL_INTERFACE:${CppSdkHeadersD
 
 install_cppsdk_external_target(libluadll lua)
 
+# Squirrel
+if(HG_BUILD_HG_SQUIRREL)
+	set(SQ_DISABLE_INTERPRETER ON CACHE BOOL "Disable stock Squirrel interpreter" FORCE)
+	set(SQ_DISABLE_INSTALLER ON CACHE BOOL "Disable Squirrel install rules" FORCE)
+	set(SQ_DISABLE_HEADER_INSTALLER ON CACHE BOOL "Disable Squirrel header install rules" FORCE)
+	set(SQ_DISABLE_CMAKE_INSTALLER ON CACHE BOOL "Disable Squirrel CMake install rules" FORCE)
+	set(DISABLE_STATIC ON CACHE BOOL "Disable static Squirrel libraries" FORCE)
+	set(DISABLE_DYNAMIC OFF CACHE BOOL "Build shared Squirrel libraries" FORCE)
+	set(LONG_OUTPUT_NAMES OFF CACHE BOOL "Use short Squirrel binary and library names" FORCE)
+
+	add_subdirectory(${HG_SQUIRREL_PATH} squirrel EXCLUDE_FROM_ALL)
+
+	if(TARGET squirrel)
+		set_target_properties(squirrel PROPERTIES FOLDER "harfang/3rdparty/squirrel")
+		target_include_directories(squirrel PUBLIC $<INSTALL_INTERFACE:${CppSdkHeadersDestination}/extern/squirrel>)
+		install_cppsdk_external_target(squirrel squirrel)
+	endif()
+
+	if(TARGET sqstdlib)
+		set_target_properties(sqstdlib PROPERTIES FOLDER "harfang/3rdparty/squirrel")
+		target_include_directories(sqstdlib PUBLIC $<INSTALL_INTERFACE:${CppSdkHeadersDestination}/extern/squirrel>)
+		install_cppsdk_external_target(sqstdlib squirrel)
+	endif()
+
+	if(HG_BUILD_CPP_SDK)
+		install(
+			FILES
+				${HG_SQUIRREL_PATH}/include/sqconfig.h
+				${HG_SQUIRREL_PATH}/include/squirrel.h
+				${HG_SQUIRREL_PATH}/include/sqstdaux.h
+				${HG_SQUIRREL_PATH}/include/sqstdblob.h
+				${HG_SQUIRREL_PATH}/include/sqstdio.h
+				${HG_SQUIRREL_PATH}/include/sqstdmath.h
+				${HG_SQUIRREL_PATH}/include/sqstdstring.h
+				${HG_SQUIRREL_PATH}/include/sqstdsystem.h
+			DESTINATION cppsdk/include/extern/squirrel
+			COMPONENT cppsdk
+		)
+	endif()
+endif()
+
 # STB vorbis (customized to handle raw VORBIS stream)
 add_library(stb_vorbis STATIC stb_vorbis/stb_vorbis.c)
 set_target_properties(stb_vorbis PROPERTIES FOLDER "harfang/3rdparty")

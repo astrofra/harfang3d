@@ -23,6 +23,9 @@ def bind_std_vector(gen, T_conv, bound_name=None):
 	elif gen.get_language() == 'Lua':
 		LuaTable_T_type = 'LuaTableOf%s' % T_conv.bound_name
 		gen.bind_type(lib.lua.stl.LuaTableToStdVectorConverter(LuaTable_T_type, T_conv))
+	elif gen.get_language() == 'Squirrel':
+		SquirrelArray_T_type = 'SquirrelArrayOf%s' % T_conv.bound_name
+		gen.bind_type(lib.squirrel.stl.SquirrelArrayToStdVectorConverter(SquirrelArray_T_type, T_conv))
 	elif gen.get_language() == 'Go':
 		GoTable_T_type = 'GoSliceOf%s' % T_conv.bound_name
 		gen.bind_type(lib.go.stl.GoSliceToStdVectorConverter(GoTable_T_type, T_conv))
@@ -35,6 +38,8 @@ def bind_std_vector(gen, T_conv, bound_name=None):
 		gen.bind_constructor(conv, ['?%s sequence' % PySequence_T_type])
 	elif gen.get_language() == 'Lua':
 		gen.bind_constructor(conv, ['?%s sequence' % LuaTable_T_type])
+	elif gen.get_language() == 'Squirrel':
+		gen.bind_constructor(conv, ['?%s sequence' % SquirrelArray_T_type])
 	elif gen.get_language() == 'Go':
 		gen.bind_constructor(conv, ['?%s sequence' % GoTable_T_type])
 
@@ -58,11 +63,13 @@ def expand_std_vector_proto(gen, protos, is_constructor_proto=False):
 	prefix = {
 		'CPython' : 'PySequenceOf',
 		'Lua' : 'LuaTableOf',
+		'Squirrel' : 'SquirrelArrayOf',
 		'Go' : 'GoSliceOf'
 	}
 	name_prefix = {
 		'CPython' : 'SequenceOf',
 		'Lua' : 'TableOf',
+		'Squirrel' : 'ArrayOf',
 		'Go' : 'SliceOf'
 	}
 
