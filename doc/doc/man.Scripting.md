@@ -44,7 +44,7 @@ Scene events reported by the default update behavior:
 
 - *OnDestroy()*: A script component is about to be destroyed and its memory released.
 - *OnAttachToScene(scene, slot_idx)*: A script component was attached to a Scene slot as a result of calling [Scene_SetScript].
-- *OnDetachFromScene(scene, slot_idx)*: A script component was detached from a Scene slot as a result of calling [Scene_RemoveScript].
+- *OnDetachFromScene(scene, slot_idx)*: A script component was detached from a Scene slot as a result of clearing that slot through [Scene_SetScript].
 - *OnUpdate(Scene scene, time_ns dt)*: Called during a scene update.
 - *OnSubmitSceneToForwardPipeline(ViewId base_view_id, Scene scene, Rect rect, ViewState view_state, ForwardPipeline pipeline, PipelineResources, FramebufferHandle fb)*: Called at the end of a scene submission to the forward pipeline.
 
