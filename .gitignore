@@ -10,3 +10,4 @@ dist
 commit_id
 *.DS_Store
 /tutorials/hg_lua
+/tutorials/hg_squirrel
