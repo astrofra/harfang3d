@@ -18,7 +18,7 @@ The easiest way is to drag and drop the resources folder on the assetc executabl
 
 ## Command-Line
 
-Since HARFANG 3.2.5, `assetc` is now included in both _Python_ and _Lua_ versions.
+Since HARFANG 3.2.5, `assetc` is now included in the packaged _Python_, _Lua_, and _Squirrel_ distributions.
 
 ### Python
 
@@ -47,6 +47,18 @@ In this example, we will compile a folder called `resources` and target the `Ope
 hg_bin = require "harfang.bin"
 hg_bin.assetc('resources', '-api', 'GL')
 ```
+
+### Squirrel
+
+In HARFANG Squirrel 3.2.7 and above, `assetc` is packaged with the public runtime under `harfang/assetc`.
+
+Invoke the packaged executable directly from the Squirrel package root:
+
+```text
+harfang/assetc/assetc.exe resources -api GL
+```
+
+At the moment `.nut` scripts are copied as source assets; there is no Squirrel bytecode compilation step in `assetc`.
 
 ## Usage in detail
 

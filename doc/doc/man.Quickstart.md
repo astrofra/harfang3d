@@ -4,6 +4,7 @@ Once you have a functioning installation of Harfang for your language of choice:
 
 * [man.CPython]
 * [man.Lua]
+* [man.Squirrel]
 
 Follow the following steps:
 

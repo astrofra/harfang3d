@@ -38,7 +38,6 @@ The current source tree already contains the important inputs and most of the pa
 - `doc/doc/tree_desc.txt` defines manual-page order.
 - `doc/img/` contains documentation images.
 - `doc/markdown.css` contains a reusable documentation stylesheet.
-- `doc/doc_to_hugo.py` converts the internal documentation format to Hugo content.
 - `doc/doc_utils/api_tools.py` loads FabGen `api.xml`.
 - `doc/doc_utils/doc_tools.py` loads Markdown documentation and can generate fallback autodoc from API XML.
 - `doc/doc_utils/html_tools.py` contains an older offline HTML-oriented renderer and link resolver.
@@ -49,8 +48,8 @@ The current CMake docs path is incomplete:
 - Root `CMakeLists.txt` enables `add_subdirectory(doc)` only when `HG_BUILD_DOCS=ON`.
 - Root `CMakeLists.txt` also calls `find_package(Doxygen REQUIRED)` when `HG_BUILD_DOCS=ON`, but the active `doc/CMakeLists.txt` does not use Doxygen.
 - `doc/CMakeLists.txt` only generates `api.xml`; the old offline docs command is commented out and references a missing `doc_to_html.py`.
-- `doc_to_hugo.py` is not wired to a CMake target in this repository.
-- No active NPM pipeline is present in this repository; the NPM/Hugo complexity appears to belong to the web-site publishing side, not the local Harfang source tree.
+- The old Hugo converter has been removed from the active source tree because it was not wired to any local CMake target.
+- No active NPM pipeline is present in this repository; the former NPM/Hugo complexity belonged to the web-site publishing side, not the local Harfang source tree.
 
 FabGen already supports the API XML part:
 
@@ -100,6 +99,7 @@ static_html/
     requirements.html
     cpython.html
     lua.html
+    squirrel.html
     ...
   api/
     cpython/
@@ -107,6 +107,10 @@ static_html/
       functions.html
       constants.html
     lua/
+      classes.html
+      functions.html
+      constants.html
+    squirrel/
       classes.html
       functions.html
       constants.html
@@ -433,7 +437,7 @@ Polish beyond MVP:
 - ranked search
 - responsive styling cleanup
 - strict link checking in CI
-- removal or deprecation of Hugo-specific scripts
+- further cleanup of stale documentation content and links
 
 ## Recommendation
 

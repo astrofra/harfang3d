@@ -10,6 +10,7 @@ The installation instructions for each supported language are found in the follo
 
 * [man.CPython]
 * [man.Lua]
+* [man.Squirrel]
 
 ## Getting Help
 
