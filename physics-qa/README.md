@@ -85,6 +85,25 @@ Run the whole suite:
 run-all.bat
 ```
 
+## Deterministic Physics Dumps
+
+`rb_dynamic_variable_friction.lua` supports a fixed-step JSON Lines capture for
+backend comparisons. The capture records each cuboid's world matrix, linear
+velocity, and angular velocity after every physics update.
+
+Capture the Bullet reference and Tau candidate:
+
+```bat
+dump-one.bat bullet rb_dynamic_variable_friction.lua
+dump-one.bat tau rb_dynamic_variable_friction.lua
+python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
+```
+
+The captures are written to `qa_dumps/<backend>/<scenario>.jsonl`. The default
+run records 600 ticks at 60 Hz and exits automatically. Set
+`HG_PHYSICS_QA_DUMP_SAMPLES` or `HG_PHYSICS_QA_DUMP_EVERY` to change the
+capture duration or sampling interval.
+
 ## Notes
 
 - This is still an upstream Lua QA suite, not yet a fully automated pass/fail
