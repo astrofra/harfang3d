@@ -1521,6 +1521,20 @@ void Collision::SetCollisionResource(const std::string &path) {
 		warn("Orphaned collision component");
 }
 
+float Collision::GetRestitution() const { return 0.f; }
+
+void Collision::SetRestitution(float restitution) {
+	static_cast<void>(restitution);
+	warn("Collision restitution is not stored in Scene");
+}
+
+float Collision::GetFriction() const { return 0.f; }
+
+void Collision::SetFriction(float friction) {
+	static_cast<void>(friction);
+	warn("Collision friction is not stored in Scene");
+}
+
 //
 bool Instance::IsValid() const { return scene_ref && scene_ref->scene ? scene_ref->scene->IsValidInstanceRef(ref) : false; }
 

@@ -80,8 +80,10 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		Decompose(shape.local_transform, &shape.local_position, &shape.local_rotation, nullptr);
 		shape.size = collision.GetSize();
 		shape.mass = collision.GetMass();
-		shape.friction = collision.GetFriction();
-		shape.restitution = collision.GetRestitution();
+		// Collision components currently do not store contact material properties in Scene.
+		// Keep them on the rigid body side for the Tau phase-1 backend, like Bullet does.
+		shape.friction = 0.f;
+		shape.restitution = 0.f;
 
 		total_mass += shape.mass;
 		shapes.push_back(shape);
