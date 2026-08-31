@@ -36,6 +36,7 @@ set(HDRS
 	scene_forward_pipeline.h
 	scene.h
 	scene_lua_vm.h
+	scene_physics.h
 	scene_systems.h
 	scene_to_obj.h
 	script_param.h

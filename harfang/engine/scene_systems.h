@@ -24,6 +24,9 @@ class SceneBullet3Physics;
 #if HG_ENABLE_TAU_SCENE_PHYSICS
 class SceneTauPhysics;
 #endif
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+class ScenePhysics;
+#endif
 
 struct SceneClocks {
 	time_ns physics{};
@@ -32,6 +35,12 @@ struct SceneClocks {
 /// Create dependent system resource based on the current scene state.
 void SceneSyncToSystemsFromFile(Scene &scene, SceneLuaVM &vm);
 void SceneSyncToSystemsFromAssets(Scene &scene, SceneLuaVM &vm);
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+void SceneSyncToSystemsFromFile(Scene &scene, ScenePhysics &physics);
+void SceneSyncToSystemsFromAssets(Scene &scene, ScenePhysics &physics);
+void SceneSyncToSystemsFromFile(Scene &scene, ScenePhysics &physics, SceneLuaVM &vm);
+void SceneSyncToSystemsFromAssets(Scene &scene, ScenePhysics &physics, SceneLuaVM &vm);
+#endif
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 void SceneSyncToSystemsFromFile(Scene &scene, SceneBullet3Physics &physics);
 void SceneSyncToSystemsFromAssets(Scene &scene, SceneBullet3Physics &physics);
@@ -48,6 +57,17 @@ void SceneSyncToSystemsFromAssets(Scene &scene, SceneTauPhysics &physics, SceneL
 /// Update scene, physics and scripts. Script events are called where required.
 void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt);
 void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneLuaVM &vm);
+
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, ScenePhysics &physics, time_ns physics_step, int max_physics_step);
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, ScenePhysics &physics, time_ns physics_step, int max_physics_step, SceneLuaVM &vm);
+
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, ScenePhysics &physics, NodePairContacts &contacts, time_ns physics_step, int max_physics_step);
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, ScenePhysics &physics, NodePairContacts &contacts, time_ns physics_step,
+	int max_physics_step, SceneLuaVM &vm);
+#endif
 
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, time_ns physics_step, int max_physics_step);
@@ -74,6 +94,11 @@ void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneTauP
 size_t SceneGarbageCollectSystems(Scene &scene);
 size_t SceneGarbageCollectSystems(Scene &scene, SceneLuaVM &vm);
 
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+size_t SceneGarbageCollectSystems(Scene &scene, ScenePhysics &physics);
+size_t SceneGarbageCollectSystems(Scene &scene, ScenePhysics &physics, SceneLuaVM &vm);
+#endif
+
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics);
 size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm);
@@ -86,6 +111,11 @@ size_t SceneGarbageCollectSystems(Scene &scene, SceneTauPhysics &physics, SceneL
 /// Clear scene, physics and scripts.
 void SceneClearSystems(Scene &scene);
 void SceneClearSystems(Scene &scene, SceneLuaVM &vm);
+
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+void SceneClearSystems(Scene &scene, ScenePhysics &physics);
+void SceneClearSystems(Scene &scene, ScenePhysics &physics, SceneLuaVM &vm);
+#endif
 
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 void SceneClearSystems(Scene &scene, SceneBullet3Physics &physics);

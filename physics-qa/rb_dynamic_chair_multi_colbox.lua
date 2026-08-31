@@ -70,7 +70,7 @@ floor, rb_floor = CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.V
 rb_floor:SetRestitution(1)
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)

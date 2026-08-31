@@ -91,7 +91,7 @@ run-all.bat
   test harness.
 - Most scenarios open an interactive window and rely on visual inspection or
   manual exit.
-- The scripts currently target `SceneBullet3Physics` directly. If Harfang grows
-  a backend-neutral physics layer later, this suite should be adapted to select
-  the backend through a small indirection layer rather than editing each test
-  repeatedly.
+- Most scripts still target `SceneBullet3Physics` directly today.
+- `rb_dynamic_chair_multi_colbox.lua` already uses the compile-time
+  `ScenePhysics` alias so the same Lua script can run against the selected
+  backend without adding runtime selection logic.
