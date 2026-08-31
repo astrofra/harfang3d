@@ -1,0 +1,2404 @@
+{
+	"canvas": {
+		"clear_color": true,
+		"clear_z": true,
+		"color": [
+			0,
+			0,
+			0,
+			255
+		]
+	},
+	"collisions": [
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.5,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				3.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				4.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.5,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				3.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				2.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				4.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				4.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				2.0,
+				1.0
+			],
+			"type": "cylinder"
+		},
+		{
+			"mass": 0.0,
+			"path": "",
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				20.0,
+				1.0,
+				20.0
+			],
+			"type": "cube"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				-1.5,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"type": "cube"
+		},
+		{
+			"mass": 1.0,
+			"path": "",
+			"pos": [
+				0.0,
+				-1.5,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"type": "cube"
+		}
+	],
+	"environment": {
+		"ambient": [
+			0,
+			0,
+			0,
+			0
+		],
+		"brdf_map": "core/pbr/brdf.dds",
+		"current_camera": null,
+		"fog_color": [
+			0,
+			0,
+			0,
+			0
+		],
+		"fog_far": 0.0,
+		"fog_near": 0.0,
+		"probe": {
+			"irradiance_map": ".irradiance",
+			"parallax": 0.0,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"radiance_map": ".radiance",
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			],
+			"type": "sphere"
+		}
+	},
+	"key_values": null,
+	"lights": [
+		{
+			"diffuse": [
+				255,
+				255,
+				255,
+				255
+			],
+			"diffuse_intensity": 1.0,
+			"inner_angle": 9.999999747378752e-05,
+			"outer_angle": 0.6300534009933472,
+			"priority": 0.0,
+			"pssm_split": [
+				10.0,
+				50.0,
+				100.0,
+				200.0
+			],
+			"radius": 0.0,
+			"shadow_bias": 9.999999747378752e-05,
+			"shadow_type": "map",
+			"specular": [
+				255,
+				255,
+				255,
+				255
+			],
+			"specular_intensity": 1.0,
+			"type": "spot"
+		},
+		{
+			"diffuse": [
+				255,
+				0,
+				0,
+				255
+			],
+			"diffuse_intensity": 1.0,
+			"inner_angle": 0.5235987901687622,
+			"outer_angle": 0.7853981852531433,
+			"priority": 0.0,
+			"pssm_split": [
+				10.0,
+				50.0,
+				100.0,
+				200.0
+			],
+			"radius": 18.100000381469727,
+			"shadow_bias": 9.999999747378752e-05,
+			"shadow_type": "none",
+			"specular": [
+				255,
+				0,
+				0,
+				255
+			],
+			"specular_intensity": 1.0,
+			"type": "point"
+		}
+	],
+	"nodes": [
+		{
+			"components": [
+				5,
+				4294967295,
+				2,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 0,
+			"name": "left_leg_bone"
+		},
+		{
+			"components": [
+				0,
+				4294967295,
+				4294967295,
+				0,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 1,
+			"name": "Light"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 2
+				},
+				{
+					"idx": 8
+				}
+			],
+			"components": [
+				8,
+				4294967295,
+				4294967295,
+				4294967295,
+				2
+			],
+			"disabled": false,
+			"idx": 2,
+			"name": "left_leg"
+		},
+		{
+			"components": [
+				7,
+				4294967295,
+				3,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 3,
+			"name": "chest_bone"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 3
+				}
+			],
+			"components": [
+				6,
+				4294967295,
+				4294967295,
+				4294967295,
+				3
+			],
+			"disabled": false,
+			"idx": 4,
+			"name": "chest"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 0
+				},
+				{
+					"idx": 7
+				}
+			],
+			"components": [
+				1,
+				4294967295,
+				4294967295,
+				4294967295,
+				0
+			],
+			"disabled": false,
+			"idx": 5,
+			"name": "right_leg"
+		},
+		{
+			"components": [
+				2,
+				4294967295,
+				0,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 6,
+			"name": "right_leg_bone"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 1
+				}
+			],
+			"components": [
+				3,
+				4294967295,
+				4294967295,
+				4294967295,
+				1
+			],
+			"disabled": false,
+			"idx": 7,
+			"name": "right_arm"
+		},
+		{
+			"components": [
+				4,
+				4294967295,
+				1,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 8,
+			"name": "right_arm_bone"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 4
+				}
+			],
+			"components": [
+				9,
+				4294967295,
+				4294967295,
+				4294967295,
+				4
+			],
+			"disabled": false,
+			"idx": 9,
+			"name": "left_arm"
+		},
+		{
+			"components": [
+				10,
+				4294967295,
+				4,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 10,
+			"name": "left_arm_bone"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 5
+				}
+			],
+			"components": [
+				11,
+				4294967295,
+				4294967295,
+				4294967295,
+				5
+			],
+			"disabled": false,
+			"idx": 11,
+			"name": "head"
+		},
+		{
+			"components": [
+				12,
+				4294967295,
+				5,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 12,
+			"name": "head_bone"
+		},
+		{
+			"collisions": [
+				{
+					"idx": 6
+				}
+			],
+			"components": [
+				13,
+				4294967295,
+				4294967295,
+				4294967295,
+				6
+			],
+			"disabled": false,
+			"idx": 13,
+			"name": "ground"
+		},
+		{
+			"components": [
+				14,
+				4294967295,
+				6,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 14,
+			"name": "gound_plateform"
+		},
+		{
+			"components": [
+				15,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 15,
+			"name": "chest_joint_to_head"
+		},
+		{
+			"components": [
+				38,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 16,
+			"name": "chest_joint_to_left_leg_4"
+		},
+		{
+			"components": [
+				39,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 17,
+			"name": "left_leg_joint_to_chest_4"
+		},
+		{
+			"components": [
+				16,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 18,
+			"name": "chest_joint_to_left_leg"
+		},
+		{
+			"components": [
+				17,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 19,
+			"name": "chest_joint_to_right_leg"
+		},
+		{
+			"components": [
+				18,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 20,
+			"name": "left_leg_joint_to_chest"
+		},
+		{
+			"components": [
+				19,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 21,
+			"name": "right_leg_joint_to_chest"
+		},
+		{
+			"components": [
+				20,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 22,
+			"name": "right_arm_joint_to_chest"
+		},
+		{
+			"components": [
+				21,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 23,
+			"name": "left_arm_joint_to_chest"
+		},
+		{
+			"components": [
+				22,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 24,
+			"name": "head_joint_to_chest"
+		},
+		{
+			"components": [
+				23,
+				4294967295,
+				4294967295,
+				1,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 25,
+			"name": "Light"
+		},
+		{
+			"components": [
+				24,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 26,
+			"name": "right_arm_joint_to_chest_2"
+		},
+		{
+			"components": [
+				40,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 27,
+			"name": "chest_joint_to_right_leg_4"
+		},
+		{
+			"components": [
+				25,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 28,
+			"name": "left_arm_joint_to_chest_2"
+		},
+		{
+			"components": [
+				41,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 29,
+			"name": "right_leg_joint_to_chest_4"
+		},
+		{
+			"components": [
+				26,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 30,
+			"name": "chest_joint_to_left_arm_2"
+		},
+		{
+			"components": [
+				27,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 31,
+			"name": "chest_joint_to_left_arm_3"
+		},
+		{
+			"components": [
+				28,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 32,
+			"name": "chest_joint_to_right_arm_2"
+		},
+		{
+			"components": [
+				29,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 33,
+			"name": "chest_joint_to_right_arm_3"
+		},
+		{
+			"components": [
+				30,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 34,
+			"name": "left_leg_joint_to_chest_2"
+		},
+		{
+			"components": [
+				31,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 35,
+			"name": "left_leg_joint_to_chest_3"
+		},
+		{
+			"components": [
+				32,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 36,
+			"name": "right_leg_joint_to_chest_2"
+		},
+		{
+			"components": [
+				33,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 37,
+			"name": "right_leg_joint_to_chest_3"
+		},
+		{
+			"components": [
+				34,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 38,
+			"name": "chest_joint_to_right_leg_2"
+		},
+		{
+			"components": [
+				35,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 39,
+			"name": "chest_joint_to_right_leg_3"
+		},
+		{
+			"components": [
+				36,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 40,
+			"name": "chest_joint_to_left_leg_2"
+		},
+		{
+			"components": [
+				37,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 41,
+			"name": "chest_joint_to_left_leg_3"
+		},
+		{
+			"components": [
+				42,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 42,
+			"name": "ground_joint_to_left_leg"
+		},
+		{
+			"components": [
+				43,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 43,
+			"name": "ground_joint_to_right_leg"
+		},
+		{
+			"components": [
+				44,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 44,
+			"name": "right_leg_joint_to_ground"
+		},
+		{
+			"components": [
+				45,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 45,
+			"name": "left_leg_joint_to_ground"
+		},
+		{
+			"components": [
+				51,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 46,
+			"name": "left_leg_joint_to_ground_2"
+		},
+		{
+			"components": [
+				53,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 47,
+			"name": "right_leg_joint_to_ground_2"
+		},
+		{
+			"components": [
+				52,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 48,
+			"name": "right_leg_joint_to_ground_3"
+		},
+		{
+			"components": [
+				46,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 49,
+			"name": "left_leg_joint_to_ground_3"
+		},
+		{
+			"components": [
+				47,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 50,
+			"name": "ground_joint_to_left_leg_2"
+		},
+		{
+			"components": [
+				48,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 51,
+			"name": "ground_joint_to_left_leg_3"
+		},
+		{
+			"components": [
+				49,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 52,
+			"name": "ground_joint_to_right_leg_2"
+		},
+		{
+			"components": [
+				50,
+				4294967295,
+				4294967295,
+				4294967295,
+				4294967295
+			],
+			"disabled": false,
+			"idx": 53,
+			"name": "ground_joint_to_right_leg_3"
+		}
+	],
+	"objects": [
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		},
+		{
+			"bones": [],
+			"material_infos": [
+				{
+					"name": "Material"
+				}
+			],
+			"materials": [
+				{
+					"blend_mode": "opaque",
+					"depth_test": "less",
+					"face_culling": "cw",
+					"flags": [],
+					"program": "core/shader/pbr.hps",
+					"values": [
+						{
+							"name": "uBaseOpacityColor",
+							"type": "vec4",
+							"value": [
+								0.800000011920929,
+								0.800000011920929,
+								0.800000011920929,
+								1.0
+							]
+						},
+						{
+							"name": "uOcclusionRoughnessMetalnessColor",
+							"type": "vec4",
+							"value": [
+								1.0,
+								0.5,
+								0.25,
+								0.0
+							]
+						},
+						{
+							"name": "uSelfColor",
+							"type": "vec4",
+							"value": [
+								0.0,
+								0.0,
+								0.0,
+								-1.0
+							]
+						}
+					],
+					"write_a": true,
+					"write_b": true,
+					"write_g": true,
+					"write_r": true,
+					"write_z": true
+				}
+			],
+			"name": "cube/Cube_38.geo"
+		}
+	],
+	"rigid_bodies": [
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "dynamic"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "dynamic"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "dynamic"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "static"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "dynamic"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "dynamic"
+		},
+		{
+			"angular_damping": 0.0,
+			"friction": 0.501960813999176,
+			"linear_damping": 0.0,
+			"restitution": 0.0,
+			"rolling_friction": 0.0,
+			"type": "static"
+		}
+	],
+	"transforms": [
+		{
+			"parent": null,
+			"pos": [
+				6.10242223739624,
+				18.047611236572266,
+				5.99322509765625
+			],
+			"rot": [
+				66.75904083251953,
+				-111.02045440673828,
+				-92.49739837646484
+			],
+			"scl": [
+				0.9999995827674866,
+				1.000000238418579,
+				0.9999999403953552
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				-0.5,
+				1.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				2.0,
+				0.5
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				-1.6892112493515015,
+				4.862528324127197,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				-34.999996185302734
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 7,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5000000596046448,
+				2.000000238418579,
+				0.5
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.5,
+				2.0,
+				0.5
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				0.0,
+				3.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.0,
+				2.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				2.0,
+				1.0
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				0.5,
+				1.0,
+				0.0
+			],
+			"rot": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				1.6892000436782837,
+				4.862500190734863,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				34.999996185302734
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 9,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				3.0
+			],
+			"scl": [
+				0.5000000596046448,
+				2.000000238418579,
+				0.5
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				0.0,
+				9.084503173828125,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 11,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				0.9999999403953552,
+				0.9999999403953552,
+				1.0
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				0.0,
+				-2.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				0.0,
+				0.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				20.0,
+				1.0,
+				20.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.0,
+				4.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-0.75,
+				0.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.25,
+				0.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-1.25,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				0.75,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 7,
+			"pos": [
+				0.20000000298023224,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 9,
+			"pos": [
+				0.20000000298023224,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				6.830186066508759e-06
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 11,
+			"pos": [
+				0.0,
+				-1.0,
+				0.0
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": null,
+			"pos": [
+				-8.079174041748047,
+				4.06172513961792,
+				-9.222774505615234
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 7,
+			"pos": [
+				0.20000000298023224,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				34.999996185302734
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 9,
+			"pos": [
+				0.20000000298023224,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				-34.9999885559082
+			],
+			"scl": [
+				0.9999998807907104,
+				0.9999998807907104,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				1.0,
+				2.5,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				1.0,
+				2.5,
+				-0.5
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-1.0,
+				2.5,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-1.0,
+				2.5,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-1.25,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-0.75,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				0.75,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				1.25,
+				2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.75,
+				0.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.25,
+				0.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-0.75,
+				0.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-0.25,
+				0.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				-0.25,
+				0.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-0.75,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 4,
+			"pos": [
+				0.75,
+				0.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				1.25,
+				2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				-0.5,
+				1.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				0.5,
+				1.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				1.0,
+				-2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-1.0,
+				-2.0,
+				-0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-1.25,
+				-2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				-0.25,
+				1.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				-0.75,
+				1.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				0.75,
+				1.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 13,
+			"pos": [
+				0.25,
+				1.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 2,
+			"pos": [
+				-0.75,
+				-2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				0.75,
+				-2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"parent": 5,
+			"pos": [
+				1.25,
+				-2.0,
+				0.25
+			],
+			"rot": [
+				-0.0,
+				0.0,
+				0.0
+			],
+			"scl": [
+				1.0,
+				1.0,
+				1.0
+			]
+		}
+	]
+}
