@@ -76,7 +76,7 @@ CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.Vec3(-2, -0.005, 0)
 CreatePhysicCubeEx(scene, ground_size, hg.TransformationMat4(hg.Vec3(4.5, 2.85, 0), hg.Vec3(0, 0, math.pi/4)), ground_ref, {mat_grey}, hg.RBT_Static, 0)
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)

@@ -1708,6 +1708,7 @@ def bind_scene_physics_common_methods(gen, physics):
 	gen.bind_method(physics, 'NodeSetLinearFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
 	gen.bind_method(physics, 'NodeGetAngularFactor', 'hg::Vec3', ['const hg::Node &node'])
 	gen.bind_method(physics, 'NodeSetAngularFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
+	gen.bind_method(physics, 'RenderCollision', 'void', ['bgfx::ViewId view_id', 'const bgfx::VertexLayout &vtx_layout', 'bgfx::ProgramHandle prg', 'hg::RenderState render_state', 'uint32_t depth'])
 
 
 def bind_bullet3_physics(gen):
@@ -1725,7 +1726,6 @@ def bind_bullet3_physics(gen):
 	gen.bind_method(bullet, 'NodeCollideWorld', 'hg::NodePairContacts', ['const hg::Node &node', 'const hg::Mat4 &world', '?int max_contact'])
 	gen.bind_method(bullet, 'RaycastFirstHit', 'hg::RaycastOut', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
 	gen.bind_method(bullet, 'RaycastAllHits', 'std::vector<hg::RaycastOut>', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
-	gen.bind_method(bullet, 'RenderCollision', 'void', ['bgfx::ViewId view_id', 'const bgfx::VertexLayout &vtx_layout', 'bgfx::ProgramHandle prg', 'hg::RenderState render_state', 'uint32_t depth'])
 
 	lib.stl.bind_function_T(gen, 'std::function<void(hg::SceneBullet3Physics&, hg::time_ns)>', 'SceneBullet3PhysicsPreTickCallback')
 	gen.bind_method(bullet, 'SetPreTickCallback', 'void', ['const std::function<void(hg::SceneBullet3Physics&, hg::time_ns)>& cbk'])

@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "engine/render_pipeline.h"
 #include "engine/physics.h"
 
 #include "foundation/quaternion.h"
@@ -141,6 +142,8 @@ public:
 	void NodeSetLinearFactor(const Node &node, const Vec3 &k) { NodeSetLinearFactor(node.ref, k); }
 	Vec3 NodeGetAngularFactor(const Node &node) const { return NodeGetAngularFactor(node.ref); }
 	void NodeSetAngularFactor(const Node &node, const Vec3 &k) { NodeSetAngularFactor(node.ref, k); }
+
+	void RenderCollision(bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth);
 
 private:
 	std::map<NodeRef, TauNode> nodes;

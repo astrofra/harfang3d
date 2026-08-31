@@ -3,6 +3,7 @@
 #include "engine/scene_tau_physics.h"
 
 #include "engine/assets_rw_interface.h"
+#include "engine/render_pipeline.h"
 #include "engine/scene.h"
 
 #include "foundation/file_rw_interface.h"
@@ -224,11 +225,11 @@ float GetTauBodyRestitution(const TauNode &node, const TauCollisionShape &shape)
 }
 
 float CombineTauFriction(const TauNode &a, const TauCollisionShape &shape_a, const TauNode &b, const TauCollisionShape &shape_b) {
-	return Sqrt(std::max(0.f, GetTauBodyFriction(a, shape_a) * GetTauBodyFriction(b, shape_b)));
+	return Clamp(GetTauBodyFriction(a, shape_a) * GetTauBodyFriction(b, shape_b), -10.f, 10.f);
 }
 
 float CombineTauRestitution(const TauNode &a, const TauCollisionShape &shape_a, const TauNode &b, const TauCollisionShape &shape_b) {
-	return std::max(GetTauBodyRestitution(a, shape_a), GetTauBodyRestitution(b, shape_b));
+	return GetTauBodyRestitution(a, shape_a) * GetTauBodyRestitution(b, shape_b);
 }
 
 OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const Vec3 &scale, const TauCollisionShape &shape) {
@@ -267,6 +268,45 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 	}
 
 	return proxy;
+}
+
+Color GetTauDebugColor(const TauNode &node) {
+	if (node.body_type == RBT_Dynamic)
+		return Color::Green;
+	if (node.body_type == RBT_Kinematic)
+		return Color::Yellow;
+	return Color::Orange;
+}
+
+Vec3 GetTauObbAxis(const OBB &obb, int axis);
+
+void AppendTauObbWireframe(Vertices &vtx, size_t &vtx_count, const OBB &obb, const Color &color) {
+	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
+	const Vec3 axis_x = GetTauObbAxis(obb, 0) * half_extents.x;
+	const Vec3 axis_y = GetTauObbAxis(obb, 1) * half_extents.y;
+	const Vec3 axis_z = GetTauObbAxis(obb, 2) * half_extents.z;
+
+	const Vec3 corners[8] = {
+		obb.pos - axis_x - axis_y - axis_z,
+		obb.pos + axis_x - axis_y - axis_z,
+		obb.pos + axis_x + axis_y - axis_z,
+		obb.pos - axis_x + axis_y - axis_z,
+		obb.pos - axis_x - axis_y + axis_z,
+		obb.pos + axis_x - axis_y + axis_z,
+		obb.pos + axis_x + axis_y + axis_z,
+		obb.pos - axis_x + axis_y + axis_z,
+	};
+
+	static const uint8_t edges[12][2] = {
+		{0, 1}, {1, 2}, {2, 3}, {3, 0},
+		{4, 5}, {5, 6}, {6, 7}, {7, 4},
+		{0, 4}, {1, 5}, {2, 6}, {3, 7},
+	};
+
+	for (const auto &edge : edges) {
+		vtx.Begin(vtx_count++).SetPos(corners[edge[0]]).SetColor0(color).End();
+		vtx.Begin(vtx_count++).SetPos(corners[edge[1]]).SetColor0(color).End();
+	}
 }
 
 Vec3 ComputeTauContactOrientationHint(const TauWorldShape &a, const TauWorldShape &b) {
@@ -850,6 +890,29 @@ Vec3 SceneTauPhysics::NodeGetAngularFactor(NodeRef ref) const {
 void SceneTauPhysics::NodeSetAngularFactor(NodeRef ref, const Vec3 &k) {
 	if (auto *node = FindTauNode(nodes, ref))
 		node->angular_factor = k;
+}
+
+void SceneTauPhysics::RenderCollision(
+	bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth) {
+	size_t shape_count = 0;
+	for (const auto &entry : nodes)
+		shape_count += entry.second.shapes.size();
+
+	if (shape_count == 0)
+		return;
+
+	Vertices vtx(vtx_decl, shape_count * 24);
+	size_t vtx_count = 0;
+
+	for (const auto &entry : nodes) {
+		const auto &node = entry.second;
+		const Color color = GetTauDebugColor(node);
+
+		for (const auto &shape : node.shapes)
+			AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
+	}
+
+	DrawLines(view_id, vtx, program, state, depth);
 }
 
 } // namespace hg
