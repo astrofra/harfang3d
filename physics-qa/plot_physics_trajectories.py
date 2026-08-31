@@ -2,13 +2,18 @@
 """Render Bullet and Tau QA trajectories as an overlaid 3D PNG."""
 
 import argparse
+from io import BytesIO
 import json
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from PIL import Image, ImageChops
 
 
 BACKEND_COLORS = {"bullet": "#3f8cff", "tau": "#ff4b4b"}
+TRAJECTORY_LINEWIDTH = 0.9
+DOT_RATIO = 0.05
 
 
 def load_capture(path):
@@ -34,22 +39,59 @@ def style_axis(axis):
     axis.xaxis.pane.set_facecolor("black")
     axis.yaxis.pane.set_facecolor("black")
     axis.zaxis.pane.set_facecolor("black")
-    axis.xaxis.pane.set_edgecolor("#404040")
-    axis.yaxis.pane.set_edgecolor("#404040")
-    axis.zaxis.pane.set_edgecolor("#404040")
+    axis.xaxis.pane.set_edgecolor("#202020")
+    axis.yaxis.pane.set_edgecolor("#202020")
+    axis.zaxis.pane.set_edgecolor("#202020")
     axis.tick_params(colors="#b0b0b0")
     axis.xaxis.label.set_color("#d0d0d0")
     axis.yaxis.label.set_color("#d0d0d0")
     axis.zaxis.label.set_color("#d0d0d0")
-    axis.grid(color="#303030", linewidth=0.5)
+    axis.grid(color="#181818", linewidth=0.5)
 
 
-def draw_trajectories(axis, trajectories, color, label, linewidth):
+def get_limits(*trajectory_sets):
+    coordinates = [position for trajectories in trajectory_sets for positions in trajectories.values() for position in positions]
+    x, y, z = zip(*coordinates)
+    values = (x, z, y)  # Matplotlib's third coordinate is vertical; Harfang's Y stays up.
+    limits = []
+    for axis_values in values:
+        low, high = min(axis_values), max(axis_values)
+        margin = max((high - low) * 0.05, 0.1)
+        limits.append((low - margin, high + margin))
+    return limits
+
+
+def configure_axis(axis, limits, elevation, azimuth):
+    axis.set_xlim(limits[0])
+    axis.set_ylim(limits[1])
+    axis.set_zlim(limits[2])
+    axis.view_init(elev=elevation, azim=azimuth)
+
+
+def draw_trajectories(axis, trajectories, color, linewidth):
     for index, positions in sorted(trajectories.items()):
         x, y, z = zip(*positions)
-        # Matplotlib's third coordinate is rendered as vertical. Preserve Harfang's Y-up convention.
-        axis.plot(x, z, y, color=color, linewidth=linewidth, alpha=0.9, label=label if index == 1 else None)
-        axis.scatter(x[0], z[0], y[0], color=color, s=22, marker="o", depthshade=False)
+        axis.plot(x, z, y, color=color, linewidth=linewidth, alpha=1.0)
+        dot_count = max(2, round(len(positions) * DOT_RATIO))
+        dot_indices = {round(index * (len(positions) - 1) / (dot_count - 1)) for index in range(dot_count)}
+        axis.scatter([x[index] for index in dot_indices], [z[index] for index in dot_indices], [y[index] for index in dot_indices],
+                     color=color, s=6, marker="o", depthshade=False)
+
+
+def render_layer(trajectories, color, linewidth, limits, elevation, azimuth):
+    figure = plt.figure(figsize=(12, 9), facecolor=(0, 0, 0, 0))
+    axis = figure.add_axes((0.08, 0.08, 0.84, 0.84), projection="3d")
+    axis.set_axis_off()
+    axis.patch.set_alpha(0.0)
+    configure_axis(axis, limits, elevation, azimuth)
+    draw_trajectories(axis, trajectories, color, linewidth)
+    output = BytesIO()
+    figure.savefig(output, format="png", dpi=180, transparent=True)
+    plt.close(figure)
+    layer = Image.open(output).convert("RGBA")
+    black = Image.new("RGB", layer.size, "black")
+    black.paste(layer, mask=layer.getchannel("A"))
+    return black
 
 
 def main():
@@ -67,22 +109,28 @@ def main():
         parser.error("captures belong to different QA scenarios")
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    limits = get_limits(reference, candidate)
     figure = plt.figure(figsize=(12, 9), facecolor="black")
-    axis = figure.add_subplot(111, projection="3d")
+    axis = figure.add_axes((0.08, 0.08, 0.84, 0.84), projection="3d")
     style_axis(axis)
-    draw_trajectories(axis, reference, BACKEND_COLORS["bullet"], "Bullet", 5.4)
-    draw_trajectories(axis, candidate, BACKEND_COLORS["tau"], "Tau", 1.8)
+    configure_axis(axis, limits, args.elevation, args.azimuth)
 
     axis.set_title(f"Physics QA trajectories: {reference_metadata['test']}", color="white", pad=18)
     axis.set_xlabel("X")
     axis.set_ylabel("Z")
     axis.set_zlabel("Y (vertical)")
-    axis.view_init(elev=args.elevation, azim=args.azimuth)
-    legend = axis.legend(facecolor="#101010", edgecolor="#606060", labelcolor="white", loc="upper left")
-    for handle in legend.legend_handles:
-        handle.set_alpha(1.0)
-    figure.tight_layout()
-    figure.savefig(args.output, dpi=180, facecolor=figure.get_facecolor())
+    axis.legend(handles=[Line2D([0], [0], color=BACKEND_COLORS["bullet"], linewidth=TRAJECTORY_LINEWIDTH, label="Bullet"),
+                         Line2D([0], [0], color=BACKEND_COLORS["tau"], linewidth=TRAJECTORY_LINEWIDTH, label="Tau")],
+                facecolor="#101010", edgecolor="#606060", labelcolor="white", loc="upper left")
+
+    base = BytesIO()
+    figure.savefig(base, format="png", dpi=180, facecolor=figure.get_facecolor())
+    plt.close(figure)
+    bullet_layer = render_layer(reference, BACKEND_COLORS["bullet"], TRAJECTORY_LINEWIDTH, limits, args.elevation, args.azimuth)
+    tau_layer = render_layer(candidate, BACKEND_COLORS["tau"], TRAJECTORY_LINEWIDTH, limits, args.elevation, args.azimuth)
+    image = ImageChops.add(Image.open(base).convert("RGB"), bullet_layer)
+    image = ImageChops.add(image, tau_layer)
+    image.save(args.output)
     print(f"Trajectory plot written to: {args.output}")
 
 

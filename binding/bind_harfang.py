@@ -1748,6 +1748,19 @@ def bind_scene_physics(gen):
 	physics = gen.begin_class('hg::ScenePhysics', noncopyable=True)
 	gen.bind_constructor(physics, ['?int thread_count'])
 	bind_scene_physics_common_methods(gen, physics)
+	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS') and not gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
+		# The legacy factory must return the canonical Lua ScenePhysics type so that
+		# SceneUpdateSystems and other common API overloads accept the result.
+		def own_scene_physics_result(gen, conv, expr, output, ownership):
+			return gen.rval_from_c_ptr(conv, output, expr, 'Owning')
+
+		physics.add_feature('rval_transform', own_scene_physics_result)
+		gen.insert_binding_code('''
+static hg::ScenePhysics *_CreateLegacySceneBullet3Physics(int thread_count = 1) {
+	return new hg::ScenePhysics(thread_count);
+}
+''')
+		gen.bind_function('_CreateLegacySceneBullet3Physics', 'hg::ScenePhysics *', ['?int thread_count'], bound_name='SceneBullet3Physics')
 	gen.end_class(physics)
 
 

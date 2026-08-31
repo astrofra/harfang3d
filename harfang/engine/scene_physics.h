@@ -21,6 +21,9 @@ class ScenePhysics : public SceneTauPhysics {
 public:
 	using SceneTauPhysics::SceneTauPhysics;
 };
+
+// Keep source code using the historical physics entry point buildable with Tau.
+using SceneBullet3Physics = ScenePhysics;
 #endif
 
 } // namespace hg
