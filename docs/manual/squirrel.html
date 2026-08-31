@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harfang for Squirrel - Harfang</title>
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body class="static-doc" data-root="../">
+<div class="doc-layout">
+<aside class="doc-sidebar">
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
+<div id="doc-search-results" class="doc-search-results"></div>
+<div class="doc-nav-title">Manual</div>
+<ul class="doc-nav">
+<li><a class="" href="overview.html">Overview</a></li>
+<li><a class="" href="requirements.html">Requirements</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="cpython.html">Harfang for CPython</a></li>
+<li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li><a class="active" href="squirrel.html">Harfang for Squirrel</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="quickstart.html">Quickstart</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="assets.html">Resources &amp; Assets</a></li>
+<li><a class="" href="assetcompiler.html">Compiling to Assets</a></li>
+<li><a class="" href="gltf.html">Importing from GLTF</a></li>
+<li><a class="" href="fbx.html">Importing from FBX</a></li>
+<li><a class="" href="assimp.html">Importing from Assimp</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="input.html">Reading Input</a></li>
+<li><a class="" href="audio.html">Playing Audio</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="shader.html">Writing a Shader</a></li>
+<li><a class="" href="pipelineshader.html">Writing a Pipeline Shader</a></li>
+<li><a class="" href="views.html">Drawing to Views</a></li>
+<li><a class="" href="forwardpipeline.html">Using the Forward Pipeline</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="ownership.html">Ownership &amp; References</a></li>
+<li><a class="" href="coordinateandunitsystem.html">Coordinates and Units System</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="scene.html">Working with Scene</a></li>
+<li><a class="" href="drawingscene.html">Drawing a Scene</a></li>
+<li><a class="" href="physics.html">Physics</a></li>
+<li><a class="" href="scripting.html">Scripting</a></li>
+<li class="doc-nav-spacer"></li>
+<li><a class="" href="navigation.html">Navigation</a></li>
+<li><a class="" href="vr.html">Virtual Reality</a></li>
+</ul>
+<div class="doc-nav-title">API Python</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/cpython/classes.html">Classes</a></li>
+<li><a class="" href="../api/cpython/functions.html">Functions</a></li>
+<li><a class="" href="../api/cpython/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Lua</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/lua/classes.html">Classes</a></li>
+<li><a class="" href="../api/lua/functions.html">Functions</a></li>
+<li><a class="" href="../api/lua/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Squirrel</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/squirrel/classes.html">Classes</a></li>
+<li><a class="" href="../api/squirrel/functions.html">Functions</a></li>
+<li><a class="" href="../api/squirrel/constants.html">Constants</a></li>
+</ul>
+</aside>
+<main class="doc-content">
+<p>Harfang for Squirrel is distributed as a vendored Squirrel runtime package with native-module loading enabled.</p>
+<h2 id="installation">Installation</h2>
+<p>The standard package layout keeps the runtime files side by side:</p>
+<ul>
+<li><code>hg_squirrel.exe</code> for the public interpreter</li>
+<li><code>launcher_squirrel.exe</code> and <code>launcher_squirrel_noconsole.exe</code> for packaged applications</li>
+<li><code>harfang.dll</code>, <code>squirrel.dll</code>, <code>sqstdlib.dll</code>, <code>glfw3.dll</code>, <code>lua54.dll</code></li>
+<li><code>harfang/assetc/assetc.exe</code> and its toolchain files</li>
+</ul>
+<p>On Windows, launching <code>hg_squirrel.exe</code> from that folder is the supported setup.</p>
+<h2 id="testing-your-installation">Testing your Installation</h2>
+<p>Create a file named <code>test.nut</code> and run it with <code>hg_squirrel.exe</code>.</p>
+<div class="codehilite"><pre><span></span><code><span class="n">local</span><span class="w"> </span><span class="n">hg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s2">&quot;harfang&quot;</span><span class="p">);</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">&quot;harfang loaded&quot;</span><span class="p">);</span>
+</code></pre></div>
+
+<h2 id="first-program">First Program</h2>
+<div class="codehilite"><pre><span></span><code><span class="c1">// Basic loop</span>
+<span class="n">local</span><span class="w"> </span><span class="n">hg</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">require</span><span class="p">(</span><span class="s">&quot;harfang&quot;</span><span class="p">);</span>
+
+<span class="n">hg</span><span class="p">.</span><span class="n">InputInit</span><span class="p">();</span>
+<span class="n">hg</span><span class="p">.</span><span class="n">WindowSystemInit</span><span class="p">();</span>
+
+<span class="n">local</span><span class="w"> </span><span class="n">width</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">1280</span><span class="p">;</span>
+<span class="n">local</span><span class="w"> </span><span class="n">height</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="mi">720</span><span class="p">;</span>
+<span class="n">local</span><span class="w"> </span><span class="nb">window</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">RenderInit</span><span class="p">(</span><span class="s">&quot;Harfang - Basic Loop&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">width</span><span class="p">,</span><span class="w"> </span><span class="n">height</span><span class="p">,</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">RF_VSync</span><span class="p">);</span>
+
+<span class="k">while</span><span class="w"> </span><span class="p">(</span>!<span class="n">hg</span><span class="p">.</span><span class="n">ReadKeyboard</span><span class="p">().</span><span class="n">Key</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">K_Escape</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">IsWindowOpen</span><span class="p">(</span><span class="nb">window</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">hg</span><span class="p">.</span><span class="n">SetViewClear</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">CF_Color</span><span class="w"> </span><span class="o">|</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">CF_Depth</span><span class="p">,</span><span class="w"> </span><span class="n">hg</span><span class="p">.</span><span class="n">Color</span><span class="p">.</span><span class="n">get_Green</span><span class="p">(),</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+<span class="w">    </span><span class="n">hg</span><span class="p">.</span><span class="n">SetViewRect</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w"> </span><span class="n">width</span><span class="p">,</span><span class="w"> </span><span class="n">height</span><span class="p">);</span>
+
+<span class="w">    </span><span class="n">hg</span><span class="p">.</span><span class="n">Touch</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+
+<span class="w">    </span><span class="n">hg</span><span class="p">.</span><span class="n">Frame</span><span class="p">();</span>
+<span class="w">    </span><span class="n">hg</span><span class="p">.</span><span class="n">UpdateWindow</span><span class="p">(</span><span class="nb">window</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="n">hg</span><span class="p">.</span><span class="n">RenderShutdown</span><span class="p">();</span>
+<span class="n">hg</span><span class="p">.</span><span class="n">DestroyWindow</span><span class="p">(</span><span class="nb">window</span><span class="p">);</span>
+</code></pre></div>
+
+<p><code>require("harfang")</code> loads the native Harfang module. <code>include("script.nut")</code> can be used to execute additional Squirrel source files from the current script search path.</p>
+<p>The public Squirrel package currently targets host-side scripting through <code>hg_squirrel.exe</code> and <code>launcher_squirrel.exe</code>. Embedded scene scripting remains Lua-only for now.</p>
+<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+</main>
+</div>
+<script src="../search.js"></script>
+</body>
+</html>

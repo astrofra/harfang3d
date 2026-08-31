@@ -33,9 +33,12 @@ set(_hg_lua_launcher_includes
 	${CMAKE_CURRENT_SOURCE_DIR}/../../harfang
 	${CMAKE_CURRENT_SOURCE_DIR}/../../extern
 	${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
+set(_hg_lua_launcher_sources
+	launcher.cpp
+	../launcher_app_common.cpp)
 set(_hg_lua_launcher_libs hg_lua engine foundation platform jsonhpp libluadll)
 
-add_executable(launcher launcher.cpp)
+add_executable(launcher ${_hg_lua_launcher_sources})
 target_include_directories(launcher
 	PUBLIC
 		${_hg_lua_launcher_includes})
@@ -44,7 +47,7 @@ set_target_properties(launcher PROPERTIES OUTPUT_NAME "launcher" DEBUG_POSTFIX "
 add_dependencies(launcher hg_lua)
 
 if(WIN32)
-	add_executable(launcher_noconsole WIN32 launcher.cpp)
+	add_executable(launcher_noconsole WIN32 ${_hg_lua_launcher_sources})
 	target_include_directories(launcher_noconsole
 		PUBLIC
 			${_hg_lua_launcher_includes})

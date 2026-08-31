@@ -2,13 +2,15 @@
 
 Scripts can be used to extend the behavior of nodes and scenes.
 
+This page documents the current embedded scripting workflow centered on [SceneLuaVM]. Harfang also ships a public Squirrel runtime package for host-side scripting through `hg_squirrel`, but embedded scene scripting remains Lua-oriented for now.
+
 [TOC]
 
 ## Host vs. Embedded VM
 
 When using Harfang from a scripting language it can be difficult to differentiate between parts of your program running on you main script VM and parts of your program running on one of the supported embedded VMs.
 
-We differentiate between those VMs by using the term *host VM* and *embedded VM*. For example, you may write a program in CPython which declares a scene extended using Lua scripts. In this case, CPython is the *host VM* and Lua is the *embedded VM*.
+We differentiate between those VMs by using the term *host VM* and *embedded VM*. For example, you may write a program in CPython, Lua or Squirrel and declare a scene extended using Lua scripts. In that case, the language running your application is the *host VM* and Lua is the *embedded VM*.
 
 ## Declaring Scripts
 
@@ -44,7 +46,7 @@ Scene events reported by the default update behavior:
 
 - *OnDestroy()*: A script component is about to be destroyed and its memory released.
 - *OnAttachToScene(scene, slot_idx)*: A script component was attached to a Scene slot as a result of calling [Scene_SetScript].
-- *OnDetachFromScene(scene, slot_idx)*: A script component was detached from a Scene slot as a result of calling [Scene_RemoveScript].
+- *OnDetachFromScene(scene, slot_idx)*: A script component was detached from a Scene slot as a result of clearing that slot through [Scene_SetScript].
 - *OnUpdate(Scene scene, time_ns dt)*: Called during a scene update.
 - *OnSubmitSceneToForwardPipeline(ViewId base_view_id, Scene scene, Rect rect, ViewState view_state, ForwardPipeline pipeline, PipelineResources, FramebufferHandle fb)*: Called at the end of a scene submission to the forward pipeline.
 

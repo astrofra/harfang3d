@@ -19,6 +19,7 @@
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="../../manual/cpython.html">Harfang for CPython</a></li>
 <li><a class="" href="../../manual/lua.html">Harfang for Lua</a></li>
+<li><a class="" href="../../manual/squirrel.html">Harfang for Squirrel</a></li>
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="../../manual/quickstart.html">Quickstart</a></li>
 <li class="doc-nav-spacer"></li>
@@ -58,6 +59,12 @@
 <li><a class="" href="../lua/classes.html">Classes</a></li>
 <li><a class="" href="../lua/functions.html">Functions</a></li>
 <li><a class="" href="../lua/constants.html">Constants</a></li>
+</ul>
+<div class="doc-nav-title">API Squirrel</div>
+<ul class="doc-nav">
+<li><a class="" href="../squirrel/classes.html">Classes</a></li>
+<li><a class="" href="../squirrel/functions.html">Functions</a></li>
+<li><a class="" href="../squirrel/constants.html">Constants</a></li>
 </ul>
 </aside>
 <main class="doc-content">
@@ -3103,7 +3110,7 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">MakeForwardPipelineLinearLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, pssm_split: <a href="classes.html#vec4">Vec4</a>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-proto">MakeForwardPipelineLinearLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, pssm_split: <a href="classes.html#vec4">Vec4</a>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>, shadow_bias: <code>float</code>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-doc"><p>Create a forward pipeline linear light.</p>
-<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a> and [SubmitModelToForwardPipeline].</p></div>
+<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a>, <a href="#submitscenetoforwardpipeline">SubmitSceneToForwardPipeline</a> and <a href="../../manual/drawingscene.html">Drawing a Scene</a>.</p></div>
 </section>
 <section class="api-entry" id="makeforwardpipelinepointlight">
 <h2>MakeForwardPipelinePointLight <span class="api-kind">Function</span></h2>
@@ -3113,7 +3120,7 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">MakeForwardPipelinePointLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, radius: <code>float</code>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-proto">MakeForwardPipelinePointLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, radius: <code>float</code>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>, shadow_bias: <code>float</code>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-doc"><p>Create a forward pipeline point light.</p>
-<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a> and [SubmitModelToForwardPipeline].</p></div>
+<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a>, <a href="#submitscenetoforwardpipeline">SubmitSceneToForwardPipeline</a> and <a href="../../manual/drawingscene.html">Drawing a Scene</a>.</p></div>
 </section>
 <section class="api-entry" id="makeforwardpipelinespotlight">
 <h2>MakeForwardPipelineSpotLight <span class="api-kind">Function</span></h2>
@@ -3125,7 +3132,7 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">MakeForwardPipelineSpotLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, radius: <code>float</code>, inner_angle: <code>float</code>, outer_angle: <code>float</code>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-proto">MakeForwardPipelineSpotLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>, radius: <code>float</code>, inner_angle: <code>float</code>, outer_angle: <code>float</code>, priority: <code>float</code>, shadow_type: <a href="constants.html#forwardpipelineshadowtype">ForwardPipelineShadowType</a>, shadow_bias: <code>float</code>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
 <div class="api-doc"><p>Create a forward pipeline spot light.</p>
-<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a> and [SubmitModelToForwardPipeline].</p></div>
+<p>See <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a>, <a href="#prepareforwardpipelinelights">PrepareForwardPipelineLights</a>, <a href="#submitscenetoforwardpipeline">SubmitSceneToForwardPipeline</a> and <a href="../../manual/drawingscene.html">Drawing a Scene</a>.</p></div>
 </section>
 <section class="api-entry" id="makefrustum">
 <h2>MakeFrustum <span class="api-kind">Function</span></h2>
@@ -3558,7 +3565,7 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">PrepareForwardPipelineLights(lights: <a href="classes.html#forwardpipelinelightlist">ForwardPipelineLightList</a>) -&gt; <a href="classes.html#forwardpipelinelights">ForwardPipelineLights</a></div>
 <div class="api-doc"><p>Prepare a list of forward pipeline lights into a structure ready for submitting to the forward pipeline.</p>
 <p>Lights are sorted by priority/type and the most important lights are assigned to available lighting slot of the forward pipeline.</p>
-<p>See [SubmitModelToForwardPipeline].</p></div>
+<p>For the public scripting API, see <a href="#submitscenetoforwardpipeline">SubmitSceneToForwardPipeline</a> and <a href="../../manual/drawingscene.html">Drawing a Scene</a>.</p></div>
 </section>
 <section class="api-entry" id="preparesceneforwardpipelinecommonrenderdata">
 <h2>PrepareSceneForwardPipelineCommonRenderData <span class="api-kind">Function</span></h2>

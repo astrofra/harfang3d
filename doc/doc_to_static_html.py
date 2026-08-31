@@ -28,37 +28,37 @@ TAG_RE = re.compile(r"<[^>]+>")
 
 
 BUILTIN_TYPES = {
-	"void": {"cpython": "None", "lua": "nil"},
-	"bool": {"cpython": "bool", "lua": "boolean"},
-	"char": {"cpython": "int", "lua": "integer"},
-	"short": {"cpython": "int", "lua": "integer"},
-	"int": {"cpython": "int", "lua": "integer"},
-	"long": {"cpython": "int", "lua": "integer"},
-	"uchar": {"cpython": "int", "lua": "integer"},
-	"ushort": {"cpython": "int", "lua": "integer"},
-	"uint": {"cpython": "int", "lua": "integer"},
-	"uint8_t": {"cpython": "int", "lua": "integer"},
-	"uint16_t": {"cpython": "int", "lua": "integer"},
-	"uint32_t": {"cpython": "int", "lua": "integer"},
-	"int8_t": {"cpython": "int", "lua": "integer"},
-	"int16_t": {"cpython": "int", "lua": "integer"},
-	"int32_t": {"cpython": "int", "lua": "integer"},
-	"Int8": {"cpython": "int", "lua": "integer"},
-	"Int16": {"cpython": "int", "lua": "integer"},
-	"Int32": {"cpython": "int", "lua": "integer"},
-	"Int64": {"cpython": "int", "lua": "integer"},
-	"Char16": {"cpython": "int", "lua": "integer"},
-	"Char32": {"cpython": "int", "lua": "integer"},
-	"UInt8": {"cpython": "int", "lua": "integer"},
-	"UInt16": {"cpython": "int", "lua": "integer"},
-	"UInt32": {"cpython": "int", "lua": "integer"},
-	"UInt64": {"cpython": "int", "lua": "integer"},
-	"IntPtr": {"cpython": "int", "lua": "integer"},
-	"size_t": {"cpython": "int", "lua": "integer"},
-	"ptrdiff_t": {"cpython": "int", "lua": "integer"},
-	"float": {"cpython": "float", "lua": "number"},
-	"double": {"cpython": "float", "lua": "number"},
-	"string": {"cpython": "str", "lua": "string"},
+	"void": {"cpython": "None", "lua": "nil", "squirrel": "null"},
+	"bool": {"cpython": "bool", "lua": "boolean", "squirrel": "bool"},
+	"char": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"short": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"int": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"long": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"uchar": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"ushort": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"uint": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"uint8_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"uint16_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"uint32_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"int8_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"int16_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"int32_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Int8": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Int16": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Int32": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Int64": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Char16": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"Char32": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"UInt8": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"UInt16": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"UInt32": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"UInt64": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"IntPtr": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"size_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"ptrdiff_t": {"cpython": "int", "lua": "integer", "squirrel": "integer"},
+	"float": {"cpython": "float", "lua": "number", "squirrel": "float"},
+	"double": {"cpython": "float", "lua": "number", "squirrel": "float"},
+	"string": {"cpython": "str", "lua": "string", "squirrel": "string"},
 }
 
 
@@ -322,7 +322,7 @@ class StaticDocGenerator:
 		self.doc_dir = Path(args.doc)
 		self.img_dir = Path(args.img)
 		self.css_path = Path(args.css)
-		self.languages = ["cpython", "lua"]
+		self.languages = ["cpython", "lua", "squirrel"]
 		self.manual_order = []
 		self.manual_spacers = set()
 		self.manual_titles = {}
@@ -836,7 +836,7 @@ class StaticDocGenerator:
 		return tag.get("name")
 
 	def language_title(self, lang):
-		return "Python" if lang == "cpython" else "Lua"
+		return {"cpython": "Python", "lua": "Lua", "squirrel": "Squirrel"}.get(lang, lang)
 
 	def format_builtin(self, uid, lang):
 		label = BUILTIN_TYPES.get(uid, {}).get(lang, uid)

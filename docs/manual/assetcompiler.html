@@ -19,6 +19,7 @@
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="cpython.html">Harfang for CPython</a></li>
 <li><a class="" href="lua.html">Harfang for Lua</a></li>
+<li><a class="" href="squirrel.html">Harfang for Squirrel</a></li>
 <li class="doc-nav-spacer"></li>
 <li><a class="" href="quickstart.html">Quickstart</a></li>
 <li class="doc-nav-spacer"></li>
@@ -59,6 +60,12 @@
 <li><a class="" href="../api/lua/functions.html">Functions</a></li>
 <li><a class="" href="../api/lua/constants.html">Constants</a></li>
 </ul>
+<div class="doc-nav-title">API Squirrel</div>
+<ul class="doc-nav">
+<li><a class="" href="../api/squirrel/classes.html">Classes</a></li>
+<li><a class="" href="../api/squirrel/functions.html">Functions</a></li>
+<li><a class="" href="../api/squirrel/constants.html">Constants</a></li>
+</ul>
 </aside>
 <main class="doc-content">
 <p>Compiling project resources into assets is done using the <code>assetc</code> command-line tool.</p>
@@ -70,7 +77,7 @@
 <p>The easiest way is to drag and drop the resources folder on the assetc executable:</p>
 <p><img alt="assetc drag &amp; drop" src="../images/docs/3.2.7/assetc.gif"></p>
 <h2 id="command-line">Command-Line</h2>
-<p>Since HARFANG 3.2.5, <code>assetc</code> is now included in both <em>Python</em> and <em>Lua</em> versions.</p>
+<p>Since HARFANG 3.2.5, <code>assetc</code> is now included in the packaged <em>Python</em>, <em>Lua</em>, and <em>Squirrel</em> distributions.</p>
 <h3 id="python">Python</h3>
 <p>In HARFANG Python 3.2.5 and above, <code>assetc</code> is packaged into the bdist wheel and can be invoked as a function of harfang.bin module.</p>
 <p>In this example, we will compile a folder called <code>resources</code> and target the <code>OpenGL</code> API:</p>
@@ -94,6 +101,13 @@
 <span class="n">hg_bin</span><span class="p">.</span><span class="n">assetc</span><span class="p">(</span><span class="s1">&#39;resources&#39;</span><span class="p">,</span> <span class="s1">&#39;-api&#39;</span><span class="p">,</span> <span class="s1">&#39;GL&#39;</span><span class="p">)</span>
 </code></pre></div>
 
+<h3 id="squirrel">Squirrel</h3>
+<p>In HARFANG Squirrel 3.2.7 and above, <code>assetc</code> is packaged with the public runtime under <code>harfang/assetc</code>.</p>
+<p>Invoke the packaged executable directly from the Squirrel package root:</p>
+<div class="codehilite"><pre><span></span><code>harfang/assetc/assetc.exe resources -api GL
+</code></pre></div>
+
+<p>At the moment <code>.nut</code> scripts are copied as source assets; there is no Squirrel bytecode compilation step in <code>assetc</code>.</p>
 <h2 id="usage-in-detail">Usage in detail</h2>
 <p>If you need more control over the compilation options, the command line gets the following parameters:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">assetc</span><span class="w"> </span><span class="o">&lt;</span><span class="n">input</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[</span><span class="n">output</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">daemon</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">platform</span><span class="w"> </span><span class="n">PLATFORM</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">api</span><span class="w"> </span><span class="n">API</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">defines</span><span class="w"> </span><span class="n">DEFINES</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">job</span><span class="w"> </span><span class="n">COUNT</span><span class="p">]</span>

@@ -1,6 +1,6 @@
 # HARFANG® Tutorials
 
-These **tutorials** demonstrate the usage of the HARFANG API in **Python** and **Lua**.
+These **tutorials** demonstrate the usage of the HARFANG API in **Python**, **Lua** and **Squirrel**.
 
 To run the tutorials:
 
@@ -21,6 +21,12 @@ or
 ```bash
 D:\tutorials-hg2>lua draw_lines.lua
 ```
+or
+```bash
+D:\tutorials-hg2>hg_squirrel draw_lines.nut
+```
+
+Recent builds of this fork do not guarantee working Python artifacts on every platform/configuration. If Python is unavailable in your build, prefer the Lua or Squirrel tutorial entry points.
 
 Alternatively, you can open the tutorial folder using [Visual Studio Code](https://code.visualstudio.com/) and use the provided debug targets to run the tutorials.
 

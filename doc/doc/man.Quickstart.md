@@ -4,6 +4,9 @@ Once you have a functioning installation of Harfang for your language of choice:
 
 * [man.CPython]
 * [man.Lua]
+* [man.Squirrel]
+
+Recent builds of this fork do not guarantee working Python artifacts on every platform/configuration. If CPython is unavailable in your build, use the Lua or Squirrel package instead.
 
 Follow the following steps:
 
@@ -19,6 +22,12 @@ You can now execute the tutorials from the folder you unzipped them to.
 
 ```bash
 D:\tutorials-hg2>python draw_lines.py
+```
+
+For the Squirrel runtime package:
+
+```bash
+D:\tutorials-hg2>hg_squirrel draw_lines.nut
 ```
 
 Alternatively, you can open the tutorial folder using [Visual Studio Code](https://code.visualstudio.com/) and use the provided debug targets to run the tutorials.

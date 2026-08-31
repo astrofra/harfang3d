@@ -1466,6 +1466,28 @@ static void LuaScript(std::map<std::string, Hash> &hashes, const std::string &pa
 }
 
 //
+static void SquirrelScript(std::map<std::string, Hash> &hashes, const std::string &path) {
+	ProfilerPerfSection perf("Command/SquirrelScript");
+
+	log(format("  Squirrel script '%1'").arg(path));
+
+	if (NeedsCompilation(hashes, {path}, {path}, {})) {
+		const auto src = FullInputPath(path), dst = FullOutputPath(path);
+
+		MkOutputTree(path);
+		CleanOutputs({path});
+
+		if (!CopyFile(src.c_str(), dst.c_str())) {
+			ReportFailedInput(src);
+			const json json_err = {{"type", "FailedToCopyInput"}, {"src", src}, {"dst", dst}};
+			log_error(json_err);
+		}
+	} else {
+		debug("  [O] Squirrel script up to date");
+	}
+}
+
+//
 static void Physics(std::map<std::string, Hash> &hashes, const std::string &path) {
 	ProfilerPerfSection perf("Command/Physics");
 
@@ -1516,13 +1538,13 @@ static void PathFinding(std::map<std::string, Hash> &hashes, const std::string &
 }
 
 //
-enum class AssetType { Unprocessed, Ignore, Broken, Scene, Texture, Geometry, Lua, Shader, PipelineShader, Physics, PathFinding, ComputeShader, Count };
+enum class AssetType { Unprocessed, Ignore, Broken, Scene, Texture, Geometry, Lua, Squirrel, Shader, PipelineShader, Physics, PathFinding, ComputeShader, Count };
 
 #if 0
 // CWE 561: The function 'AssetTypeToString' is never used.
 static const std::string& AssetTypeToString(AssetType type) {
 	static const std::string types[static_cast<int>(AssetType::Count) + 1] = {
-		"Unprocessed", "Ignore", "Broken", "Scene", "Texture", "Geometry", "Lua", "Shader", "PipelineShader", "Physics", "PathFinding", "ComputeShader", "Undefined"};
+		"Unprocessed", "Ignore", "Broken", "Scene", "Texture", "Geometry", "Lua", "Squirrel", "Shader", "PipelineShader", "Physics", "PathFinding", "ComputeShader", "Undefined"};
 	return types[int(type)];
 }
 #endif
@@ -1550,6 +1572,9 @@ static AssetType GetAssetFileType(std::string path, const std::vector<std::strin
 	} else if (ext == "lua") {
 		out_files.push_back(path);
 		return AssetType::Lua;
+	} else if (ext == "nut") {
+		out_files.push_back(path);
+		return AssetType::Squirrel;
 	} else if (ext == "sc") {
 		std::string name;
 		if (ends_with(path, "_vs.sc") || ends_with(path, "_fs.sc"))
@@ -1723,6 +1748,8 @@ static bool CompileClassifiedInputs(const std::map<std::vector<std::string>, Ass
 				Geometry(updated_hashes, names[0]);
 			else if (config.type == AssetType::Lua)
 				LuaScript(updated_hashes, names[0]);
+			else if (config.type == AssetType::Squirrel)
+				SquirrelScript(updated_hashes, names[0]);
 			else if (config.type == AssetType::ComputeShader)
 				ComputeShader(updated_hashes, names[0]);
 			else if (config.type == AssetType::Shader)
