@@ -93,9 +93,8 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 }
 
 Mat4 GetNodeWorld(const Node &node) {
-	if (node.HasTransform())
-		return node.GetTransform().GetWorld();
-	return node.GetWorld();
+	// Match Bullet and fetch an up-to-date world matrix, especially for freshly instantiated nodes.
+	return node.ComputeWorld();
 }
 
 TauNode *FindTauNode(std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
