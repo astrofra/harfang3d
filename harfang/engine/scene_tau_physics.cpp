@@ -272,6 +272,10 @@ float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &sh
 	return shape.radius * std::max({scale.x, scale.y, scale.z});
 }
 
+Mat3 BuildTauWorldSphereRotation(const TauNode &node, const TauCollisionShape &shape) {
+	return ToMatrix3(node.orientation) * shape.local_rotation;
+}
+
 TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 	TauBodyProxy proxy;
 	proxy.ref = ref;
@@ -345,9 +349,12 @@ void AppendTauObbWireframe(Vertices &vtx, size_t &vtx_count, const OBB &obb, con
 	}
 }
 
-void AppendTauSphereWireframe(Vertices &vtx, size_t &vtx_count, const Vec3 &center, float radius, const Color &color) {
+void AppendTauSphereWireframe(Vertices &vtx, size_t &vtx_count, const Vec3 &center, float radius, const Mat3 &rotation, const Color &color) {
 	static constexpr int segment_count = 16;
-	const Vec3 axes[3][2] = {{Vec3::Right, Vec3::Up}, {Vec3::Right, Vec3::Front}, {Vec3::Up, Vec3::Front}};
+	const Vec3 axis_x = Normalize(GetX(rotation));
+	const Vec3 axis_y = Normalize(GetY(rotation));
+	const Vec3 axis_z = Normalize(GetZ(rotation));
+	const Vec3 axes[3][2] = {{axis_x, axis_y}, {axis_x, axis_z}, {axis_y, axis_z}};
 	for (const auto &plane : axes) {
 		for (int i = 0; i < segment_count; ++i) {
 			const float angle0 = 2.f * Pi * float(i) / float(segment_count);
@@ -1062,7 +1069,8 @@ void SceneTauPhysics::RenderCollision(
 
 		for (const auto &shape : node.shapes) {
 			if (shape.type == CT_Sphere)
-				AppendTauSphereWireframe(vtx, vtx_count, BuildTauWorldSphereCenter(node, shape), BuildTauWorldSphereRadius(node, shape), color);
+				AppendTauSphereWireframe(vtx, vtx_count, BuildTauWorldSphereCenter(node, shape), BuildTauWorldSphereRadius(node, shape),
+					BuildTauWorldSphereRotation(node, shape), color);
 			else
 				AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
 		}
