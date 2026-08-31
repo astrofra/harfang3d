@@ -24,6 +24,7 @@ static constexpr float k_tau_position_slop = 0.002f;
 static constexpr float k_tau_position_correction = 0.75f;
 static constexpr float k_tau_restitution_threshold = 1.0f;
 static constexpr float k_tau_baumgarte = 0.15f;
+static constexpr float k_tau_rolling_friction_impulse_scale = 0.1f;
 static constexpr int k_tau_position_iterations = 3;
 static constexpr int k_tau_velocity_iterations = 8;
 
@@ -652,29 +653,39 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 			ApplyTauImpulse(*contact.node_a, -tangent_impulse, arm_a);
 			ApplyTauImpulse(*contact.node_b, tangent_impulse, arm_b);
 
-			const float rolling_friction = CombineTauRollingFriction(*contact.node_a, *contact.node_b);
-			if (rolling_friction <= 0.f)
-				continue;
-
-			const Vec3 relative_angular_velocity = contact.node_b->angular_velocity - contact.node_a->angular_velocity;
-			const Vec3 rolling_velocity = relative_angular_velocity - contact.normal * Dot(relative_angular_velocity, contact.normal);
-			const float rolling_speed = Len(rolling_velocity);
-			if (rolling_speed <= k_tau_collision_epsilon)
-				continue;
-
-			const Vec3 rolling_axis = rolling_velocity / rolling_speed;
-			const float rolling_mass = Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_a) * rolling_axis) +
-				Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_b) * rolling_axis);
-			if (rolling_mass <= k_tau_collision_epsilon)
-				continue;
-
-			const float contact_radius = std::max(Len(arm_a), Len(arm_b));
-			const float max_rolling_impulse = rolling_friction * normal_impulse_magnitude * contact_radius;
-			const float rolling_impulse_magnitude = Clamp(-Dot(relative_angular_velocity, rolling_axis) / rolling_mass, -max_rolling_impulse, max_rolling_impulse);
-			const Vec3 rolling_impulse = rolling_axis * rolling_impulse_magnitude;
-			ApplyTauAngularImpulse(*contact.node_a, -rolling_impulse);
-			ApplyTauAngularImpulse(*contact.node_b, rolling_impulse);
 		}
+	}
+}
+
+void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, float dt_sec) {
+	for (const auto &contact : contacts) {
+		const float rolling_friction = CombineTauRollingFriction(*contact.node_a, *contact.node_b);
+		if (rolling_friction <= 0.f)
+			continue;
+
+		const Vec3 relative_angular_velocity = contact.node_b->angular_velocity - contact.node_a->angular_velocity;
+		const Vec3 rolling_velocity = relative_angular_velocity - contact.normal * Dot(relative_angular_velocity, contact.normal);
+		const float rolling_speed = Len(rolling_velocity);
+		if (rolling_speed <= k_tau_collision_epsilon)
+			continue;
+
+		const Vec3 rolling_axis = rolling_velocity / rolling_speed;
+		const float rolling_mass = Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_a) * rolling_axis) +
+			Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_b) * rolling_axis);
+		const float inverse_mass_sum = GetTauInverseMass(*contact.node_a) + GetTauInverseMass(*contact.node_b);
+		if (rolling_mass <= k_tau_collision_epsilon || inverse_mass_sum <= k_tau_collision_epsilon)
+			continue;
+
+		// Apply rolling resistance once per sub-step. Reusing each solver iteration's
+		// normal impulse was strong enough to lock every non-zero coefficient.
+		const float supported_mass = 1.f / inverse_mass_sum;
+		const float support_impulse = supported_mass * Abs(Dot(k_tau_gravity, contact.normal)) * dt_sec;
+		const float contact_radius = std::max(Len(contact.point - contact.node_a->position), Len(contact.point - contact.node_b->position));
+		const float max_rolling_impulse = k_tau_rolling_friction_impulse_scale * rolling_friction * support_impulse * contact_radius;
+		const float rolling_impulse_magnitude = Clamp(-Dot(relative_angular_velocity, rolling_axis) / rolling_mass, -max_rolling_impulse, max_rolling_impulse);
+		const Vec3 rolling_impulse = rolling_axis * rolling_impulse_magnitude;
+		ApplyTauAngularImpulse(*contact.node_a, -rolling_impulse);
+		ApplyTauAngularImpulse(*contact.node_b, rolling_impulse);
 	}
 }
 
@@ -768,6 +779,7 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, float dt_sec, const std::
 	auto contacts = BuildTauContacts(nodes);
 	SolveTauPositionConstraints(contacts);
 	SolveTauVelocityConstraints(contacts, dt_sec);
+	SolveTauRollingFriction(contacts, dt_sec);
 	CollectTauTrackedContacts(contacts, tracking_modes, latest_contacts);
 
 	for (auto &entry : nodes) {
