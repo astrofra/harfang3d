@@ -72,7 +72,7 @@ rb_floor:SetRestitution(1)
 -- scene physics
 physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
-physics_step = hg.time_from_sec_f(1 / 60)
+physics_step = hg.time_from_sec_f(1 / 120)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()

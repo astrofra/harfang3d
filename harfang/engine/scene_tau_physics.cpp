@@ -33,6 +33,7 @@ struct TauWorldShape {
 	TauNode *node{nullptr};
 	const TauCollisionShape *shape{nullptr};
 	OBB obb;
+	OBB previous_obb;
 	MinMax bounds;
 };
 
@@ -146,15 +147,24 @@ Mat4 ComposeTauWorld(const TauNode &node) {
 }
 
 void SetTauNodeWorld(TauNode &node, const Mat4 &world, TauWorldWriteMode mode) {
+	const Vec3 previous_position = node.position;
+	const Quaternion previous_orientation = node.orientation;
+
 	Mat3 rotation;
 	Decompose(world, &node.position, &rotation, &node.scale);
 	node.orientation = Normalize(QuaternionFromMatrix3(rotation));
 
 	if (mode == TauWorldWriteMode::Reset) {
+		node.previous_position = node.position;
+		node.previous_orientation = node.orientation;
 		node.motion.Reset(world);
 	} else if (mode == TauWorldWriteMode::CaptureSource) {
+		node.previous_position = previous_position;
+		node.previous_orientation = previous_orientation;
 		node.motion.CaptureSourceWorld(world);
 	} else {
+		node.previous_position = previous_position;
+		node.previous_orientation = previous_orientation;
 		node.motion.WriteSolvedWorld(world);
 	}
 }
@@ -221,9 +231,17 @@ float CombineTauRestitution(const TauNode &a, const TauCollisionShape &shape_a, 
 	return std::max(GetTauBodyRestitution(a, shape_a), GetTauBodyRestitution(b, shape_b));
 }
 
+OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const Vec3 &scale, const TauCollisionShape &shape) {
+	const Mat3 node_rotation = ToMatrix3(orientation);
+	return {position + node_rotation * (scale * shape.local_position), Abs(scale) * shape.size, node_rotation * shape.local_rotation};
+}
+
 OBB BuildTauWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
-	const Mat3 node_rotation = ToMatrix3(node.orientation);
-	return {node.position + node_rotation * (node.scale * shape.local_position), Abs(node.scale) * shape.size, node_rotation * shape.local_rotation};
+	return BuildTauWorldOBB(node.position, node.orientation, node.scale, shape);
+}
+
+OBB BuildTauPreviousWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
+	return BuildTauWorldOBB(node.previous_position, node.previous_orientation, node.scale, shape);
 }
 
 TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
@@ -240,6 +258,7 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 		world_shape.node = &node;
 		world_shape.shape = &shape;
 		world_shape.obb = BuildTauWorldOBB(node, shape);
+		world_shape.previous_obb = BuildTauPreviousWorldOBB(node, shape);
 		world_shape.bounds = MinMaxFromOBB(world_shape.obb);
 
 		proxy.shapes.push_back(world_shape);
@@ -248,6 +267,19 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 	}
 
 	return proxy;
+}
+
+Vec3 ComputeTauContactOrientationHint(const TauWorldShape &a, const TauWorldShape &b) {
+	const Vec3 current_delta = b.obb.pos - a.obb.pos;
+	const Vec3 previous_delta = b.previous_obb.pos - a.previous_obb.pos;
+	const Vec3 relative_motion = current_delta - previous_delta;
+	const float epsilon_sq = k_tau_collision_epsilon * k_tau_collision_epsilon;
+
+	if (Len2(relative_motion) > epsilon_sq)
+		return -relative_motion;
+	if (Len2(previous_delta) > epsilon_sq)
+		return previous_delta;
+	return current_delta;
 }
 
 Vec3 GetTauObbAxis(const OBB &obb, int axis) {
@@ -269,12 +301,13 @@ Vec3 GetTauSupportPoint(const OBB &obb, const Vec3 &direction) {
 		axis_z * (Dot(direction, axis_z) >= 0.f ? half_extents.z : -half_extents.z);
 }
 
-bool ComputeTauObbContact(const OBB &a, const OBB &b, Vec3 &normal, float &penetration, Vec3 &point) {
+bool ComputeTauObbContact(const OBB &a, const OBB &b, const Vec3 &orientation_hint, Vec3 &normal, float &penetration, Vec3 &point) {
 	const Vec3 half_a = Abs(a.scl) * 0.5f;
 	const Vec3 half_b = Abs(b.scl) * 0.5f;
 	const Vec3 axis_a[3] = {GetTauObbAxis(a, 0), GetTauObbAxis(a, 1), GetTauObbAxis(a, 2)};
 	const Vec3 axis_b[3] = {GetTauObbAxis(b, 0), GetTauObbAxis(b, 1), GetTauObbAxis(b, 2)};
 	const Vec3 delta = b.pos - a.pos;
+	const Vec3 hint = Len2(orientation_hint) > (k_tau_collision_epsilon * k_tau_collision_epsilon) ? orientation_hint : delta;
 	const float t[3] = {Dot(delta, axis_a[0]), Dot(delta, axis_a[1]), Dot(delta, axis_a[2])};
 
 	float r[3][3];
@@ -299,7 +332,7 @@ bool ComputeTauObbContact(const OBB &a, const OBB &b, Vec3 &normal, float &penet
 			return false;
 
 		Vec3 candidate_normal = axis / axis_length;
-		if (Dot(candidate_normal, delta) < 0.f)
+		if (Dot(candidate_normal, hint) < 0.f)
 			candidate_normal = -candidate_normal;
 
 		const float axis_penetration = (total_radius - separation) / axis_length;
@@ -478,8 +511,9 @@ std::vector<TauContactConstraint> BuildTauContacts(std::map<NodeRef, TauNode> &n
 					contact.node_b = body_b.node;
 					contact.friction = CombineTauFriction(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
 					contact.restitution = CombineTauRestitution(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
+					const Vec3 orientation_hint = ComputeTauContactOrientationHint(shape_a, shape_b);
 
-					if (ComputeTauObbContact(shape_a.obb, shape_b.obb, contact.normal, contact.penetration, contact.point))
+					if (ComputeTauObbContact(shape_a.obb, shape_b.obb, orientation_hint, contact.normal, contact.penetration, contact.point))
 						contacts.push_back(contact);
 				}
 			}
@@ -518,6 +552,8 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, float dt_sec, const std::
 		if (!IsDynamicTauNode(node))
 			continue;
 
+		node.previous_position = node.position;
+		node.previous_orientation = node.orientation;
 		node.linear_velocity += (k_tau_gravity + node.accumulated_force * node.inverse_mass) * dt_sec;
 		node.linear_velocity *= std::max(0.f, 1.f - node.linear_damping * dt_sec);
 		node.linear_velocity = node.linear_velocity * node.linear_factor;
