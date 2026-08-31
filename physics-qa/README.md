@@ -97,12 +97,17 @@ Capture the Bullet reference and Tau candidate:
 dump-one.bat bullet rb_dynamic_variable_friction.lua
 dump-one.bat tau rb_dynamic_variable_friction.lua
 python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
+python plot_physics_trajectories.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
 ```
 
 The captures are written to `qa_dumps/<backend>/<scenario>.jsonl`. The default
 run records 600 ticks at 60 Hz and exits automatically. Set
 `HG_PHYSICS_QA_DUMP_SAMPLES` or `HG_PHYSICS_QA_DUMP_EVERY` to change the
 capture duration or sampling interval.
+
+`plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
+default. It renders Bullet trajectories in blue and Tau trajectories in red on
+a black 3D plot. Use `--elevation` and `--azimuth` to change the view.
 
 ## Notes
 
