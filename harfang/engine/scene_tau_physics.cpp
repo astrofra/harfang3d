@@ -330,15 +330,21 @@ Vec3 GetTauObbAxis(const OBB &obb, int axis) {
 	return Normalize(GetZ(obb.rot));
 }
 
-Vec3 GetTauSupportPoint(const OBB &obb, const Vec3 &direction) {
+Vec3 GetTauFaceCenter(const OBB &obb, const Vec3 &direction) {
 	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
 	const Vec3 axis_x = GetTauObbAxis(obb, 0);
 	const Vec3 axis_y = GetTauObbAxis(obb, 1);
 	const Vec3 axis_z = GetTauObbAxis(obb, 2);
+	const auto face_offset = [](float projection, float extent) {
+		if (projection > k_tau_collision_epsilon)
+			return extent;
+		if (projection < -k_tau_collision_epsilon)
+			return -extent;
+		return 0.f;
+	};
 
-	return obb.pos + axis_x * (Dot(direction, axis_x) >= 0.f ? half_extents.x : -half_extents.x) +
-		axis_y * (Dot(direction, axis_y) >= 0.f ? half_extents.y : -half_extents.y) +
-		axis_z * (Dot(direction, axis_z) >= 0.f ? half_extents.z : -half_extents.z);
+	return obb.pos + axis_x * face_offset(Dot(direction, axis_x), half_extents.x) + axis_y * face_offset(Dot(direction, axis_y), half_extents.y) +
+		axis_z * face_offset(Dot(direction, axis_z), half_extents.z);
 }
 
 bool ComputeTauObbContact(const OBB &a, const OBB &b, const Vec3 &orientation_hint, Vec3 &normal, float &penetration, Vec3 &point) {
@@ -415,7 +421,13 @@ bool ComputeTauObbContact(const OBB &a, const OBB &b, const Vec3 &orientation_hi
 
 	normal = best_normal;
 	penetration = best_penetration;
-	point = (GetTauSupportPoint(a, normal) + GetTauSupportPoint(b, -normal)) * 0.5f;
+	// Use the smaller OBB's face center. Averaging support points makes a large floor select an arbitrary corner when the normal is vertical,
+	// which applies the normal impulse far from the dynamic body's center and creates a spurious torque.
+	const Vec3 size_a = Abs(a.scl);
+	const Vec3 size_b = Abs(b.scl);
+	const float volume_a = size_a.x * size_a.y * size_a.z;
+	const float volume_b = size_b.x * size_b.y * size_b.z;
+	point = volume_a <= volume_b ? GetTauFaceCenter(a, normal) : GetTauFaceCenter(b, -normal);
 	return true;
 }
 

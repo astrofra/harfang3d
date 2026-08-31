@@ -1,4 +1,5 @@
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 function CreatePhysicCubeEx(scene, size, mtx, model_ref, materials, rb_type, mass)
 	local node = hg.CreateObject(scene, mtx, model_ref, materials)
@@ -69,6 +70,15 @@ end
 floor, rb_floor = CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.Vec3(0, -0.005, 0)), ground_ref, {mat_grey}, hg.RBT_Static, 0)
 rb_floor:SetRestitution(1)
 
+chair_nodes = {}
+all_nodes = scene:GetAllNodes()
+for i = 0, all_nodes:size() - 1 do
+    node = all_nodes:at(i)
+    if node:HasRigidBody() and node:GetRigidBody():GetType() == hg.RBT_Dynamic then
+        table.insert(chair_nodes, node)
+    end
+end
+
 -- scene physics
 physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
@@ -76,6 +86,7 @@ physics_step = hg.time_from_sec_f(1 / 120)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()
+dump = qa_dump.Create("rb_dynamic_chair_multi_colbox", physics_step, chair_nodes)
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
@@ -84,12 +95,13 @@ print(">>> Description:\n>>> Drop vertically 200 chairs, made of 6 collision box
 -- main loop
 keyboard = hg.Keyboard()
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
     keyboard:Update()
 
     -- physics:NodeWake(chair_node)
     view_id = 0
     hg.SceneUpdateSystems(scene, clocks, dt_frame_step, physics, physics_step, 3)
+    qa_dump.Capture(dump, physics)
     view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
 
     -- -- Debug physics display
@@ -102,6 +114,8 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     hg.Frame()
     hg.UpdateWindow(win)
 end
+
+qa_dump.Close(dump)
 
 scene:Clear()
 scene:GarbageCollect()

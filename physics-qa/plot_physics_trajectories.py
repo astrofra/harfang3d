@@ -44,11 +44,11 @@ def style_axis(axis):
     axis.grid(color="#303030", linewidth=0.5)
 
 
-def draw_trajectories(axis, trajectories, color, label):
+def draw_trajectories(axis, trajectories, color, label, linewidth):
     for index, positions in sorted(trajectories.items()):
         x, y, z = zip(*positions)
         # Matplotlib's third coordinate is rendered as vertical. Preserve Harfang's Y-up convention.
-        axis.plot(x, z, y, color=color, linewidth=1.8, alpha=0.9, label=label if index == 1 else None)
+        axis.plot(x, z, y, color=color, linewidth=linewidth, alpha=0.9, label=label if index == 1 else None)
         axis.scatter(x[0], z[0], y[0], color=color, s=22, marker="o", depthshade=False)
 
 
@@ -70,8 +70,8 @@ def main():
     figure = plt.figure(figsize=(12, 9), facecolor="black")
     axis = figure.add_subplot(111, projection="3d")
     style_axis(axis)
-    draw_trajectories(axis, reference, BACKEND_COLORS["bullet"], "Bullet")
-    draw_trajectories(axis, candidate, BACKEND_COLORS["tau"], "Tau")
+    draw_trajectories(axis, reference, BACKEND_COLORS["bullet"], "Bullet", 5.4)
+    draw_trajectories(axis, candidate, BACKEND_COLORS["tau"], "Tau", 1.8)
 
     axis.set_title(f"Physics QA trajectories: {reference_metadata['test']}", color="white", pad=18)
     axis.set_xlabel("X")
