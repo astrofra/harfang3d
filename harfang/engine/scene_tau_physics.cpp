@@ -33,6 +33,9 @@ struct TauWorldShape {
 	NodeRef ref{};
 	TauNode *node{nullptr};
 	const TauCollisionShape *shape{nullptr};
+	Vec3 position{Vec3::Zero};
+	Vec3 previous_position{Vec3::Zero};
+	float radius{0.f};
 	OBB obb;
 	OBB previous_obb;
 	MinMax bounds;
@@ -73,7 +76,7 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		const auto collision = node.GetCollision(i);
 		if (!collision.IsValid())
 			continue;
-		if (collision.GetType() != CT_Cube)
+		if (collision.GetType() != CT_Cube && collision.GetType() != CT_Sphere)
 			return {};
 
 		TauCollisionShape shape;
@@ -81,6 +84,7 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		shape.local_transform = collision.GetLocalTransform();
 		Decompose(shape.local_transform, &shape.local_position, &shape.local_rotation, nullptr);
 		shape.size = collision.GetSize();
+		shape.radius = collision.GetRadius();
 		shape.mass = collision.GetMass();
 		// Collision components currently do not store contact material properties in Scene.
 		// Keep them on the rigid body side for the Tau phase-1 backend, like Bullet does.
@@ -201,11 +205,17 @@ void RefreshTauMassProperties(TauNode &node) {
 		if (shape.mass <= 0.f)
 			continue;
 
-		const Vec3 scaled_size = abs_scale * shape.size;
-		const Vec3 size_sq = scaled_size * scaled_size;
-		const Vec3 diagonal(shape.mass * (size_sq.y + size_sq.z) / 12.f, shape.mass * (size_sq.x + size_sq.z) / 12.f,
-			shape.mass * (size_sq.x + size_sq.y) / 12.f);
-		const Mat3 centered_inertia = shape.local_rotation * DiagonalMat3(diagonal) * Transpose(shape.local_rotation);
+		Mat3 centered_inertia;
+		if (shape.type == CT_Sphere) {
+			const float radius = shape.radius * std::max({abs_scale.x, abs_scale.y, abs_scale.z});
+			centered_inertia = Mat3::Identity * (2.f * shape.mass * radius * radius / 5.f);
+		} else {
+			const Vec3 scaled_size = abs_scale * shape.size;
+			const Vec3 size_sq = scaled_size * scaled_size;
+			const Vec3 diagonal(shape.mass * (size_sq.y + size_sq.z) / 12.f, shape.mass * (size_sq.x + size_sq.z) / 12.f,
+				shape.mass * (size_sq.x + size_sq.y) / 12.f);
+			centered_inertia = shape.local_rotation * DiagonalMat3(diagonal) * Transpose(shape.local_rotation);
+		}
 		const Vec3 local_offset = node.scale * shape.local_position;
 
 		inertia += centered_inertia + ParallelAxisTensor(shape.mass, local_offset);
@@ -232,6 +242,12 @@ float CombineTauRestitution(const TauNode &a, const TauCollisionShape &shape_a, 
 	return GetTauBodyRestitution(a, shape_a) * GetTauBodyRestitution(b, shape_b);
 }
 
+float CombineTauRollingFriction(const TauNode &a, const TauNode &b) {
+	// A static ground commonly uses zero rolling friction. Keep the dynamic body's
+	// coefficient effective so a QA sweep from 0 to 1 remains observable.
+	return Clamp(std::max(a.rolling_friction, b.rolling_friction), 0.f, 1.f);
+}
+
 OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const Vec3 &scale, const TauCollisionShape &shape) {
 	const Mat3 node_rotation = ToMatrix3(orientation);
 	return {position + node_rotation * (scale * shape.local_position), Abs(scale) * shape.size, node_rotation * shape.local_rotation};
@@ -243,6 +259,17 @@ OBB BuildTauWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
 
 OBB BuildTauPreviousWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
 	return BuildTauWorldOBB(node.previous_position, node.previous_orientation, node.scale, shape);
+}
+
+Vec3 BuildTauWorldSphereCenter(const TauNode &node, const TauCollisionShape &shape, bool previous = false) {
+	const Quaternion orientation = previous ? node.previous_orientation : node.orientation;
+	const Vec3 position = previous ? node.previous_position : node.position;
+	return position + ToMatrix3(orientation) * (node.scale * shape.local_position);
+}
+
+float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &shape) {
+	const Vec3 scale = Abs(node.scale);
+	return shape.radius * std::max({scale.x, scale.y, scale.z});
 }
 
 TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
@@ -258,9 +285,18 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 		world_shape.ref = ref;
 		world_shape.node = &node;
 		world_shape.shape = &shape;
-		world_shape.obb = BuildTauWorldOBB(node, shape);
-		world_shape.previous_obb = BuildTauPreviousWorldOBB(node, shape);
-		world_shape.bounds = MinMaxFromOBB(world_shape.obb);
+		if (shape.type == CT_Sphere) {
+			world_shape.position = BuildTauWorldSphereCenter(node, shape);
+			world_shape.previous_position = BuildTauWorldSphereCenter(node, shape, true);
+			world_shape.radius = BuildTauWorldSphereRadius(node, shape);
+			world_shape.bounds = {world_shape.position - Vec3(world_shape.radius), world_shape.position + Vec3(world_shape.radius)};
+		} else {
+			world_shape.obb = BuildTauWorldOBB(node, shape);
+			world_shape.previous_obb = BuildTauPreviousWorldOBB(node, shape);
+			world_shape.position = world_shape.obb.pos;
+			world_shape.previous_position = world_shape.previous_obb.pos;
+			world_shape.bounds = MinMaxFromOBB(world_shape.obb);
+		}
 
 		proxy.shapes.push_back(world_shape);
 		proxy.bounds = has_bounds ? Union(proxy.bounds, world_shape.bounds) : world_shape.bounds;
@@ -309,9 +345,22 @@ void AppendTauObbWireframe(Vertices &vtx, size_t &vtx_count, const OBB &obb, con
 	}
 }
 
+void AppendTauSphereWireframe(Vertices &vtx, size_t &vtx_count, const Vec3 &center, float radius, const Color &color) {
+	static constexpr int segment_count = 16;
+	const Vec3 axes[3][2] = {{Vec3::Right, Vec3::Up}, {Vec3::Right, Vec3::Front}, {Vec3::Up, Vec3::Front}};
+	for (const auto &plane : axes) {
+		for (int i = 0; i < segment_count; ++i) {
+			const float angle0 = 2.f * Pi * float(i) / float(segment_count);
+			const float angle1 = 2.f * Pi * float(i + 1) / float(segment_count);
+			vtx.Begin(vtx_count++).SetPos(center + (plane[0] * Cos(angle0) + plane[1] * Sin(angle0)) * radius).SetColor0(color).End();
+			vtx.Begin(vtx_count++).SetPos(center + (plane[0] * Cos(angle1) + plane[1] * Sin(angle1)) * radius).SetColor0(color).End();
+		}
+	}
+}
+
 Vec3 ComputeTauContactOrientationHint(const TauWorldShape &a, const TauWorldShape &b) {
-	const Vec3 current_delta = b.obb.pos - a.obb.pos;
-	const Vec3 previous_delta = b.previous_obb.pos - a.previous_obb.pos;
+	const Vec3 current_delta = b.position - a.position;
+	const Vec3 previous_delta = b.previous_position - a.previous_position;
 	const Vec3 relative_motion = current_delta - previous_delta;
 	const float epsilon_sq = k_tau_collision_epsilon * k_tau_collision_epsilon;
 
@@ -431,6 +480,71 @@ bool ComputeTauObbContact(const OBB &a, const OBB &b, const Vec3 &orientation_hi
 	return true;
 }
 
+bool ComputeTauSphereObbContact(const Vec3 &sphere_center, float sphere_radius, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
+	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
+	const Vec3 axes[3] = {GetTauObbAxis(obb, 0), GetTauObbAxis(obb, 1), GetTauObbAxis(obb, 2)};
+	const Vec3 offset = sphere_center - obb.pos;
+	float local[3] = {Dot(offset, axes[0]), Dot(offset, axes[1]), Dot(offset, axes[2])};
+	const float extent[3] = {half_extents.x, half_extents.y, half_extents.z};
+	Vec3 closest = obb.pos;
+	for (int i = 0; i < 3; ++i)
+		closest += axes[i] * Clamp(local[i], -extent[i], extent[i]);
+
+	const Vec3 delta = sphere_center - closest;
+	const float distance = Len(delta);
+	if (distance > sphere_radius)
+		return false;
+
+	if (distance > k_tau_collision_epsilon) {
+		normal = -delta / distance; // sphere toward OBB
+		penetration = sphere_radius - distance;
+		point = closest;
+		return true;
+	}
+
+	int nearest_axis = 0;
+	float nearest_distance = extent[0] - Abs(local[0]);
+	for (int i = 1; i < 3; ++i) {
+		const float distance_to_face = extent[i] - Abs(local[i]);
+		if (distance_to_face < nearest_distance) {
+			nearest_axis = i;
+			nearest_distance = distance_to_face;
+		}
+	}
+	const float sign = local[nearest_axis] >= 0.f ? 1.f : -1.f;
+	point = sphere_center + axes[nearest_axis] * (nearest_distance * sign);
+	normal = -axes[nearest_axis] * sign;
+	penetration = sphere_radius + nearest_distance;
+	return true;
+}
+
+bool ComputeTauSphereContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point) {
+	const Vec3 delta = b.position - a.position;
+	const float distance = Len(delta);
+	const float radius_sum = a.radius + b.radius;
+	if (distance > radius_sum)
+		return false;
+
+	normal = distance > k_tau_collision_epsilon ? delta / distance : Vec3::Up;
+	penetration = radius_sum - distance;
+	point = a.position + normal * a.radius;
+	return true;
+}
+
+bool ComputeTauContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point) {
+	if (a.shape->type == CT_Cube && b.shape->type == CT_Cube)
+		return ComputeTauObbContact(a.obb, b.obb, ComputeTauContactOrientationHint(a, b), normal, penetration, point);
+	if (a.shape->type == CT_Sphere && b.shape->type == CT_Cube)
+		return ComputeTauSphereObbContact(a.position, a.radius, b.obb, normal, penetration, point);
+	if (a.shape->type == CT_Cube && b.shape->type == CT_Sphere) {
+		const bool contact = ComputeTauSphereObbContact(b.position, b.radius, a.obb, normal, penetration, point);
+		if (contact)
+			normal = -normal;
+		return contact;
+	}
+	return ComputeTauSphereContact(a, b, normal, penetration, point);
+}
+
 float GetTauInverseMass(const TauNode &node) {
 	return IsDynamicTauNode(node) ? node.inverse_mass : 0.f;
 }
@@ -451,6 +565,11 @@ void ApplyTauImpulse(TauNode &node, const Vec3 &impulse, const Vec3 &arm) {
 
 	node.linear_velocity += (impulse * node.inverse_mass) * node.linear_factor;
 	node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * Cross(arm, impulse)) * node.angular_factor;
+}
+
+void ApplyTauAngularImpulse(TauNode &node, const Vec3 &impulse) {
+	if (IsDynamicTauNode(node))
+		node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * impulse) * node.angular_factor;
 }
 
 float ComputeTauAngularMassTerm(const TauNode &node, const Vec3 &arm, const Vec3 &axis) {
@@ -525,6 +644,29 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 			const Vec3 tangent_impulse = tangent * tangent_impulse_magnitude;
 			ApplyTauImpulse(*contact.node_a, -tangent_impulse, arm_a);
 			ApplyTauImpulse(*contact.node_b, tangent_impulse, arm_b);
+
+			const float rolling_friction = CombineTauRollingFriction(*contact.node_a, *contact.node_b);
+			if (rolling_friction <= 0.f)
+				continue;
+
+			const Vec3 relative_angular_velocity = contact.node_b->angular_velocity - contact.node_a->angular_velocity;
+			const Vec3 rolling_velocity = relative_angular_velocity - contact.normal * Dot(relative_angular_velocity, contact.normal);
+			const float rolling_speed = Len(rolling_velocity);
+			if (rolling_speed <= k_tau_collision_epsilon)
+				continue;
+
+			const Vec3 rolling_axis = rolling_velocity / rolling_speed;
+			const float rolling_mass = Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_a) * rolling_axis) +
+				Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_b) * rolling_axis);
+			if (rolling_mass <= k_tau_collision_epsilon)
+				continue;
+
+			const float contact_radius = std::max(Len(arm_a), Len(arm_b));
+			const float max_rolling_impulse = rolling_friction * normal_impulse_magnitude * contact_radius;
+			const float rolling_impulse_magnitude = Clamp(-Dot(relative_angular_velocity, rolling_axis) / rolling_mass, -max_rolling_impulse, max_rolling_impulse);
+			const Vec3 rolling_impulse = rolling_axis * rolling_impulse_magnitude;
+			ApplyTauAngularImpulse(*contact.node_a, -rolling_impulse);
+			ApplyTauAngularImpulse(*contact.node_b, rolling_impulse);
 		}
 	}
 }
@@ -563,9 +705,7 @@ std::vector<TauContactConstraint> BuildTauContacts(std::map<NodeRef, TauNode> &n
 					contact.node_b = body_b.node;
 					contact.friction = CombineTauFriction(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
 					contact.restitution = CombineTauRestitution(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
-					const Vec3 orientation_hint = ComputeTauContactOrientationHint(shape_a, shape_b);
-
-					if (ComputeTauObbContact(shape_a.obb, shape_b.obb, orientation_hint, contact.normal, contact.penetration, contact.point))
+					if (ComputeTauContact(shape_a, shape_b, contact.normal, contact.penetration, contact.point))
 						contacts.push_back(contact);
 				}
 			}
@@ -913,15 +1053,19 @@ void SceneTauPhysics::RenderCollision(
 	if (shape_count == 0)
 		return;
 
-	Vertices vtx(vtx_decl, shape_count * 24);
+	Vertices vtx(vtx_decl, shape_count * 96);
 	size_t vtx_count = 0;
 
 	for (const auto &entry : nodes) {
 		const auto &node = entry.second;
 		const Color color = GetTauDebugColor(node);
 
-		for (const auto &shape : node.shapes)
-			AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
+		for (const auto &shape : node.shapes) {
+			if (shape.type == CT_Sphere)
+				AppendTauSphereWireframe(vtx, vtx_count, BuildTauWorldSphereCenter(node, shape), BuildTauWorldSphereRadius(node, shape), color);
+			else
+				AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
+		}
 	}
 
 	DrawLines(view_id, vtx, program, state, depth);

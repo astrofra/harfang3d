@@ -24,6 +24,7 @@ struct TauCollisionShape {
 	Vec3 local_position{Vec3::Zero};
 	Mat3 local_rotation{Mat3::Identity};
 	Vec3 size{Vec3::One};
+	float radius{0.5f};
 	float mass{0.f};
 	float friction{0.f};
 	float restitution{0.f};

@@ -1,4 +1,5 @@
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 function CreatePhysicCubeEx(scene, size, mtx, model_ref, materials, rb_type, mass)
 	local rb_type = rb_type or hg.RBT_Dynamic
@@ -94,12 +95,13 @@ floor, rb_floor = CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.V
 rb_floor:SetRollingFriction(0)
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()
+dump = qa_dump.Create("rb_dynamic_variable_rolling_friction", physics_step, sphere_list)
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
@@ -108,7 +110,7 @@ print(">>> Description:\n>>> Apply a constant force on N spheres having a rollin
 -- main loop
 keyboard = hg.Keyboard()
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
     keyboard:Update()
 
     for i=1,#sphere_list do
@@ -117,6 +119,7 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 
     view_id = 0
     hg.SceneUpdateSystems(scene, clocks, dt_frame_step, physics, physics_step, 3)
+    qa_dump.Capture(dump, physics)
     view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
 
     -- Debug physics display
@@ -129,6 +132,8 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     hg.Frame()
     hg.UpdateWindow(win)
 end
+
+qa_dump.Close(dump)
 
 scene:Clear()
 scene:GarbageCollect()
