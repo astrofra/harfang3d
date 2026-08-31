@@ -11,6 +11,9 @@
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 #include "engine/scene_bullet3_physics.h"
 #endif
+#if HG_ENABLE_TAU_SCENE_PHYSICS
+#include "engine/scene_tau_physics.h"
+#endif
 #include "engine/physics.h"
 #include "engine/scene.h"
 
@@ -19,8 +22,6 @@
 #include "bind_Lua.h"
 
 namespace hg {
-
-class SceneBullet3Physics;
 
 //
 static void SceneSyncToScriptsCall(SceneLuaVM &vm, Scene &scene, const Reader &ir, const ReadProvider &ip) {
@@ -126,50 +127,20 @@ static size_t SceneScriptsDestroyGarbageCall(SceneLuaVM &vm, Scene &scene) {
 void SceneSyncToSystemsFromFile(Scene &scene, SceneLuaVM &vm) { SceneSyncToScriptsCall(vm, scene, g_file_reader, g_file_read_provider); }
 void SceneSyncToSystemsFromAssets(Scene &scene, SceneLuaVM &vm) { SceneSyncToScriptsCall(vm, scene, g_assets_reader, g_assets_read_provider); }
 
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-static void SceneSyncToSystems(Scene &scene, SceneBullet3Physics *physics, SceneLuaVM *vm, const Reader &ir, const ReadProvider &ip) {
+template <typename PhysicsT>
+static void SceneSyncToSystemsWithPhysics(Scene &scene, PhysicsT &physics, SceneLuaVM *vm, const Reader &ir, const ReadProvider &ip) {
 	if (vm)
 		SceneSyncToScriptsCall(*vm, scene, ir, ip);
-	if (physics)
-		physics->SceneCreatePhysics(scene, ir, ip);
+	physics.SceneCreatePhysics(scene, ir, ip);
 }
 
-void SceneSyncToSystemsFromFile(Scene &scene, SceneBullet3Physics &physics) {
-	SceneSyncToSystems(scene, &physics, nullptr, g_file_reader, g_file_read_provider);
-}
-void SceneSyncToSystemsFromAssets(Scene &scene, SceneBullet3Physics &physics) {
-	SceneSyncToSystems(scene, &physics, nullptr, g_assets_reader, g_assets_read_provider);
-}
-void SceneSyncToSystemsFromFile(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) {
-	SceneSyncToSystems(scene, &physics, &vm, g_file_reader, g_file_read_provider);
-}
-void SceneSyncToSystemsFromAssets(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) {
-	SceneSyncToSystems(scene, &physics, &vm, g_assets_reader, g_assets_read_provider);
-}
-#endif
+static void SceneUpdateSystemsNoPhysicsImpl(Scene &scene, SceneClocks &clocks, time_ns dt, SceneLuaVM *vm) {
+	(void)clocks;
 
-//
-static void SceneUpdateSystemsImpl(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics *bullet3_physics, NodePairContacts *node_node_contacts,
-	time_ns physics_step, int max_physics_step, SceneLuaVM *vm) {
 	scene.StorePreviousWorldMatrices();
 	scene.ReadyWorldMatrices();
 
 	scene.UpdatePlayingAnims(dt);
-
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-	if (bullet3_physics) {
-		bullet3_physics->SyncTransformsFromScene(scene);
-		bullet3_physics->StepSimulation(dt, physics_step, max_physics_step);
-		bullet3_physics->SyncTransformsToScene(scene);
-
-		if (node_node_contacts) {
-			bullet3_physics->CollectCollisionEvents(scene, *node_node_contacts);
-
-			if (vm)
-				SceneScriptsOnCollisionCall(*vm, scene, *node_node_contacts);
-		}
-	}
-#endif
 
 	if (vm)
 		SceneScriptsOnUpdateCall(*vm, scene, dt); // calls OnUpdate in context
@@ -178,44 +149,38 @@ static void SceneUpdateSystemsImpl(Scene &scene, SceneClocks &clocks, time_ns dt
 	scene.FixupPreviousWorldMatrices();
 }
 
-void SceneUpdateSystems(Scene &scene, SceneClocks &clock, time_ns dt) { SceneUpdateSystemsImpl(scene, clock, dt, nullptr, nullptr, 0, 0, nullptr); }
-void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneLuaVM &vm) {
-	SceneUpdateSystemsImpl(scene, clocks, dt, nullptr, nullptr, 0, 0, &vm);
+template <typename PhysicsT>
+static void SceneUpdateSystemsWithPhysicsImpl(Scene &scene, SceneClocks &clocks, time_ns dt, PhysicsT &physics, NodePairContacts *node_node_contacts,
+	time_ns physics_step, int max_physics_step, SceneLuaVM *vm) {
+	(void)clocks;
+
+	scene.StorePreviousWorldMatrices();
+	scene.ReadyWorldMatrices();
+
+	scene.UpdatePlayingAnims(dt);
+
+	physics.SyncTransformsFromScene(scene);
+	physics.StepSimulation(dt, physics_step, max_physics_step);
+	physics.SyncTransformsToScene(scene);
+
+	if (node_node_contacts) {
+		physics.CollectCollisionEvents(scene, *node_node_contacts);
+
+		if (vm)
+			SceneScriptsOnCollisionCall(*vm, scene, *node_node_contacts);
+	}
+
+	if (vm)
+		SceneScriptsOnUpdateCall(*vm, scene, dt); // calls OnUpdate in context
+
+	scene.ComputeWorldMatrices();
+	scene.FixupPreviousWorldMatrices();
 }
 
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, time_ns physics_step, int physics_max_step) {
-	SceneUpdateSystemsImpl(scene, clocks, dt, &physics, nullptr, physics_step, physics_max_step, nullptr);
-}
-
-void SceneUpdateSystems(
-	Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, time_ns physics_step, int physics_max_step, SceneLuaVM &vm) {
-	SceneUpdateSystemsImpl(scene, clocks, dt, &physics, nullptr, physics_step, physics_max_step, &vm);
-}
-
-void SceneUpdateSystems(
-	Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, NodePairContacts &contacts, time_ns physics_step, int physics_max_step) {
-	SceneUpdateSystemsImpl(scene, clocks, dt, &physics, &contacts, physics_step, physics_max_step, nullptr);
-}
-
-void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, NodePairContacts &contacts, time_ns physics_step,
-	int physics_max_step, SceneLuaVM &vm) {
-	SceneUpdateSystemsImpl(scene, clocks, dt, &physics, &contacts, physics_step, physics_max_step, &vm);
-}
-#endif
-
-//
-static size_t SceneGarbageCollectSystemsImpl(Scene &scene, SceneBullet3Physics *bullet3_physics, SceneLuaVM *vm) {
+static size_t SceneGarbageCollectSystemsNoPhysicsImpl(Scene &scene, SceneLuaVM *vm) {
 	size_t total = 0;
 
 	total += scene.GarbageCollect();
-
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-	if (bullet3_physics) {
-		total += bullet3_physics->GarbageCollect(scene);
-		total += bullet3_physics->GarbageCollectResources();
-	}
-#endif
 
 	if (vm)
 		total += SceneScriptsDestroyGarbageCall(*vm, scene); // calls OnDestroy in context
@@ -223,15 +188,21 @@ static size_t SceneGarbageCollectSystemsImpl(Scene &scene, SceneBullet3Physics *
 	return total;
 }
 
-size_t SceneGarbageCollectSystems(Scene &scene) { return SceneGarbageCollectSystemsImpl(scene, nullptr, nullptr); }
-size_t SceneGarbageCollectSystems(Scene &scene, SceneLuaVM &vm) { return SceneGarbageCollectSystemsImpl(scene, nullptr, &vm); }
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics) { return SceneGarbageCollectSystemsImpl(scene, &physics, nullptr); }
-size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) { return SceneGarbageCollectSystemsImpl(scene, &physics, &vm); }
-#endif
+template <typename PhysicsT>
+static size_t SceneGarbageCollectSystemsWithPhysicsImpl(Scene &scene, PhysicsT &physics, SceneLuaVM *vm) {
+	size_t total = 0;
 
-//
-static void SceneClearSystemsImpl(Scene &scene, SceneBullet3Physics *bullet3_physics, SceneLuaVM *vm) {
+	total += scene.GarbageCollect();
+	total += physics.GarbageCollect(scene);
+	total += physics.GarbageCollectResources();
+
+	if (vm)
+		total += SceneScriptsDestroyGarbageCall(*vm, scene); // calls OnDestroy in context
+
+	return total;
+}
+
+static void SceneClearSystemsNoPhysicsImpl(Scene &scene, SceneLuaVM *vm) {
 	if (vm) {
 		vm->ForeachScripts([](const LuaObject &env) {
 			if (auto on_destroy = Get(env, "OnDestroy")) {
@@ -242,19 +213,119 @@ static void SceneClearSystemsImpl(Scene &scene, SceneBullet3Physics *bullet3_phy
 		vm->Clear();
 	}
 
-#if HG_ENABLE_BULLET3_SCENE_PHYSICS
-	if (bullet3_physics)
-		bullet3_physics->Clear();
-#endif
-
 	scene.Clear();
 }
 
-void SceneClearSystems(Scene &scene) { SceneClearSystemsImpl(scene, nullptr, nullptr); }
-void SceneClearSystems(Scene &scene, SceneLuaVM &vm) { SceneClearSystemsImpl(scene, nullptr, &vm); }
+template <typename PhysicsT>
+static void SceneClearSystemsWithPhysicsImpl(Scene &scene, PhysicsT &physics, SceneLuaVM *vm) {
+	if (vm) {
+		vm->ForeachScripts([](const LuaObject &env) {
+			if (auto on_destroy = Get(env, "OnDestroy")) {
+				on_destroy.Push();
+				hg_lua_OnDestroy(env.L(), -1);
+			}
+		});
+		vm->Clear();
+	}
+
+	physics.Clear();
+	scene.Clear();
+}
+
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
-void SceneClearSystems(Scene &scene, SceneBullet3Physics &physics) { SceneClearSystemsImpl(scene, &physics, nullptr); }
-void SceneClearSystems(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) { SceneClearSystemsImpl(scene, &physics, &vm); }
+void SceneSyncToSystemsFromFile(Scene &scene, SceneBullet3Physics &physics) {
+	SceneSyncToSystemsWithPhysics(scene, physics, nullptr, g_file_reader, g_file_read_provider);
+}
+void SceneSyncToSystemsFromAssets(Scene &scene, SceneBullet3Physics &physics) {
+	SceneSyncToSystemsWithPhysics(scene, physics, nullptr, g_assets_reader, g_assets_read_provider);
+}
+void SceneSyncToSystemsFromFile(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) {
+	SceneSyncToSystemsWithPhysics(scene, physics, &vm, g_file_reader, g_file_read_provider);
+}
+void SceneSyncToSystemsFromAssets(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) {
+	SceneSyncToSystemsWithPhysics(scene, physics, &vm, g_assets_reader, g_assets_read_provider);
+}
+#endif
+
+void SceneUpdateSystems(Scene &scene, SceneClocks &clock, time_ns dt) { SceneUpdateSystemsNoPhysicsImpl(scene, clock, dt, nullptr); }
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneLuaVM &vm) {
+	SceneUpdateSystemsNoPhysicsImpl(scene, clocks, dt, &vm);
+}
+
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, time_ns physics_step, int physics_max_step) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, nullptr, physics_step, physics_max_step, nullptr);
+}
+
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, time_ns physics_step, int physics_max_step, SceneLuaVM &vm) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, nullptr, physics_step, physics_max_step, &vm);
+}
+
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, NodePairContacts &contacts, time_ns physics_step, int physics_max_step) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, &contacts, physics_step, physics_max_step, nullptr);
+}
+
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneBullet3Physics &physics, NodePairContacts &contacts, time_ns physics_step,
+	int physics_max_step, SceneLuaVM &vm) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, &contacts, physics_step, physics_max_step, &vm);
+}
+#endif
+
+size_t SceneGarbageCollectSystems(Scene &scene) { return SceneGarbageCollectSystemsNoPhysicsImpl(scene, nullptr); }
+size_t SceneGarbageCollectSystems(Scene &scene, SceneLuaVM &vm) { return SceneGarbageCollectSystemsNoPhysicsImpl(scene, &vm); }
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS
+size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics) { return SceneGarbageCollectSystemsWithPhysicsImpl(scene, physics, nullptr); }
+size_t SceneGarbageCollectSystems(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) {
+	return SceneGarbageCollectSystemsWithPhysicsImpl(scene, physics, &vm);
+}
+#endif
+
+void SceneClearSystems(Scene &scene) { SceneClearSystemsNoPhysicsImpl(scene, nullptr); }
+void SceneClearSystems(Scene &scene, SceneLuaVM &vm) { SceneClearSystemsNoPhysicsImpl(scene, &vm); }
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS
+void SceneClearSystems(Scene &scene, SceneBullet3Physics &physics) { SceneClearSystemsWithPhysicsImpl(scene, physics, nullptr); }
+void SceneClearSystems(Scene &scene, SceneBullet3Physics &physics, SceneLuaVM &vm) { SceneClearSystemsWithPhysicsImpl(scene, physics, &vm); }
+#endif
+
+#if HG_ENABLE_TAU_SCENE_PHYSICS
+void SceneSyncToSystemsFromFile(Scene &scene, SceneTauPhysics &physics) {
+	SceneSyncToSystemsWithPhysics(scene, physics, nullptr, g_file_reader, g_file_read_provider);
+}
+void SceneSyncToSystemsFromAssets(Scene &scene, SceneTauPhysics &physics) {
+	SceneSyncToSystemsWithPhysics(scene, physics, nullptr, g_assets_reader, g_assets_read_provider);
+}
+void SceneSyncToSystemsFromFile(Scene &scene, SceneTauPhysics &physics, SceneLuaVM &vm) {
+	SceneSyncToSystemsWithPhysics(scene, physics, &vm, g_file_reader, g_file_read_provider);
+}
+void SceneSyncToSystemsFromAssets(Scene &scene, SceneTauPhysics &physics, SceneLuaVM &vm) {
+	SceneSyncToSystemsWithPhysics(scene, physics, &vm, g_assets_reader, g_assets_read_provider);
+}
+
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneTauPhysics &physics, time_ns physics_step, int physics_max_step) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, nullptr, physics_step, physics_max_step, nullptr);
+}
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, SceneTauPhysics &physics, time_ns physics_step, int physics_max_step, SceneLuaVM &vm) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, nullptr, physics_step, physics_max_step, &vm);
+}
+void SceneUpdateSystems(
+	Scene &scene, SceneClocks &clocks, time_ns dt, SceneTauPhysics &physics, NodePairContacts &contacts, time_ns physics_step, int physics_max_step) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, &contacts, physics_step, physics_max_step, nullptr);
+}
+void SceneUpdateSystems(Scene &scene, SceneClocks &clocks, time_ns dt, SceneTauPhysics &physics, NodePairContacts &contacts, time_ns physics_step,
+	int physics_max_step, SceneLuaVM &vm) {
+	SceneUpdateSystemsWithPhysicsImpl(scene, clocks, dt, physics, &contacts, physics_step, physics_max_step, &vm);
+}
+
+size_t SceneGarbageCollectSystems(Scene &scene, SceneTauPhysics &physics) { return SceneGarbageCollectSystemsWithPhysicsImpl(scene, physics, nullptr); }
+size_t SceneGarbageCollectSystems(Scene &scene, SceneTauPhysics &physics, SceneLuaVM &vm) {
+	return SceneGarbageCollectSystemsWithPhysicsImpl(scene, physics, &vm);
+}
+
+void SceneClearSystems(Scene &scene, SceneTauPhysics &physics) { SceneClearSystemsWithPhysicsImpl(scene, physics, nullptr); }
+void SceneClearSystems(Scene &scene, SceneTauPhysics &physics, SceneLuaVM &vm) { SceneClearSystemsWithPhysicsImpl(scene, physics, &vm); }
 #endif
 
 } // namespace hg

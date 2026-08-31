@@ -11,3 +11,5 @@ commit_id
 *.DS_Store
 /tutorials/hg_lua
 /tutorials/hg_squirrel
+/build_verify_bullet
+/build_verify_tau

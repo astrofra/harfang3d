@@ -117,6 +117,10 @@ if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 	list(APPEND SRCS scene_bullet3_physics.cpp)
 	list(APPEND HDRS scene_bullet3_physics.h)
 endif()
+if(HG_ENABLE_TAU_SCENE_PHYSICS)
+	list(APPEND SRCS scene_tau_physics.cpp)
+	list(APPEND HDRS scene_tau_physics.h)
+endif()
 
 add_library(engine STATIC ${SRCS} ${HDRS})
 
@@ -146,6 +150,9 @@ endif()
 
 if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 	target_link_libraries(engine PRIVATE BulletDynamics BulletWorldImporter)
+endif()
+if(HG_ENABLE_TAU_SCENE_PHYSICS)
+	target_link_libraries(engine PRIVATE tau_legacy)
 endif()
 
 if(MSVC)
