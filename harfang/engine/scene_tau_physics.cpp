@@ -24,7 +24,7 @@ static constexpr float k_tau_position_slop = 0.002f;
 static constexpr float k_tau_position_correction = 0.75f;
 static constexpr float k_tau_restitution_threshold = 1.0f;
 static constexpr float k_tau_baumgarte = 0.15f;
-static constexpr float k_tau_rolling_friction_impulse_scale = 0.1f;
+static constexpr float k_tau_rolling_friction_impulse_scale = 0.015f;
 static constexpr int k_tau_position_iterations = 3;
 static constexpr int k_tau_velocity_iterations = 8;
 
