@@ -550,7 +550,7 @@ void SceneTauPhysics::SceneCreatePhysics(const Scene &scene, const Reader &ir, c
 
 	ClearNodes();
 
-	for (const auto &node : scene.GetNodes())
+	for (const auto &node : scene.GetAllNodes())
 		NodeCreatePhysics(node, ir, ip);
 }
 
