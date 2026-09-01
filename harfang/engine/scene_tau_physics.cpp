@@ -3,6 +3,7 @@
 #include "engine/scene_tau_physics.h"
 
 #include "engine/assets_rw_interface.h"
+#include "engine/collision_geometry.h"
 #include "engine/render_pipeline.h"
 #include "engine/scene.h"
 
@@ -38,6 +39,20 @@ static constexpr uint32_t k_tau_manifold_lifetime = 3;
 static constexpr size_t k_tau_max_manifolds = 4096;
 static constexpr int k_tau_position_iterations = 3;
 static constexpr int k_tau_velocity_iterations = 8;
+
+bool HasTauResourceSuffix(const std::string &resource, const std::string &suffix) {
+	return resource.size() >= suffix.size() && resource.compare(resource.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+std::string ResolveTauCollisionResource(const std::string &resource) {
+	static const std::string logical_suffix = ".physics";
+	static const std::string bullet_suffix = "_bullet";
+	if (HasTauResourceSuffix(resource, logical_suffix))
+		return resource + "_triangles";
+	if (HasTauResourceSuffix(resource, logical_suffix + bullet_suffix))
+		return resource.substr(0, resource.size() - bullet_suffix.size()) + "_triangles";
+	return resource;
+}
 
 enum class TauWorldWriteMode { Reset, CaptureSource, Solved };
 
@@ -107,6 +122,8 @@ bool IsTauAnalyticShape(CollisionType type) {
 	return type == CT_Cube || type == CT_Sphere || type == CT_Capsule || type == CT_Cone || type == CT_Cylinder;
 }
 
+bool IsTauRaycastShape(CollisionType type) { return IsTauAnalyticShape(type) || type == CT_Mesh; }
+
 std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, float &total_mass) {
 	std::vector<TauCollisionShape> shapes;
 	total_mass = 0.f;
@@ -115,7 +132,7 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		const auto collision = node.GetCollision(i);
 		if (!collision.IsValid())
 			continue;
-		if (!IsTauAnalyticShape(collision.GetType()))
+		if (!IsTauRaycastShape(collision.GetType()))
 			return {};
 
 		TauCollisionShape shape;
@@ -125,6 +142,7 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		shape.size = collision.GetSize();
 		shape.radius = collision.GetRadius();
 		shape.mass = collision.GetMass();
+		shape.collision_resource = collision.GetCollisionResource();
 		// Collision components currently do not store contact material properties in Scene.
 		// Keep them on the rigid body side for the Tau phase-1 backend, like Bullet does.
 		shape.friction = 0.f;
@@ -520,8 +538,89 @@ bool IntersectTauRayCone(
 	return hit.t != std::numeric_limits<float>::max();
 }
 
+bool IntersectTauRayMesh(const TauNode &node, const TauCollisionShape &shape, const Vec3 &world_origin, const Vec3 &world_direction,
+	float max_distance, TauRayShapeHit &world_hit) {
+	if (!shape.collision_geometry || shape.collision_geometry->triangles.empty())
+		return false;
+
+	const Mat4 local_to_world = ComposeTauWorld(node) * shape.local_transform;
+	Mat4 world_to_local;
+	if (!Inverse(local_to_world, world_to_local))
+		return false;
+
+	const Vec3 origin = world_to_local * world_origin;
+	const Vec3 direction = world_to_local * (world_origin + world_direction) - origin;
+	float bounds_near = 0.f, bounds_far = 0.f;
+	if (!IntersectRay(shape.collision_geometry->bounds, origin, direction, bounds_near, bounds_far) || bounds_far < 0.f ||
+		bounds_near > max_distance + k_tau_collision_epsilon)
+		return false;
+
+	TauRayShapeHit local_hit;
+	auto is_on_open_boundary = [&](const Vec3 &point) {
+		for (const auto &edge : shape.collision_geometry->boundary_edges) {
+			const Vec3 edge_direction = edge.b - edge.a;
+			const float edge_length_squared = Len2(edge_direction);
+			if (edge_length_squared <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+				continue;
+			const float edge_t = Clamp(Dot(point - edge.a, edge_direction) / edge_length_squared, 0.f, 1.f);
+			if (Len2(point - (edge.a + edge_direction * edge_t)) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+				return true;
+		}
+		return false;
+	};
+
+	for (size_t triangle_index = 0; triangle_index < shape.collision_geometry->triangles.size(); ++triangle_index) {
+		const auto &triangle = shape.collision_geometry->triangles[triangle_index];
+		const Vec3 edge_ab = triangle.b - triangle.a;
+		const Vec3 edge_ac = triangle.c - triangle.a;
+		const Vec3 p = Cross(direction, edge_ac);
+		const float determinant = Dot(edge_ab, p);
+		if (Abs(determinant) <= k_tau_collision_epsilon)
+			continue;
+
+		const float inverse_determinant = 1.f / determinant;
+		const Vec3 from_a = origin - triangle.a;
+		const float u = Dot(from_a, p) * inverse_determinant;
+		if (u < -k_tau_collision_epsilon || u > 1.f + k_tau_collision_epsilon)
+			continue;
+
+		const Vec3 q = Cross(from_a, edge_ab);
+		const float v = Dot(direction, q) * inverse_determinant;
+		if (v < -k_tau_collision_epsilon || u + v > 1.f + k_tau_collision_epsilon)
+			continue;
+
+		const float triangle_t = Dot(edge_ac, q) * inverse_determinant;
+		// Bullet's cooked triangle mesh treats its open boundary as an open
+		// set while still accepting shared internal edges. Preserve that
+		// behavior without relying on AABB quantization details. Test against
+		// the complete boundary so a boundary vertex cannot be accepted through
+		// one of its incident internal edges.
+		if (std::min({u, v, 1.f - u - v}) <= k_tau_collision_epsilon &&
+			is_on_open_boundary(origin + direction * triangle_t))
+			continue;
+
+		Vec3 normal = Cross(edge_ab, edge_ac);
+		if (Len2(normal) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+			continue;
+		normal = Normalize(normal);
+		if (Dot(normal, direction) > 0.f)
+			normal = -normal;
+		ConsiderTauRayHit(triangle_t, normal, max_distance, local_hit);
+	}
+
+	if (local_hit.t == std::numeric_limits<float>::max())
+		return false;
+
+	world_hit.t = local_hit.t;
+	world_hit.normal = Normalize(Transpose(Mat3(world_to_local)) * local_hit.normal);
+	return true;
+}
+
 bool IntersectTauRayShape(const TauNode &node, const TauCollisionShape &shape, const Vec3 &world_origin, const Vec3 &world_direction,
 	float max_distance, TauRayShapeHit &world_hit) {
+	if (shape.type == CT_Mesh)
+		return IntersectTauRayMesh(node, shape, world_origin, world_direction, max_distance, world_hit);
+
 	const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
 	const Vec3 origin = TauFrameWorldToLocal(frame, world_origin);
 	const Vec3 direction = TauFrameVectorToLocal(frame, world_direction);
@@ -648,6 +747,18 @@ void AppendTauSphereWireframe(Vertices &vtx, size_t &vtx_count, const Vec3 &cent
 void AppendTauLine(Vertices &vtx, size_t &vtx_count, const Vec3 &a, const Vec3 &b, const Color &color) {
 	vtx.Begin(vtx_count++).SetPos(a).SetColor0(color).End();
 	vtx.Begin(vtx_count++).SetPos(b).SetColor0(color).End();
+}
+
+void AppendTauMeshWireframe(
+	Vertices &vtx, size_t &vtx_count, const Mat4 &world, const CollisionGeometry &geometry, const Color &color) {
+	for (const auto &triangle : geometry.triangles) {
+		const Vec3 a = world * triangle.a;
+		const Vec3 b = world * triangle.b;
+		const Vec3 c = world * triangle.c;
+		AppendTauLine(vtx, vtx_count, a, b, color);
+		AppendTauLine(vtx, vtx_count, b, c, color);
+		AppendTauLine(vtx, vtx_count, c, a, color);
+	}
 }
 
 Vec3 TauFrameLocalToWorld(const TauPrimitiveFrame &frame, const Vec3 &point) {
@@ -1777,9 +1888,6 @@ Vec3 ObbLocalPointToWorld(const OBB &obb, const Vec3 &point) { return TauObbLoca
 } // namespace tau_internal
 
 void SceneTauPhysics::SceneCreatePhysics(const Scene &scene, const Reader &ir, const ReadProvider &ip) {
-	(void)ir;
-	(void)ip;
-
 	ClearNodes();
 
 	for (const auto &node : scene.GetAllNodes())
@@ -1789,10 +1897,25 @@ void SceneTauPhysics::SceneCreatePhysics(const Scene &scene, const Reader &ir, c
 void SceneTauPhysics::SceneCreatePhysicsFromFile(const Scene &scene) { SceneCreatePhysics(scene, g_file_reader, g_file_read_provider); }
 void SceneTauPhysics::SceneCreatePhysicsFromAssets(const Scene &scene) { SceneCreatePhysics(scene, g_assets_reader, g_assets_read_provider); }
 
-void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, const ReadProvider &ip) {
-	(void)ir;
-	(void)ip;
+std::shared_ptr<const CollisionGeometry> SceneTauPhysics::LoadCollisionGeometryResource(
+	const Reader &ir, const ReadProvider &ip, const std::string &resource) {
+	const std::string resolved_resource = ResolveTauCollisionResource(resource);
+	const auto cached = collision_geometries.find(resolved_resource);
+	if (cached != std::end(collision_geometries))
+		return cached->second;
 
+	auto geometry = std::make_shared<CollisionGeometry>();
+	const ScopedReadHandle handle(ip, resolved_resource.c_str(), true);
+	if (!LoadCollisionGeometry(ir, handle, *geometry)) {
+		warn(format("Failed to load cooked collision geometry '%1'").arg(resolved_resource));
+		return {};
+	}
+
+	collision_geometries[resolved_resource] = geometry;
+	return geometry;
+}
+
+void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, const ReadProvider &ip) {
 	if (!node.IsValid() || !node.HasRigidBody())
 		return;
 
@@ -1805,6 +1928,13 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	auto shapes = CollectTauPhase1Collisions(node, total_mass);
 	if (shapes.empty())
 		return;
+	for (auto &shape : shapes) {
+		if (shape.type != CT_Mesh)
+			continue;
+		shape.collision_geometry = LoadCollisionGeometryResource(ir, ip, shape.collision_resource);
+		if (!shape.collision_geometry)
+			return;
+	}
 
 	TauNode tau_node;
 	tau_node.shapes = std::move(shapes);
@@ -1931,7 +2061,18 @@ size_t SceneTauPhysics::GarbageCollect(const Scene &scene) {
 	return removed;
 }
 
-size_t SceneTauPhysics::GarbageCollectResources() { return 0; }
+size_t SceneTauPhysics::GarbageCollectResources() {
+	size_t removed = 0;
+	for (auto it = collision_geometries.begin(); it != collision_geometries.end();) {
+		if (it->second.use_count() == 1) {
+			it = collision_geometries.erase(it);
+			++removed;
+		} else {
+			++it;
+		}
+	}
+	return removed;
+}
 
 void SceneTauPhysics::ClearNodes() {
 	nodes.clear();
@@ -1942,7 +2083,10 @@ void SceneTauPhysics::ClearNodes() {
 	latest_contacts.clear();
 }
 
-void SceneTauPhysics::Clear() { ClearNodes(); }
+void SceneTauPhysics::Clear() {
+	ClearNodes();
+	collision_geometries.clear();
+}
 
 void SceneTauPhysics::NodeWake(NodeRef ref) const { (void)ref; }
 
@@ -2148,7 +2292,16 @@ void SceneTauPhysics::RenderCollision(
 	if (shape_count == 0 && manifold_point_count == 0)
 		return;
 
-	Vertices vtx(vtx_decl, shape_count * 192 + manifold_point_count * 8);
+	size_t vertex_capacity = manifold_point_count * 8;
+	for (const auto &entry : nodes) {
+		for (const auto &shape : entry.second.shapes) {
+			if (shape.type == CT_Mesh && shape.collision_geometry)
+				vertex_capacity += shape.collision_geometry->triangles.size() * 6;
+			else
+				vertex_capacity += 192;
+		}
+	}
+	Vertices vtx(vtx_decl, vertex_capacity);
 	size_t vtx_count = 0;
 
 	for (const auto &entry : nodes) {
@@ -2161,6 +2314,8 @@ void SceneTauPhysics::RenderCollision(
 					BuildTauWorldSphereRotation(node, shape), color);
 			else if (shape.type == CT_Cube)
 				AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
+			else if (shape.type == CT_Mesh && shape.collision_geometry)
+				AppendTauMeshWireframe(vtx, vtx_count, ComposeTauWorld(node) * shape.local_transform, *shape.collision_geometry, color);
 			else {
 				const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
 				const Vec3 scale = Abs(node.scale);

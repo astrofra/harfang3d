@@ -6,6 +6,7 @@ set(HDRS
 	audio_stream.h
 	audio_stream_interface.h
 	bloom.h
+	collision_geometry.h
 	create_geometry.h
 	cubemap.h
 	dear_imgui.h
@@ -64,6 +65,7 @@ set(SRCS
 	audio.cpp
 	audio_stream.cpp
 	bloom.cpp
+	collision_geometry.cpp
 	component.cpp
 	create_geometry.cpp
 	cubemap.cpp

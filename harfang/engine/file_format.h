@@ -14,5 +14,6 @@ static const uint8_t NodesMarker = 0x02;
 
 static const uint8_t MaterialMarker = 0x10;
 static const uint8_t ModelMarker = 0x20;
+static const uint8_t CollisionGeometryMarker = 0x30;
 
 } // namespace hg

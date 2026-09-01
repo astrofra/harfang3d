@@ -45,13 +45,13 @@ clocks = hg.SceneClocks()
 -- description
 hg.SetLogLevel(hg.LL_Normal)
 print(
-    ">>> Description:\n>>> Create a mesh collider with subdivided surface from .physics_bullet file from the plane geometry and test the collisions with raycasts.")
+    ">>> Description:\n>>> Create a mesh collider with a subdivided surface from a backend-neutral .physics resource and test it with raycasts.")
 
 -- init mesh physics
 plan_node = scene:GetNode("Plan")
 mesh_col = scene:CreateCollision()
 mesh_col:SetType(hg.CT_Mesh)
-mesh_col:SetCollisionResource("plane_vertice_grid/Plan_38.physics_bullet")
+mesh_col:SetCollisionResource("plane_vertice_grid/Plan_38.physics")
 mesh_col:SetMass(0)
 plan_node:SetCollision(0, mesh_col)
 -- create rigid body
@@ -70,8 +70,10 @@ cam_rot = cam:GetTransform():GetRot()
 vtx = hg.Vertices(vtx_line_layout, 2)
 vid_scene_opaque = 0
 local frame_count = 0
+raycast_qa = os.getenv("HG_PHYSICS_QA_MODE") == "raycast_check"
+raycast_qa_running = true
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while raycast_qa_running and not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     keyboard:Update()
     mouse:Update()
 
@@ -107,17 +109,25 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     --     end
     -- end
 
+    local raycast_hits = 0
+    local raycast_misses = 0
+    local raycast_miss_coordinates = {}
     for i = -20, 20, 2 do
         for o = -20, 20, 2 do
             start_pos = hg.Vec3(0 + i * 0.05, 0.1, 0 + o * 0.05)
             end_pos = hg.Vec3(0 + i * 0.05, -0.1, 0 + o * 0.05)
             raycast_out = physics:RaycastFirstHit(scene, start_pos, end_pos)
             if raycast_out.node:IsValid() then
+                raycast_hits = raycast_hits + 1
                 vtx:Clear()
                 vtx:Begin(0):SetPos(start_pos):SetColor0(hg.Color.Yellow):End()
                 vtx:Begin(1):SetPos(raycast_out.P):SetColor0(hg.Color.Yellow):End()
                 hg.DrawLines(vid_scene_opaque, vtx, line_shader) -- submit all lines in a single call
             else
+                raycast_misses = raycast_misses + 1
+                if raycast_qa then
+                    table.insert(raycast_miss_coordinates, string.format("(%.2f,%.2f)", start_pos.x, start_pos.z))
+                end
                 vtx:Clear()
                 vtx:Begin(0):SetPos(start_pos):SetColor0(hg.Color.Red):End()
                 vtx:Begin(1):SetPos(end_pos):SetColor0(hg.Color.Red):End()
@@ -147,6 +157,16 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 
     hg.Frame()
     hg.UpdateWindow(win)
+
+    if raycast_qa then
+        -- Bullet's cooked triangle mesh treats the outer border as open: the
+        -- 19x19 interior rays hit and the 80 perimeter rays miss.
+        assert(raycast_hits == 361, string.format("Mesh raycast QA expected 361 hits, got %d hits and %d misses at %s", raycast_hits,
+            raycast_misses, table.concat(raycast_miss_coordinates, ", ")))
+        assert(raycast_misses == 80, string.format("Mesh raycast QA expected 80 perimeter misses, got %d", raycast_misses))
+        print(string.format("Mesh raycast QA passed: hits=%d, misses=%d", raycast_hits, raycast_misses))
+        raycast_qa_running = false
+    end
 end
 
 scene:Clear()

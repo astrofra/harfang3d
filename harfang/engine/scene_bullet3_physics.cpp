@@ -26,6 +26,17 @@
 
 namespace hg {
 
+namespace {
+
+std::string ResolveBulletCollisionResource(const std::string &resource) {
+	static const std::string logical_suffix = ".physics";
+	if (resource.size() >= logical_suffix.size() && resource.compare(resource.size() - logical_suffix.size(), logical_suffix.size(), logical_suffix) == 0)
+		return resource + "_bullet";
+	return resource;
+}
+
+} // namespace
+
 btRigidBody *SceneBullet3Physics::GetNodeBody(NodeRef ref, const char *func) const {
 	const auto i = nodes.find(ref);
 
@@ -264,12 +275,15 @@ void SceneBullet3Physics::NodeCreatePhysics(const Node &node, const Reader &ir, 
 		} else if (type == CT_Cylinder) {
 			shapes.push_back(new btCylinderShape(btVector3(size.x, size.y * 0.5f, size.z)));
 		} else if (type == CT_Mesh) {
-			if (auto tree = LoadCollisionTree(ir, ip, col.GetCollisionResource().c_str()))
+			const auto resource = ResolveBulletCollisionResource(col.GetCollisionResource());
+			if (auto tree = LoadCollisionTree(ir, ip, resource.c_str()))
 				shapes.push_back(tree);
 		} else {
 			error(format("Collision Type not implemented: %1").arg(type));
 		}
 
+		if (shapes.size() != idx + 1)
+			return;
 		shapes.back()->setUserIndex(node.ref.idx); // ref back to node
 		total_mass += col.GetMass();
 	}

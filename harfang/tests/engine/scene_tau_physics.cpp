@@ -3,9 +3,16 @@
 #define TEST_NO_MAIN
 #include "acutest.h"
 
+#include "engine/collision_geometry.h"
 #include "engine/scene.h"
 #include "engine/scene_physics.h"
 #include "engine/scene_tau_physics.h"
+
+#include "foundation/data.h"
+#include "foundation/data_rw_interface.h"
+#include "foundation/file.h"
+
+#include "../utils.h"
 
 using namespace hg;
 
@@ -132,6 +139,60 @@ void TestRaycastAllHitsAreStableAndBounded() {
 	TEST_CHECK(zero_length_hits.empty());
 }
 
+void TestMeshColliderRaycast() {
+	CollisionGeometry source;
+	source.triangles = {
+		{Vec3(-1.f, 0.f, -1.f), Vec3(1.f, 0.f, 1.f), Vec3(1.f, 0.f, -1.f)},
+		{Vec3(-1.f, 0.f, -1.f), Vec3(-1.f, 0.f, 1.f), Vec3(1.f, 0.f, 1.f)},
+	};
+
+	Data serialized;
+	TEST_ASSERT(SaveCollisionGeometry(g_data_writer, DataWriteHandle(serialized), source));
+	serialized.Rewind();
+	CollisionGeometry round_trip;
+	TEST_ASSERT(LoadCollisionGeometry(g_data_reader, DataReadHandle(serialized), round_trip));
+	TEST_CHECK(round_trip.triangles.size() == source.triangles.size());
+	TEST_CHECK(round_trip.bounds.mn == Vec3(-1.f, 0.f, -1.f));
+	TEST_CHECK(round_trip.bounds.mx == Vec3(1.f, 0.f, 1.f));
+
+	const std::string temporary = test::CreateTempFilepath();
+	Unlink(temporary.c_str());
+	const std::string logical_resource = temporary + ".physics";
+	const std::string cooked_resource = logical_resource + "_triangles";
+	TEST_ASSERT(SaveCollisionGeometryToFile(cooked_resource.c_str(), source));
+
+	Scene scene;
+	Node mesh = scene.CreateNode();
+	mesh.SetTransform(scene.CreateTransform(TranslationMat4(Vec3(2.f, 0.f, 3.f))));
+	auto rigid_body = scene.CreateRigidBody();
+	rigid_body.SetType(RBT_Static);
+	mesh.SetRigidBody(rigid_body);
+	auto collision = scene.CreateCollision();
+	collision.SetType(CT_Mesh);
+	collision.SetCollisionResource(logical_resource);
+	collision.SetMass(0.f);
+	mesh.SetCollision(0, collision);
+
+	SceneTauPhysics physics;
+	physics.NodeCreatePhysicsFromFile(mesh);
+	TEST_ASSERT(physics.NodeHasBody(mesh));
+
+	const RaycastOut hit = physics.RaycastFirstHit(scene, Vec3(2.f, 1.f, 3.f), Vec3(2.f, -1.f, 3.f));
+	TEST_CHECK(hit.node == mesh);
+	TEST_CHECK(Abs(hit.P.y) < 0.0001f);
+	TEST_CHECK(Abs(hit.t - 1.f) < 0.0001f);
+	TEST_CHECK(hit.N.y > 0.99f);
+
+	const RaycastOut miss = physics.RaycastFirstHit(scene, Vec3(4.f, 1.f, 3.f), Vec3(4.f, -1.f, 3.f));
+	TEST_CHECK(!miss.node.IsValid());
+	const RaycastOut open_boundary = physics.RaycastFirstHit(scene, Vec3(3.f, 1.f, 3.f), Vec3(3.f, -1.f, 3.f));
+	TEST_CHECK(!open_boundary.node.IsValid());
+
+	physics.NodeDestroyPhysics(mesh);
+	TEST_CHECK(physics.GarbageCollectResources() == 1);
+	Unlink(cooked_resource.c_str());
+}
+
 } // namespace
 
 void test_scene_tau_physics() {
@@ -139,4 +200,5 @@ void test_scene_tau_physics() {
 	TestScenePhysicsPreTickAdapter();
 	TestRaycastVariousCollisionShapes();
 	TestRaycastAllHitsAreStableAndBounded();
+	TestMeshColliderRaycast();
 }

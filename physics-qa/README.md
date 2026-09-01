@@ -149,8 +149,18 @@ run-one.bat rb_raycast_various_collshapes.lua
 ```
 
 This check does not run `assetc`: these five collision shapes are constructed
-and raycast analytically at runtime. Mesh collision raycasts remain a separate
-backend/cooking task.
+and raycast analytically at runtime.
+
+The mesh-collider raycast sample uses the same one-frame mode, but requires its
+assets to be rebuilt first. `assetc` cooks `Plan_38.physics_triangles` beside
+the existing Bullet-specific blob; the Lua sample references the logical
+`Plan_38.physics` manifest and each backend resolves its own companion:
+
+```bat
+build-assets.bat
+set HG_PHYSICS_QA_MODE=raycast_check
+run-one.bat rb_mesh_collider_raycast.lua
+```
 
 `plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
 default. It renders Bullet trajectories in blue and Tau trajectories in red on

@@ -14,11 +14,14 @@
 
 #include <functional>
 #include <map>
+#include <memory>
+#include <string>
 #include <vector>
 
 namespace hg {
 
 class Scene;
+struct CollisionGeometry;
 
 struct TauCollisionShape {
 	CollisionType type{CT_Cube};
@@ -30,6 +33,8 @@ struct TauCollisionShape {
 	float mass{0.f};
 	float friction{0.f};
 	float restitution{0.f};
+	std::string collision_resource;
+	std::shared_ptr<const CollisionGeometry> collision_geometry;
 };
 
 struct TauNode {
@@ -172,7 +177,11 @@ public:
 	void TriggerPreTickCallback(hg::time_ns dt);
 
 private:
+	std::shared_ptr<const CollisionGeometry> LoadCollisionGeometryResource(
+		const Reader &ir, const ReadProvider &ip, const std::string &resource);
+
 	std::map<NodeRef, TauNode> nodes;
+	std::map<std::string, std::shared_ptr<const CollisionGeometry>> collision_geometries;
 	std::vector<Tau6DofConstraint> constraints;
 	std::vector<TauContactManifold> contact_manifolds;
 	uint32_t contact_step{0};
