@@ -251,6 +251,15 @@ contacts treat the sleeping endpoint as immovable until that wake condition is
 met. Tests cover explicit wake propagation, collision-driven wake, disabled
 deactivation, moving supports, and tracked-contact continuity.
 
+Dynamic support dependencies are directional: a contact whose normal opposes
+gravity records the lower body as a support for the upper body. If that support
+cohort is awake and moves faster than 0.5 m/s (or 0.5 rad/s), the directly
+supported sleeping cohort wakes on the next fixed step; higher layers follow
+on subsequent steps. A remembered dependency also survives a one-step contact
+loss, preventing a fast-moving foundation from leaving frozen Kapla sections
+in mid-air. Side contacts do not propagate this wake, and bounded inline
+support storage avoids per-contact heap allocation.
+
 Sleeping bodies keep broad-phase proxies, manifolds, and contact-event
 visibility. They skip integration, sleeping/sleeping solver constraints,
 motion-state updates, and unchanged scene-transform publication. Narrow phase
@@ -318,6 +327,15 @@ from `y=3`, waits for sleep at `y=0.5`, invalidates and rebuilds scene world
 matrices, and verifies that the rendered pose remains at the settled height. A
 second regression verifies active-pose continuity on a frame too short to
 execute a fixed substep.
+
+A 65-body cohort-boundary regression now verifies dynamic-support wake: the
+lower support occupies the last slot of one 64-body cohort, the upper cuboid
+the first slot of the next, and moving only the lower cohort wakes the upper on
+the following fixed step. A same-machine A/B of the 1,500-body mixed settled
+pool measured 6.646 ms median / 7.398 ms p95 without support tracking and
+6.806 ms / 7.333 ms with it (one 120-sample validation repetition), a 2.4%
+median cost within the 10% milestone policy. Active timings were unchanged
+within run-to-run noise.
 The packaged Release 1,500-body mixed settled scene benchmark reports a
 6.450 ms median and 6.960 ms p95 over 120 samples (one validation repetition).
 
@@ -714,10 +732,11 @@ Implementation status (2026-09-01): met for the deterministic physics-only
 gate. The pool exceeds 90% sleeping by step 600; explicit/API and impact wake
 paths, moving supports, disabled deactivation, dirty transform publication,
 sleep-pose persistence across scene matrix invalidation, and sleeping contact
-events have dedicated tests. Bounded activation cohorts prevent local impacts
-from waking the complete dense pile. The full interactive rendered-tutorial
-gate remains part of Phase 0, and sleeping-contact narrow-phase reuse remains
-the next performance milestone.
+events have dedicated tests. Directional dynamic-support wake also crosses a
+bounded-cohort boundary without waking unrelated lateral contacts. Bounded
+activation cohorts prevent local impacts from waking the complete dense pile.
+The full interactive rendered-tutorial gate remains part of Phase 0, and
+sleeping-contact narrow-phase reuse remains the next performance milestone.
 
 ## Phase 5: Optimize The Solver And Scene Synchronization
 

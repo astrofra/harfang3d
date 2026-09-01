@@ -281,6 +281,46 @@ void TestSleepingBodyWakesOnImpact() {
 	TEST_CHECK(physics.NodeGetLinearVelocity(target).x > 0.f);
 }
 
+void TestSleepingBodyWakesWithDynamicSupportCohort() {
+	Scene scene;
+	std::vector<Node> graph_bodies;
+	graph_bodies.reserve(65);
+
+	// Fill the first 63 slots of a connected sleep graph with immobile bodies.
+	// The lower support then becomes slot 64 and the supported body slot 65,
+	// placing them on opposite sides of the bounded 64-body cohort boundary.
+	for (int i = 0; i < 63; ++i)
+		graph_bodies.push_back(CreateTauContactPrimitive(scene, CT_Cube, Vec3(100.f + float(i) * 2.f, 0.5f, 0.f), RBT_Dynamic, 1.f));
+	const Node support = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+	const Node supported = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 1.5f, 0.f), RBT_Dynamic, 1.f);
+	graph_bodies.push_back(support);
+	graph_bodies.push_back(supported);
+	CreatePhysicCube(scene, Vec3(300.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	for (size_t i = 0; i + 1 < graph_bodies.size(); ++i)
+		physics.Add6DofConstraint(graph_bodies[i], graph_bodies[i + 1], Mat4::Identity, Mat4::Identity);
+	for (size_t i = 0; i < 63; ++i) {
+		physics.NodeSetLinearFactor(graph_bodies[i], Vec3::Zero);
+		physics.NodeSetAngularFactor(graph_bodies[i], Vec3::Zero);
+	}
+	StepTauWorld(physics, 240);
+	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, support.ref));
+	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, supported.ref));
+	TEST_CHECK(tau_internal::GetNodeSleepIslandId(physics, support.ref) != tau_internal::GetNodeSleepIslandId(physics, supported.ref));
+
+	// Emulate the bounded wake performed by an impact on the lower cohort. The
+	// supported body is deliberately in the next cohort and initially remains
+	// asleep; the following step must propagate the wake dependency upward.
+	tau_internal::WakeNodeSleepCohortWithVelocityForTest(physics, support.ref, Vec3(0.6f, 0.f, 0.f));
+	TEST_ASSERT(!tau_internal::IsNodeSleeping(physics, support.ref));
+	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, supported.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, supported.ref));
+}
+
 void TestDeactivationAndMovingSupportWake() {
 	{
 		Scene scene;
@@ -576,6 +616,7 @@ void test_scene_tau_physics() {
 	TestSleepingBodyWakeAndTrackedContacts();
 	TestSleepingIslandWakePropagation();
 	TestSleepingBodyWakesOnImpact();
+	TestSleepingBodyWakesWithDynamicSupportCohort();
 	TestDeactivationAndMovingSupportWake();
 	TestRaycastVariousCollisionShapes();
 	TestCapsuleCollisionPairs();
