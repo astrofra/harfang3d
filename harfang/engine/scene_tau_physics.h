@@ -4,6 +4,7 @@
 
 #include "engine/render_pipeline.h"
 #include "engine/physics.h"
+#include "engine/scene_tau_physics_contact.h"
 
 #include "foundation/quaternion.h"
 #include "foundation/rw_interface.h"
@@ -164,6 +165,8 @@ public:
 private:
 	std::map<NodeRef, TauNode> nodes;
 	std::vector<Tau6DofConstraint> constraints;
+	std::vector<TauContactManifold> contact_manifolds;
+	uint32_t contact_step{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
 };

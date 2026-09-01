@@ -100,6 +100,20 @@ python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_variable_friction.jso
 python plot_physics_trajectories.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
 ```
 
+The cuboid-chain scenario has a dedicated bounded-envelope check. It requires
+600 fixed samples, keeps every Tau ring center within 5 m vertically of
+Bullet, checks the static top ring and rejects non-finite or excessive speeds
+(20 m/s by default, just above the Bullet reference peak):
+
+```bat
+dump-one.bat bullet rb_rings_chain.lua
+dump-one.bat tau rb_rings_chain.lua
+python validate_tau_rings_chain.py qa_dumps\bullet\rb_rings_chain.jsonl qa_dumps\tau\rb_rings_chain.jsonl
+```
+
+Pass a second Tau capture with `--repeat <path>` to require byte-identical
+deterministic output.
+
 The captures are written to `qa_dumps/<backend>/<scenario>.jsonl`. The default
 run records 600 ticks at 60 Hz and exits automatically. Set
 `HG_PHYSICS_QA_DUMP_SAMPLES` or `HG_PHYSICS_QA_DUMP_EVERY` to change the

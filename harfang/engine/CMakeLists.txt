@@ -120,7 +120,7 @@ if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 endif()
 if(HG_ENABLE_TAU_SCENE_PHYSICS)
 	list(APPEND SRCS scene_tau_physics.cpp)
-	list(APPEND HDRS scene_tau_physics.h)
+	list(APPEND HDRS scene_tau_physics.h scene_tau_physics_contact.h)
 endif()
 
 add_library(engine STATIC ${SRCS} ${HDRS})

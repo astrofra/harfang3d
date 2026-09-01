@@ -81,6 +81,10 @@ set(TEST_ENGINE_SRCS
 	engine/scene.cpp
 )
 
+if(HG_ENABLE_TAU_SCENE_PHYSICS)
+	list(APPEND TEST_ENGINE_SRCS engine/scene_tau_physics_contact.cpp)
+endif()
+
 set(TEST_SCRIPT_SRCS
 	script/lua_vm.cpp
 )

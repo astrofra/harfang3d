@@ -55,6 +55,9 @@ extern void test_meta();
 extern void test_picture();
 extern void test_video_stream();
 extern void test_scene();
+#if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
+extern void test_scene_tau_physics_contact();
+#endif
 
 // script tests
 extern void test_lua_vm();
@@ -114,6 +117,9 @@ TEST_LIST = {
 	{"engine.picture", test_picture},
 	{"engine.video_stream", test_video_stream},
 	{"engine.scene", test_scene},
+#if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
+	{"engine.scene_tau_physics_contact", test_scene_tau_physics_contact},
+#endif
 
 	// script
 	{"script.lua_vm", test_lua_vm},
