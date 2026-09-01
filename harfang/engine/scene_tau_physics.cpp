@@ -64,6 +64,8 @@ struct TauWorldShape {
 	Vec3 position{Vec3::Zero};
 	Vec3 previous_position{Vec3::Zero};
 	float radius{0.f};
+	TauCapsuleGeometry capsule;
+	TauCapsuleGeometry previous_capsule;
 	OBB obb;
 	OBB previous_obb;
 	MinMax bounds;
@@ -116,7 +118,7 @@ bool IsDynamicTauNode(const TauNode &node) {
 	return node.body_type == RBT_Dynamic && node.total_mass > 0.f && node.inverse_mass > 0.f;
 }
 
-bool IsTauSolverShape(CollisionType type) { return type == CT_Cube || type == CT_Sphere; }
+bool IsTauSolverShape(CollisionType type) { return type == CT_Cube || type == CT_Sphere || type == CT_Capsule; }
 
 bool IsTauAnalyticShape(CollisionType type) {
 	return type == CT_Cube || type == CT_Sphere || type == CT_Capsule || type == CT_Cone || type == CT_Cylinder;
@@ -148,8 +150,8 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		shape.friction = 0.f;
 		shape.restitution = 0.f;
 
-		// Capsule, cone and cylinder are raycast/debug shapes for now. Do not turn
-		// them into dynamic bodies until their narrow phase is implemented.
+		// Cone and cylinder are raycast/debug shapes for now. Do not turn them into
+		// dynamic bodies until their narrow phase is implemented.
 		if (IsTauSolverShape(shape.type))
 			total_mass += shape.mass;
 		shapes.push_back(shape);
@@ -269,6 +271,16 @@ void RefreshTauMassProperties(TauNode &node) {
 		if (shape.type == CT_Sphere) {
 			const float radius = shape.radius * std::max({abs_scale.x, abs_scale.y, abs_scale.z});
 			centered_inertia = Mat3::Identity * (2.f * shape.mass * radius * radius / 5.f);
+		} else if (shape.type == CT_Capsule) {
+			// Match btCapsuleShape::calculateLocalInertia: approximate the capsule
+			// with the box enclosing its cylindrical span and spherical caps.
+			const float radius = shape.radius * std::max(abs_scale.x, abs_scale.z);
+			const float height = Abs(shape.size.y) * abs_scale.y;
+			const Vec3 bounding_size(radius * 2.f, height + radius * 2.f, radius * 2.f);
+			const Vec3 size_sq = bounding_size * bounding_size;
+			const Vec3 diagonal(shape.mass * (size_sq.y + size_sq.z) / 12.f, shape.mass * (size_sq.x + size_sq.z) / 12.f,
+				shape.mass * (size_sq.x + size_sq.y) / 12.f);
+			centered_inertia = shape.local_rotation * DiagonalMat3(diagonal) * Transpose(shape.local_rotation);
 		} else {
 			const Vec3 scaled_size = abs_scale * shape.size;
 			const Vec3 size_sq = scaled_size * scaled_size;
@@ -349,6 +361,16 @@ struct TauRayShapeHit {
 TauPrimitiveFrame BuildTauPrimitiveFrame(const TauNode &node, const TauCollisionShape &shape) {
 	const Mat3 rotation = ToMatrix3(node.orientation) * shape.local_rotation;
 	return {BuildTauWorldSphereCenter(node, shape), Normalize(GetX(rotation)), Normalize(GetY(rotation)), Normalize(GetZ(rotation))};
+}
+
+TauCapsuleGeometry BuildTauWorldCapsule(const TauNode &node, const TauCollisionShape &shape, bool previous = false) {
+	const Quaternion orientation = previous ? node.previous_orientation : node.orientation;
+	const Mat3 rotation = ToMatrix3(orientation) * shape.local_rotation;
+	const Vec3 center = BuildTauWorldSphereCenter(node, shape, previous);
+	const Vec3 scale = Abs(node.scale);
+	const float half_height = Abs(shape.size.y) * scale.y * 0.5f;
+	const Vec3 half_axis = Normalize(GetY(rotation)) * half_height;
+	return {center - half_axis, center + half_axis, shape.radius * std::max(scale.x, scale.z)};
 }
 
 Vec3 TauFrameWorldToLocal(const TauPrimitiveFrame &frame, const Vec3 &point) {
@@ -676,6 +698,14 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 			world_shape.previous_position = BuildTauWorldSphereCenter(node, shape, true);
 			world_shape.radius = BuildTauWorldSphereRadius(node, shape);
 			world_shape.bounds = {world_shape.position - Vec3(world_shape.radius), world_shape.position + Vec3(world_shape.radius)};
+		} else if (shape.type == CT_Capsule) {
+			world_shape.capsule = BuildTauWorldCapsule(node, shape);
+			world_shape.previous_capsule = BuildTauWorldCapsule(node, shape, true);
+			world_shape.position = (world_shape.capsule.a + world_shape.capsule.b) * 0.5f;
+			world_shape.previous_position = (world_shape.previous_capsule.a + world_shape.previous_capsule.b) * 0.5f;
+			const Vec3 radius(world_shape.capsule.radius);
+			world_shape.bounds = {Min(world_shape.capsule.a, world_shape.capsule.b) - radius,
+				Max(world_shape.capsule.a, world_shape.capsule.b) + radius};
 		} else {
 			world_shape.obb = BuildTauWorldOBB(node, shape);
 			world_shape.previous_obb = BuildTauPreviousWorldOBB(node, shape);
@@ -1185,6 +1215,201 @@ void ClosestTauSegmentPoints(const Vec3 &p0, const Vec3 &p1, const Vec3 &q0, con
 	point_q = q0 + d2 * t;
 }
 
+Vec3 ClosestTauPointOnSegment(const Vec3 &a, const Vec3 &b, const Vec3 &point) {
+	const Vec3 segment = b - a;
+	const float length_squared = Len2(segment);
+	if (length_squared <= k_tau_collision_epsilon)
+		return a;
+	return a + segment * Clamp(Dot(point - a, segment) / length_squared, 0.f, 1.f);
+}
+
+Vec3 ClosestTauPointOnObb(const OBB &obb, const Vec3 &point) {
+	const Vec3 half = Abs(obb.scl) * 0.5f;
+	Vec3 local = WorldToTauObbLocal(obb, point);
+	for (int axis = 0; axis < 3; ++axis)
+		local[axis] = Clamp(local[axis], -half[axis], half[axis]);
+	return TauObbLocalToWorld(obb, local);
+}
+
+Vec3 TauPerpendicularDirection(const Vec3 &direction) {
+	const float length_squared = Len2(direction);
+	if (length_squared <= k_tau_collision_epsilon)
+		return Vec3::Up;
+	const Vec3 axis = direction / Sqrt(length_squared);
+	const Vec3 reference = Abs(axis.x) < 0.577f ? Vec3::Right : (Abs(axis.y) < 0.577f ? Vec3::Up : Vec3::Front);
+	return Normalize(Cross(axis, reference));
+}
+
+Vec3 TauCapsuleFallbackNormal(const TauCapsuleGeometry &capsule, const Vec3 &target) {
+	const Vec3 axis = capsule.b - capsule.a;
+	const Vec3 center = (capsule.a + capsule.b) * 0.5f;
+	Vec3 radial = target - center;
+	const float axis_length_squared = Len2(axis);
+	if (axis_length_squared > k_tau_collision_epsilon)
+		radial -= axis * (Dot(radial, axis) / axis_length_squared);
+	if (Len2(radial) > k_tau_collision_epsilon)
+		return Normalize(radial);
+	return TauPerpendicularDirection(axis);
+}
+
+void SetTauRoundedContactPoint(
+	const Vec3 &axis_point_a, float radius_a, const Vec3 &axis_point_b, float radius_b, const Vec3 &normal, Vec3 &point) {
+	const Vec3 surface_a = axis_point_a + normal * radius_a;
+	const Vec3 surface_b = axis_point_b - normal * radius_b;
+	point = (surface_a + surface_b) * 0.5f;
+}
+
+bool ComputeTauCapsuleSphereContactImpl(const TauCapsuleGeometry &capsule, const Vec3 &sphere_center, float sphere_radius, Vec3 &normal,
+	float &penetration, Vec3 &point) {
+	const float capsule_radius = std::max(0.f, capsule.radius);
+	sphere_radius = std::max(0.f, sphere_radius);
+	const Vec3 capsule_point = ClosestTauPointOnSegment(capsule.a, capsule.b, sphere_center);
+	const Vec3 delta = sphere_center - capsule_point;
+	const float distance = Len(delta);
+	const float radius_sum = capsule_radius + sphere_radius;
+	if (distance > radius_sum)
+		return false;
+
+	normal = distance > k_tau_collision_epsilon ? delta / distance : TauCapsuleFallbackNormal(capsule, sphere_center);
+	penetration = radius_sum - distance;
+	SetTauRoundedContactPoint(capsule_point, capsule_radius, sphere_center, sphere_radius, normal, point);
+	return true;
+}
+
+bool ComputeTauCapsuleCapsuleContactImpl(
+	const TauCapsuleGeometry &a, const TauCapsuleGeometry &b, Vec3 &normal, float &penetration, Vec3 &point) {
+	Vec3 point_a, point_b;
+	ClosestTauSegmentPoints(a.a, a.b, b.a, b.b, point_a, point_b);
+	const Vec3 delta = point_b - point_a;
+	const float distance = Len(delta);
+	const float radius_a = std::max(0.f, a.radius), radius_b = std::max(0.f, b.radius);
+	const float radius_sum = radius_a + radius_b;
+	if (distance > radius_sum)
+		return false;
+
+	if (distance > k_tau_collision_epsilon) {
+		normal = delta / distance;
+	} else {
+		const Vec3 center_delta = (b.a + b.b - a.a - a.b) * 0.5f;
+		const Vec3 crossed_axes = Cross(a.b - a.a, b.b - b.a);
+		if (Len2(crossed_axes) > k_tau_collision_epsilon) {
+			normal = Normalize(crossed_axes);
+			if (Dot(normal, center_delta) < 0.f)
+				normal = -normal;
+		} else {
+			normal = TauCapsuleFallbackNormal(a, (b.a + b.b) * 0.5f);
+			if (Dot(normal, center_delta) < 0.f)
+				normal = -normal;
+		}
+	}
+
+	penetration = radius_sum - distance;
+	SetTauRoundedContactPoint(point_a, radius_a, point_b, radius_b, normal, point);
+	return true;
+}
+
+bool TauSegmentIntersectsObb(const TauCapsuleGeometry &capsule, const OBB &obb) {
+	const Vec3 a = WorldToTauObbLocal(obb, capsule.a);
+	const Vec3 b = WorldToTauObbLocal(obb, capsule.b);
+	const Vec3 direction = b - a;
+	const Vec3 half = Abs(obb.scl) * 0.5f;
+	float t_enter = 0.f, t_exit = 1.f;
+
+	for (int axis = 0; axis < 3; ++axis) {
+		if (Abs(direction[axis]) <= k_tau_collision_epsilon) {
+			if (a[axis] < -half[axis] || a[axis] > half[axis])
+				return false;
+			continue;
+		}
+		float t0 = (-half[axis] - a[axis]) / direction[axis];
+		float t1 = (half[axis] - a[axis]) / direction[axis];
+		if (t0 > t1)
+			std::swap(t0, t1);
+		t_enter = std::max(t_enter, t0);
+		t_exit = std::min(t_exit, t1);
+		if (t_enter > t_exit)
+			return false;
+	}
+	return true;
+}
+
+void ConsiderTauClosestPair(const Vec3 &capsule_point, const Vec3 &obb_point, float &best_distance_squared, Vec3 &best_capsule_point,
+	Vec3 &best_obb_point) {
+	const float distance_squared = Len2(obb_point - capsule_point);
+	if (distance_squared < best_distance_squared) {
+		best_distance_squared = distance_squared;
+		best_capsule_point = capsule_point;
+		best_obb_point = obb_point;
+	}
+}
+
+bool ComputeTauCapsuleObbContactImpl(
+	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
+	const float radius = std::max(0.f, capsule.radius);
+	const Vec3 half = Abs(obb.scl) * 0.5f;
+
+	if (TauSegmentIntersectsObb(capsule, obb)) {
+		const Vec3 local_a = WorldToTauObbLocal(obb, capsule.a);
+		const Vec3 local_b = WorldToTauObbLocal(obb, capsule.b);
+		float best_depth = std::numeric_limits<float>::max();
+		int best_axis = 0;
+		bool move_positive = true;
+		for (int axis = 0; axis < 3; ++axis) {
+			const float positive_depth = half[axis] + radius - std::min(local_a[axis], local_b[axis]);
+			if (positive_depth < best_depth) {
+				best_depth = positive_depth;
+				best_axis = axis;
+				move_positive = true;
+			}
+			const float negative_depth = half[axis] + radius + std::max(local_a[axis], local_b[axis]);
+			if (negative_depth < best_depth) {
+				best_depth = negative_depth;
+				best_axis = axis;
+				move_positive = false;
+			}
+		}
+
+		const bool use_a = move_positive ? local_a[best_axis] <= local_b[best_axis] : local_a[best_axis] >= local_b[best_axis];
+		Vec3 local_point = use_a ? local_a : local_b;
+		for (int axis = 0; axis < 3; ++axis)
+			local_point[axis] = Clamp(local_point[axis], -half[axis], half[axis]);
+		local_point[best_axis] = move_positive ? half[best_axis] : -half[best_axis];
+		normal = GetTauObbAxis(obb, best_axis) * (move_positive ? -1.f : 1.f);
+		penetration = std::max(0.f, best_depth);
+		point = TauObbLocalToWorld(obb, local_point);
+		return true;
+	}
+
+	float best_distance_squared = std::numeric_limits<float>::max();
+	Vec3 capsule_point, obb_point;
+	ConsiderTauClosestPair(capsule.a, ClosestTauPointOnObb(obb, capsule.a), best_distance_squared, capsule_point, obb_point);
+	ConsiderTauClosestPair(capsule.b, ClosestTauPointOnObb(obb, capsule.b), best_distance_squared, capsule_point, obb_point);
+
+	std::array<Vec3, 8> vertices;
+	for (uint8_t vertex = 0; vertex < vertices.size(); ++vertex) {
+		const Vec3 local((vertex & 1) ? half.x : -half.x, (vertex & 2) ? half.y : -half.y, (vertex & 4) ? half.z : -half.z);
+		vertices[vertex] = TauObbLocalToWorld(obb, local);
+		ConsiderTauClosestPair(ClosestTauPointOnSegment(capsule.a, capsule.b, vertices[vertex]), vertices[vertex], best_distance_squared,
+			capsule_point, obb_point);
+	}
+
+	static constexpr uint8_t edges[12][2] = {
+		{0, 1}, {2, 3}, {4, 5}, {6, 7}, {0, 2}, {1, 3}, {4, 6}, {5, 7}, {0, 4}, {1, 5}, {2, 6}, {3, 7}};
+	for (const auto &edge : edges) {
+		Vec3 point_on_capsule, point_on_edge;
+		ClosestTauSegmentPoints(capsule.a, capsule.b, vertices[edge[0]], vertices[edge[1]], point_on_capsule, point_on_edge);
+		ConsiderTauClosestPair(point_on_capsule, point_on_edge, best_distance_squared, capsule_point, obb_point);
+	}
+
+	const float distance = Sqrt(best_distance_squared);
+	if (distance > radius)
+		return false;
+	normal = distance > k_tau_collision_epsilon ? (obb_point - capsule_point) / distance : TauCapsuleFallbackNormal(capsule, obb.pos);
+	penetration = radius - distance;
+	SetTauRoundedContactPoint(capsule_point, radius, obb_point, 0.f, normal, point);
+	return true;
+}
+
 bool ComputeTauObbContactManifold(const OBB &a, const OBB &b, TauContactManifold &manifold) {
 	const Vec3 half_a = Abs(a.scl) * 0.5f;
 	const Vec3 half_b = Abs(b.scl) * 0.5f;
@@ -1360,7 +1585,27 @@ bool ComputeTauContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &nor
 			normal = -normal;
 		return contact;
 	}
-	return ComputeTauSphereContact(a, b, normal, penetration, point);
+	if (a.shape->type == CT_Capsule && b.shape->type == CT_Sphere)
+		return ComputeTauCapsuleSphereContactImpl(a.capsule, b.position, b.radius, normal, penetration, point);
+	if (a.shape->type == CT_Sphere && b.shape->type == CT_Capsule) {
+		const bool contact = ComputeTauCapsuleSphereContactImpl(b.capsule, a.position, a.radius, normal, penetration, point);
+		if (contact)
+			normal = -normal;
+		return contact;
+	}
+	if (a.shape->type == CT_Capsule && b.shape->type == CT_Cube)
+		return ComputeTauCapsuleObbContactImpl(a.capsule, b.obb, normal, penetration, point);
+	if (a.shape->type == CT_Cube && b.shape->type == CT_Capsule) {
+		const bool contact = ComputeTauCapsuleObbContactImpl(b.capsule, a.obb, normal, penetration, point);
+		if (contact)
+			normal = -normal;
+		return contact;
+	}
+	if (a.shape->type == CT_Capsule && b.shape->type == CT_Capsule)
+		return ComputeTauCapsuleCapsuleContactImpl(a.capsule, b.capsule, normal, penetration, point);
+	if (a.shape->type == CT_Sphere && b.shape->type == CT_Sphere)
+		return ComputeTauSphereContact(a, b, normal, penetration, point);
+	return false;
 }
 
 float GetTauInverseMass(const TauNode &node) {
@@ -1755,6 +2000,8 @@ std::vector<TauContactConstraint> BuildTauContacts(
 						contact.friction = friction;
 						contact.restitution = restitution;
 						if (ComputeTauContact(shape_a, shape_b, contact.normal, contact.penetration, contact.point)) {
+							++diagnostics.shape_pairs;
+							++diagnostics.manifold_points;
 							diagnostics.max_penetration = std::max(diagnostics.max_penetration, contact.penetration);
 							contacts.push_back(contact);
 						}
@@ -1887,6 +2134,21 @@ bool ComputeObbContactManifold(const OBB &a, const OBB &b, TauContactManifold &m
 }
 
 Vec3 ObbLocalPointToWorld(const OBB &obb, const Vec3 &point) { return TauObbLocalToWorld(obb, point); }
+
+bool ComputeCapsuleSphereContact(const TauCapsuleGeometry &capsule, const Vec3 &sphere_center, float sphere_radius, Vec3 &normal,
+	float &penetration, Vec3 &point) {
+	return ComputeTauCapsuleSphereContactImpl(capsule, sphere_center, sphere_radius, normal, penetration, point);
+}
+
+bool ComputeCapsuleObbContact(
+	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
+	return ComputeTauCapsuleObbContactImpl(capsule, obb, normal, penetration, point);
+}
+
+bool ComputeCapsuleCapsuleContact(
+	const TauCapsuleGeometry &a, const TauCapsuleGeometry &b, Vec3 &normal, float &penetration, Vec3 &point) {
+	return ComputeTauCapsuleCapsuleContactImpl(a, b, normal, penetration, point);
+}
 
 } // namespace tau_internal
 

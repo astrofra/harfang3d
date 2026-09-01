@@ -38,6 +38,27 @@ Node CreateTauRaycastPrimitive(Scene &scene, CollisionType type, const Vec3 &pos
 	return node;
 }
 
+Node CreateTauContactPrimitive(
+	Scene &scene, CollisionType type, const Vec3 &position, RigidBodyType body_type, float mass, float radius = 0.5f, float height = 1.f) {
+	Node node = scene.CreateNode();
+	node.SetTransform(scene.CreateTransform(TranslationMat4(position)));
+	auto rigid_body = scene.CreateRigidBody();
+	rigid_body.SetType(body_type);
+	node.SetRigidBody(rigid_body);
+	auto collision = scene.CreateCollision();
+	collision.SetType(type);
+	collision.SetMass(mass);
+	if (type == CT_Cube)
+		collision.SetSize(Vec3::One);
+	else {
+		collision.SetRadius(radius);
+		if (type == CT_Capsule)
+			collision.SetHeight(height);
+	}
+	node.SetCollision(0, collision);
+	return node;
+}
+
 void TestPreTickCallback() {
 	Scene scene;
 	const Node cube = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 2.f, 0.f)), InvalidModelRef, {}, 1.f);
@@ -115,6 +136,73 @@ void TestRaycastVariousCollisionShapes() {
 
 	const RaycastOut miss = physics.RaycastFirstHit(scene, Vec3(4.f, 0.75f, -5.f), Vec3(4.f, 0.75f, 10.f));
 	TEST_CHECK(!miss.node.IsValid());
+}
+
+void TestCapsuleCollisionPairs() {
+	Scene scene;
+	const Node capsule_sphere = CreateTauContactPrimitive(scene, CT_Capsule, Vec3::Zero, RBT_Dynamic, 1.f);
+	const Node sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(0.8f, 0.f, 0.f), RBT_Static, 0.f);
+
+	// Create the cube first to exercise the reversed cube/capsule dispatch order.
+	const Node cube = CreateTauContactPrimitive(scene, CT_Cube, Vec3(10.8f, 0.f, 0.f), RBT_Static, 0.f);
+	const Node capsule_cube = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(10.f, 0.f, 0.f), RBT_Dynamic, 1.f);
+
+	const Node capsule_a = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(20.f, 0.f, 0.f), RBT_Dynamic, 1.f);
+	const Node capsule_b = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(20.8f, 0.f, 0.f), RBT_Static, 0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	const Node dynamic_capsules[] = {capsule_sphere, capsule_cube, capsule_a};
+	for (const Node &capsule : dynamic_capsules) {
+		TEST_CHECK(physics.NodeHasBody(capsule));
+		physics.NodeStartTrackingCollisionEvents(capsule, CETM_EventAndContacts);
+		physics.NodeAddImpulse(capsule, Vec3(0.f, 0.f, 1.f));
+		TEST_CHECK(physics.NodeGetLinearVelocity(capsule).z > 0.9f);
+		physics.NodeSetLinearVelocity(capsule, Vec3::Zero);
+	}
+
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	NodePairContacts contacts;
+	physics.CollectCollisionEvents(scene, contacts);
+
+	struct ExpectedPair {
+		Node capsule;
+		Node other;
+	};
+	const ExpectedPair expected[] = {{capsule_sphere, sphere}, {capsule_cube, cube}, {capsule_a, capsule_b}};
+	for (const auto &pair : expected) {
+		const auto pair_contacts = GetNodeRefPairContacts(pair.capsule.ref, pair.other.ref, contacts);
+		TEST_CHECK_(pair_contacts.size() == 1, "expected one capsule contact, got %zu", pair_contacts.size());
+		if (!pair_contacts.empty()) {
+			TEST_CHECK(AlmostEqual(Len(pair_contacts[0].N), 1.f, 0.0001f));
+			TEST_CHECK(pair_contacts[0].d <= 0.f);
+		}
+	}
+}
+
+void TestCapsuleSettlesOnCuboid() {
+	Scene scene;
+	const Node capsule = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(0.f, 3.f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeStartTrackingCollisionEvents(capsule, CETM_EventAndContacts);
+	size_t contact_steps = 0;
+	for (int step = 0; step < 240; ++step) {
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+		NodePairContacts contacts;
+		physics.CollectCollisionEvents(scene, contacts);
+		if (!GetNodeRefsInContact(capsule.ref, contacts).empty())
+			++contact_steps;
+	}
+	physics.SyncTransformsToScene(scene);
+
+	const float settled_y = GetT(capsule.GetTransform().GetWorld()).y;
+	TEST_CHECK_(settled_y > 0.9f && settled_y < 1.1f, "expected capsule center near y=1, got %.6f", settled_y);
+	TEST_CHECK(Abs(physics.NodeGetLinearVelocity(capsule).y) < 0.1f);
+	TEST_CHECK(contact_steps > 100);
 }
 
 void TestRaycastAllHitsAreStableAndBounded() {
@@ -229,6 +317,8 @@ void test_scene_tau_physics() {
 	TestPreTickCallback();
 	TestScenePhysicsPreTickAdapter();
 	TestRaycastVariousCollisionShapes();
+	TestCapsuleCollisionPairs();
+	TestCapsuleSettlesOnCuboid();
 	TestRaycastAllHitsAreStableAndBounded();
 	TestMeshColliderRaycast();
 }

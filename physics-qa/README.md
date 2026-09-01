@@ -151,6 +151,10 @@ run-one.bat rb_raycast_various_collshapes.lua
 This check does not run `assetc`: these five collision shapes are constructed
 and raycast analytically at runtime.
 
+`rb_capsule_collision_pairs.lua` is a headless, asset-free check for physical
+capsule contacts. It requires contacts for capsule/sphere, capsule/cuboid and
+capsule/capsule, and can be run against either Bullet or Tau with `run-one.bat`.
+
 The mesh-collider raycast sample uses the same one-frame mode, but requires its
 assets to be rebuilt first. `assetc` cooks `Plan_38.physics_triangles` beside
 the existing Bullet-specific blob; the Lua sample references the logical

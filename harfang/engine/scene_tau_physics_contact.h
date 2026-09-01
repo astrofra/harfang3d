@@ -45,11 +45,21 @@ struct TauContactManifold {
 	uint32_t last_seen_step{0};
 };
 
+struct TauCapsuleGeometry {
+	Vec3 a{Vec3::Zero}, b{Vec3::Zero};
+	float radius{0.f};
+};
+
 namespace tau_internal {
 
 // Internal narrowphase entry points kept visible for focused Tau unit tests.
 bool ComputeObbContactManifold(const OBB &a, const OBB &b, TauContactManifold &manifold);
 Vec3 ObbLocalPointToWorld(const OBB &obb, const Vec3 &point);
+bool ComputeCapsuleSphereContact(const TauCapsuleGeometry &capsule, const Vec3 &sphere_center, float sphere_radius, Vec3 &normal,
+	float &penetration, Vec3 &point);
+bool ComputeCapsuleObbContact(
+	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point);
+bool ComputeCapsuleCapsuleContact(const TauCapsuleGeometry &a, const TauCapsuleGeometry &b, Vec3 &normal, float &penetration, Vec3 &point);
 
 } // namespace tau_internal
 

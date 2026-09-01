@@ -83,4 +83,46 @@ void test_scene_tau_physics_contact() {
 			CheckManifoldOrientation(a, b, manifold);
 		}
 	}
+	{
+		const TauCapsuleGeometry capsule{Vec3(0.f, -1.f, 0.f), Vec3(0.f, 1.f, 0.f), 0.5f};
+		Vec3 normal, point;
+		float penetration = 0.f;
+		TEST_CHECK(tau_internal::ComputeCapsuleSphereContact(capsule, Vec3(0.8f, 0.f, 0.f), 0.5f, normal, penetration, point));
+		TEST_CHECK(Dot(normal, Vec3::Right) > 0.9999f);
+		TEST_CHECK(Abs(penetration - 0.2f) < 0.0001f);
+		TEST_CHECK(Abs(point.x - 0.4f) < 0.0001f);
+		TEST_CHECK(!tau_internal::ComputeCapsuleSphereContact(capsule, Vec3(1.01f, 0.f, 0.f), 0.5f, normal, penetration, point));
+	}
+	{
+		const TauCapsuleGeometry capsule{Vec3(0.f, -1.f, 0.f), Vec3(0.f, 1.f, 0.f), 0.5f};
+		Vec3 normal, point;
+		float penetration = 0.f;
+		TEST_CHECK(tau_internal::ComputeCapsuleObbContact(capsule, OBB(Vec3(0.8f, 0.f, 0.f), Vec3::One), normal, penetration, point));
+		TEST_CHECK(Dot(normal, Vec3::Right) > 0.9999f);
+		TEST_CHECK(Abs(penetration - 0.2f) < 0.0001f);
+		TEST_CHECK(Abs(point.x - 0.4f) < 0.0001f);
+		TEST_CHECK(!tau_internal::ComputeCapsuleObbContact(capsule, OBB(Vec3(1.6f, 0.f, 0.f), Vec3::One), normal, penetration, point));
+
+		TEST_CHECK(tau_internal::ComputeCapsuleObbContact(capsule, OBB(Vec3::Zero, Vec3::One), normal, penetration, point));
+		TEST_CHECK(AlmostEqual(Len(normal), 1.f, 0.0001f));
+		TEST_CHECK(Abs(penetration - 1.f) < 0.0001f);
+	}
+	{
+		const TauCapsuleGeometry a{Vec3(0.f, -1.f, 0.f), Vec3(0.f, 1.f, 0.f), 0.5f};
+		const TauCapsuleGeometry b{Vec3(0.8f, -1.f, 0.f), Vec3(0.8f, 1.f, 0.f), 0.5f};
+		Vec3 normal, point;
+		float penetration = 0.f;
+		TEST_CHECK(tau_internal::ComputeCapsuleCapsuleContact(a, b, normal, penetration, point));
+		TEST_CHECK(Dot(normal, Vec3::Right) > 0.9999f);
+		TEST_CHECK(Abs(penetration - 0.2f) < 0.0001f);
+		TEST_CHECK(Abs(point.x - 0.4f) < 0.0001f);
+
+		const TauCapsuleGeometry crossing{Vec3(-1.f, 0.f, 0.f), Vec3(1.f, 0.f, 0.f), 0.5f};
+		TEST_CHECK(tau_internal::ComputeCapsuleCapsuleContact(a, crossing, normal, penetration, point));
+		TEST_CHECK(AlmostEqual(Len(normal), 1.f, 0.0001f));
+		TEST_CHECK(Abs(penetration - 1.f) < 0.0001f);
+
+		const TauCapsuleGeometry separated{Vec3(1.01f, -1.f, 0.f), Vec3(1.01f, 1.f, 0.f), 0.5f};
+		TEST_CHECK(!tau_internal::ComputeCapsuleCapsuleContact(a, separated, normal, penetration, point));
+	}
 }
