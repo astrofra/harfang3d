@@ -102,15 +102,22 @@ python plot_physics_trajectories.py qa_dumps\bullet\rb_dynamic_variable_friction
 
 The impulse-callback scenario additionally verifies that its pre-tick callback
 is invoked once per fixed physics sub-step and that the callback-driven cube
-tracks the render-loop-driven cube. It captures both cubes in the same run.
-The velocity override accounts for the single backend-specific ground-contact
-spike; the mean velocity difference remains much smaller:
+tracks the render-loop-driven cube. It samples both positions before entering
+`SceneUpdateSystems`, because the world-matrix cache is intentionally invalid
+during a pre-tick callback. It captures both cubes in the same run:
 
 ```bat
 dump-one.bat bullet rb_dynamic_impulse_callback.lua
 dump-one.bat tau rb_dynamic_impulse_callback.lua
-python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl --linear-velocity-threshold 0.4
+python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl
+python analyze_impulse_callback_amplitude.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl
 ```
+
+The amplitude analysis writes
+`qa_dumps/rb_dynamic_impulse_callback_amplitude.png`. In addition to position
+and velocity, it plots the Tau-minus-Bullet residual and a display-only
+half-step interpolation proposal; it does not alter either captured solver
+trajectory.
 
 The cuboid-chain scenario has a dedicated bounded-envelope check. It requires
 600 fixed samples, keeps every Tau ring center within 5 m vertically of

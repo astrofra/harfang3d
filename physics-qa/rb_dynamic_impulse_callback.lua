@@ -84,11 +84,12 @@ function sleep(n)
 	if n > 0 then os.execute("ping -n " .. tonumber(n+1) .. " localhost > NUL") end
   end
 
-function impulse(ph, node, dt, target_pos) 
+function impulse(ph, node, dt, target_pos, current_pos)
 	cur_velocity = ph:NodeGetLinearVelocity(node)
 	-- Pre-tick callbacks run while SceneUpdateSystems has invalidated the
-	-- cached world matrices. Compute the node world directly in that phase.
-	vel_to_target = target_pos - hg.GetT(node:ComputeWorld())
+	-- cached world matrices. Both paths therefore use the same position
+	-- sampled immediately before the systems update.
+	vel_to_target = target_pos - current_pos
 	vel_to_target = vel_to_target - cur_velocity
 	ph:NodeAddImpulse(node, vel_to_target)
 	ph:NodeWake(node)
@@ -98,12 +99,12 @@ callback_count = 0
 
 function foo(ph, dt)
 	callback_count = callback_count + 1
-	impulse(ph, cube_node_callback, dt, cube_node_callback_pos)
+	impulse(ph, cube_node_callback, dt, cube_node_callback_pos, cube_node_callback_world_pos)
 end
 
 function check_impulse_parity(ph)
-	render_error = hg.GetT(cube_node_render:ComputeWorld()) - cube_node_render_pos
-	callback_error = hg.GetT(cube_node_callback:ComputeWorld()) - cube_node_callback_pos
+	render_error = hg.GetT(cube_node_render:GetTransform():GetWorld()) - cube_node_render_pos
+	callback_error = hg.GetT(cube_node_callback:GetTransform():GetWorld()) - cube_node_callback_pos
 	position_error = hg.Len(render_error - callback_error)
 	velocity_error = hg.Len(ph:NodeGetLinearVelocity(cube_node_render) - ph:NodeGetLinearVelocity(cube_node_callback))
 	if position_error > 0.0001 or velocity_error > 0.0001 then
@@ -132,6 +133,9 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.compl
 		cube_node_callback_pos.y = cube_node_render_pos.y
 	end
 
+	cube_node_render_world_pos = hg.GetT(cube_node_render:GetTransform():GetWorld())
+	cube_node_callback_world_pos = hg.GetT(cube_node_callback:GetTransform():GetWorld())
+
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(_ofs,0,0), cube_node_render_pos - hg.Vec3(_ofs,0,0), hg.Color.Red})
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(0,_ofs,0), cube_node_render_pos - hg.Vec3(0,_ofs,0), hg.Color.Red})
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(0,0,_ofs), cube_node_render_pos - hg.Vec3(0,0,_ofs), hg.Color.Red})
@@ -140,7 +144,7 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.compl
 	table.insert(lines, {cube_node_callback_pos + hg.Vec3(0,_ofs,0), cube_node_callback_pos - hg.Vec3(0,_ofs,0), hg.Color.Red})
 	table.insert(lines, {cube_node_callback_pos + hg.Vec3(0,0,_ofs), cube_node_callback_pos - hg.Vec3(0,0,_ofs), hg.Color.Red})
 
-	impulse(physics, cube_node_render, dt, cube_node_render_pos)
+	impulse(physics, cube_node_render, dt, cube_node_render_pos, cube_node_render_world_pos)
 
 	hg.SceneUpdateSystems(scene, clocks, dt, physics, physics_step, 8)
 	physics_frame_count = physics_frame_count + 1
