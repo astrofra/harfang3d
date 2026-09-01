@@ -138,6 +138,20 @@ run records 600 ticks at 60 Hz and exits automatically. Set
 `HG_PHYSICS_QA_DUMP_SAMPLES` or `HG_PHYSICS_QA_DUMP_EVERY` to change the
 capture duration or sampling interval.
 
+The various-collision-shapes raycast sample also has a one-frame check that
+requires every analytic primitive (sphere, cube, capsule, cone and cylinder)
+to be hit at least once, then exits cleanly:
+
+```bat
+set HG_PHYSICS_QA_MODE=raycast_check
+set HG_LUA_DIR=..\..\install\tau\hg_lua
+run-one.bat rb_raycast_various_collshapes.lua
+```
+
+This check does not run `assetc`: these five collision shapes are constructed
+and raycast analytically at runtime. Mesh collision raycasts remain a separate
+backend/cooking task.
+
 `plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
 default. It renders Bullet trajectories in blue and Tau trajectories in red on
 a black 3D plot. Use `--elevation` and `--azimuth` to change the view.

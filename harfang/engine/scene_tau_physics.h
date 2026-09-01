@@ -161,6 +161,9 @@ public:
 		Add6DofConstraint(node_a.ref, node_b.ref, anchor_a_local, anchor_b_local);
 	}
 
+	RaycastOut RaycastFirstHit(const Scene &scene, const Vec3 &world_p0, const Vec3 &world_p1) const;
+	std::vector<RaycastOut> RaycastAllHits(const Scene &scene, const Vec3 &world_p0, const Vec3 &world_p1) const;
+
 	void RenderCollision(bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth);
 
 	// Match Bullet's internal pre-tick contract: one call immediately before

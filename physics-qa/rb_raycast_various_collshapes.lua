@@ -138,6 +138,14 @@ clocks = hg.SceneClocks()
 hg.SetLogLevel(hg.LL_Normal)
 print(">>> Description:\n>>> Shoot N raycast toward a collection of Node + Rigid bodies + Collision shapes of various types.\n>>> Red if the raycast hit nothing.\n>>> Green if the raycast hit a node.")
 
+-- One-frame, non-interactive verification used by the Bullet/Tau QA runs.
+-- The sample only uses analytic primitives, so no compiled collision asset is involved.
+raycast_qa = os.getenv("HG_PHYSICS_QA_MODE") == "raycast_check"
+raycast_qa_hits = {}
+raycast_qa_center_t = {}
+raycast_qa_center_x = { ["Physic Sphere"] = 2, ["Physic Cube"] = 0, ["Physic Capsule"] = -2, ["Physic Cone"] = -4, ["Physic Cylinder"] = -6 }
+raycast_qa_running = true
+
 -- main loop
 keyboard = hg.Keyboard()
 mouse = hg.Mouse()
@@ -145,7 +153,7 @@ mouse = hg.Mouse()
 vtx = hg.Vertices(vtx_line_layout, 2)
 vid_scene_opaque = 0
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while raycast_qa_running and not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     keyboard:Update()
 	mouse:Update()
 
@@ -154,6 +162,13 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 		end_pos = hg.Vec3(-8 + 0.2 * i, 0.75, 10)
 		raycast_out = physics:RaycastFirstHit(scene, start_pos, end_pos)
 		if raycast_out.node:IsValid() then
+			if raycast_qa then
+				local name = raycast_out.node:GetName()
+				raycast_qa_hits[name] = (raycast_qa_hits[name] or 0) + 1
+				if raycast_qa_center_x[name] and math.abs(start_pos.x - raycast_qa_center_x[name]) < 0.001 then
+					raycast_qa_center_t[name] = raycast_out.t
+				end
+			end
 			vtx:Clear()
 			vtx:Begin(0):SetPos(start_pos):SetColor0(hg.Color.Green):End()
 			vtx:Begin(1):SetPos(raycast_out.P):SetColor0(hg.Color.Green):End()
@@ -180,6 +195,19 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 
     hg.Frame()
     hg.UpdateWindow(win)
+
+	if raycast_qa then
+		local shape_names = {"Physic Sphere", "Physic Cube", "Physic Capsule", "Physic Cone", "Physic Cylinder"}
+		local summary = {}
+		for _, name in ipairs(shape_names) do
+			local count = raycast_qa_hits[name] or 0
+			assert(count > 0, "Raycast QA did not hit " .. name)
+			assert(raycast_qa_center_t[name], "Raycast QA did not capture the center ray for " .. name)
+			table.insert(summary, string.format("%s=%d@%.6f", name, count, raycast_qa_center_t[name]))
+		end
+		print("Raycast QA passed: " .. table.concat(summary, ", "))
+		raycast_qa_running = false
+	end
 end
 
 scene:Clear()

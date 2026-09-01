@@ -33,6 +33,7 @@ static constexpr float k_tau_manifold_point_tolerance = 0.05f;
 static constexpr float k_tau_manifold_normal_tolerance = 0.94f;
 static constexpr float k_tau_manifold_clip_tolerance = 0.001f;
 static constexpr float k_tau_sat_tie_tolerance = 0.0001f;
+static constexpr float k_tau_bullet_convex_margin = 0.04f;
 static constexpr uint32_t k_tau_manifold_lifetime = 3;
 static constexpr size_t k_tau_max_manifolds = 4096;
 static constexpr int k_tau_position_iterations = 3;
@@ -100,6 +101,12 @@ bool IsDynamicTauNode(const TauNode &node) {
 	return node.body_type == RBT_Dynamic && node.total_mass > 0.f && node.inverse_mass > 0.f;
 }
 
+bool IsTauSolverShape(CollisionType type) { return type == CT_Cube || type == CT_Sphere; }
+
+bool IsTauAnalyticShape(CollisionType type) {
+	return type == CT_Cube || type == CT_Sphere || type == CT_Capsule || type == CT_Cone || type == CT_Cylinder;
+}
+
 std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, float &total_mass) {
 	std::vector<TauCollisionShape> shapes;
 	total_mass = 0.f;
@@ -108,7 +115,7 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		const auto collision = node.GetCollision(i);
 		if (!collision.IsValid())
 			continue;
-		if (collision.GetType() != CT_Cube && collision.GetType() != CT_Sphere)
+		if (!IsTauAnalyticShape(collision.GetType()))
 			return {};
 
 		TauCollisionShape shape;
@@ -123,7 +130,10 @@ std::vector<TauCollisionShape> CollectTauPhase1Collisions(const Node &node, floa
 		shape.friction = 0.f;
 		shape.restitution = 0.f;
 
-		total_mass += shape.mass;
+		// Capsule, cone and cylinder are raycast/debug shapes for now. Do not turn
+		// them into dynamic bodies until their narrow phase is implemented.
+		if (IsTauSolverShape(shape.type))
+			total_mass += shape.mass;
 		shapes.push_back(shape);
 	}
 
@@ -234,7 +244,7 @@ void RefreshTauMassProperties(TauNode &node) {
 	Mat3 inertia = Mat3::Zero;
 
 	for (const auto &shape : node.shapes) {
-		if (shape.mass <= 0.f)
+		if (!IsTauSolverShape(shape.type) || shape.mass <= 0.f)
 			continue;
 
 		Mat3 centered_inertia;
@@ -308,6 +318,240 @@ Mat3 BuildTauWorldSphereRotation(const TauNode &node, const TauCollisionShape &s
 	return ToMatrix3(node.orientation) * shape.local_rotation;
 }
 
+struct TauPrimitiveFrame {
+	Vec3 center{Vec3::Zero};
+	Vec3 axis_x{Vec3::Right}, axis_y{Vec3::Up}, axis_z{Vec3::Front};
+};
+
+struct TauRayShapeHit {
+	float t{std::numeric_limits<float>::max()};
+	Vec3 normal{Vec3::Zero};
+};
+
+TauPrimitiveFrame BuildTauPrimitiveFrame(const TauNode &node, const TauCollisionShape &shape) {
+	const Mat3 rotation = ToMatrix3(node.orientation) * shape.local_rotation;
+	return {BuildTauWorldSphereCenter(node, shape), Normalize(GetX(rotation)), Normalize(GetY(rotation)), Normalize(GetZ(rotation))};
+}
+
+Vec3 TauFrameWorldToLocal(const TauPrimitiveFrame &frame, const Vec3 &point) {
+	const Vec3 delta = point - frame.center;
+	return {Dot(delta, frame.axis_x), Dot(delta, frame.axis_y), Dot(delta, frame.axis_z)};
+}
+
+Vec3 TauFrameVectorToLocal(const TauPrimitiveFrame &frame, const Vec3 &vector) {
+	return {Dot(vector, frame.axis_x), Dot(vector, frame.axis_y), Dot(vector, frame.axis_z)};
+}
+
+Vec3 TauFrameVectorToWorld(const TauPrimitiveFrame &frame, const Vec3 &vector) {
+	return frame.axis_x * vector.x + frame.axis_y * vector.y + frame.axis_z * vector.z;
+}
+
+bool SolveTauRayQuadratic(float a, float b, float c, float &t0, float &t1) {
+	if (Abs(a) <= k_tau_collision_epsilon) {
+		if (Abs(b) <= k_tau_collision_epsilon)
+			return false;
+		t0 = t1 = -c / b;
+		return true;
+	}
+
+	const float discriminant = b * b - 4.f * a * c;
+	if (discriminant < 0.f)
+		return false;
+
+	const float root = Sqrt(std::max(0.f, discriminant));
+	t0 = (-b - root) / (2.f * a);
+	t1 = (-b + root) / (2.f * a);
+	if (t0 > t1)
+		std::swap(t0, t1);
+	return true;
+}
+
+void ConsiderTauRayHit(float t, const Vec3 &normal, float max_distance, TauRayShapeHit &hit) {
+	if (t < -k_tau_collision_epsilon || t > max_distance + k_tau_collision_epsilon || t >= hit.t)
+		return;
+	hit.t = Clamp(t, 0.f, max_distance);
+	hit.normal = normal;
+}
+
+void IntersectTauRaySphere(const Vec3 &origin, const Vec3 &direction, const Vec3 &center, float radius, float max_distance,
+	int hemisphere, TauRayShapeHit &hit) {
+	if (radius <= k_tau_collision_epsilon)
+		return;
+
+	const Vec3 offset = origin - center;
+	float t0, t1;
+	if (!SolveTauRayQuadratic(Dot(direction, direction), 2.f * Dot(offset, direction), Dot(offset, offset) - radius * radius, t0, t1))
+		return;
+
+	const float roots[2] = {t0, t1};
+	for (float t : roots) {
+		const Vec3 point = origin + direction * t;
+		if ((hemisphere > 0 && point.y < center.y - k_tau_collision_epsilon) ||
+			(hemisphere < 0 && point.y > center.y + k_tau_collision_epsilon))
+			continue;
+		ConsiderTauRayHit(t, Normalize(point - center), max_distance, hit);
+	}
+}
+
+bool IntersectTauRayBox(
+	const Vec3 &origin, const Vec3 &direction, const Vec3 &half_extents, float max_distance, TauRayShapeHit &hit) {
+	float t_near = -std::numeric_limits<float>::max();
+	float t_far = std::numeric_limits<float>::max();
+	Vec3 near_normal = Vec3::Zero, far_normal = Vec3::Zero;
+
+	for (int axis = 0; axis < 3; ++axis) {
+		if (Abs(direction[axis]) <= k_tau_collision_epsilon) {
+			if (origin[axis] < -half_extents[axis] || origin[axis] > half_extents[axis])
+				return false;
+			continue;
+		}
+
+		float t0 = (-half_extents[axis] - origin[axis]) / direction[axis];
+		float t1 = (half_extents[axis] - origin[axis]) / direction[axis];
+		Vec3 n0 = Vec3::Zero, n1 = Vec3::Zero;
+		n0[axis] = -1.f;
+		n1[axis] = 1.f;
+		if (t0 > t1) {
+			std::swap(t0, t1);
+			std::swap(n0, n1);
+		}
+		if (t0 > t_near) {
+			t_near = t0;
+			near_normal = n0;
+		}
+		if (t1 < t_far) {
+			t_far = t1;
+			far_normal = n1;
+		}
+		if (t_near > t_far)
+			return false;
+	}
+
+	if (t_far < -k_tau_collision_epsilon || t_near > max_distance + k_tau_collision_epsilon)
+		return false;
+	if (t_near >= 0.f)
+		ConsiderTauRayHit(t_near, near_normal, max_distance, hit);
+	else
+		ConsiderTauRayHit(t_far, far_normal, max_distance, hit);
+	return hit.t != std::numeric_limits<float>::max();
+}
+
+void IntersectTauRayCylinderSide(const Vec3 &origin, const Vec3 &direction, float radius, float half_height, float max_distance,
+	TauRayShapeHit &hit) {
+	float t0, t1;
+	if (!SolveTauRayQuadratic(direction.x * direction.x + direction.z * direction.z,
+			2.f * (origin.x * direction.x + origin.z * direction.z), origin.x * origin.x + origin.z * origin.z - radius * radius, t0, t1))
+		return;
+
+	const float roots[2] = {t0, t1};
+	for (float t : roots) {
+		const Vec3 point = origin + direction * t;
+		if (point.y < -half_height - k_tau_collision_epsilon || point.y > half_height + k_tau_collision_epsilon)
+			continue;
+		ConsiderTauRayHit(t, Normalize(Vec3(point.x, 0.f, point.z)), max_distance, hit);
+	}
+}
+
+void IntersectTauRayDisc(const Vec3 &origin, const Vec3 &direction, float y, float radius, const Vec3 &normal, float max_distance,
+	TauRayShapeHit &hit) {
+	if (Abs(direction.y) <= k_tau_collision_epsilon)
+		return;
+	const float t = (y - origin.y) / direction.y;
+	const Vec3 point = origin + direction * t;
+	if (point.x * point.x + point.z * point.z <= radius * radius + k_tau_collision_epsilon)
+		ConsiderTauRayHit(t, normal, max_distance, hit);
+}
+
+bool IntersectTauRayCylinder(
+	const Vec3 &origin, const Vec3 &direction, float radius, float height, float max_distance, TauRayShapeHit &hit) {
+	if (radius <= k_tau_collision_epsilon || height <= k_tau_collision_epsilon)
+		return false;
+	const float half_height = height * 0.5f;
+	IntersectTauRayCylinderSide(origin, direction, radius, half_height, max_distance, hit);
+	IntersectTauRayDisc(origin, direction, half_height, radius, Vec3::Up, max_distance, hit);
+	IntersectTauRayDisc(origin, direction, -half_height, radius, -Vec3::Up, max_distance, hit);
+	return hit.t != std::numeric_limits<float>::max();
+}
+
+bool IntersectTauRayCapsule(
+	const Vec3 &origin, const Vec3 &direction, float radius, float height, float max_distance, TauRayShapeHit &hit) {
+	if (radius <= k_tau_collision_epsilon)
+		return false;
+	const float half_height = std::max(0.f, height * 0.5f);
+	if (half_height > k_tau_collision_epsilon)
+		IntersectTauRayCylinderSide(origin, direction, radius, half_height, max_distance, hit);
+	IntersectTauRaySphere(origin, direction, Vec3(0.f, half_height, 0.f), radius, max_distance, 1, hit);
+	IntersectTauRaySphere(origin, direction, Vec3(0.f, -half_height, 0.f), radius, max_distance, -1, hit);
+	return hit.t != std::numeric_limits<float>::max();
+}
+
+bool IntersectTauRayCone(
+	const Vec3 &origin, const Vec3 &direction, float radius, float height, float max_distance, TauRayShapeHit &hit) {
+	if (radius <= k_tau_collision_epsilon || height <= k_tau_collision_epsilon)
+		return false;
+
+	const float half_height = height * 0.5f;
+	const float slope = radius / height;
+	const float slope_sq = slope * slope;
+	// btConeShape keeps Bullet's default 4 cm convex margin instead of
+	// subtracting it from its implicit dimensions (as btBoxShape does). Match
+	// the resulting parallel side surface so the QA ray fan has the same
+	// silhouette. The base cap is left at its declared height; its rounded rim
+	// is outside this phase-1 analytic contract.
+	const float side_margin = k_tau_bullet_convex_margin * Sqrt(1.f + slope_sq);
+	const float apex_delta = half_height - origin.y + side_margin / slope;
+	float t0, t1;
+	if (SolveTauRayQuadratic(direction.x * direction.x + direction.z * direction.z - slope_sq * direction.y * direction.y,
+			2.f * (origin.x * direction.x + origin.z * direction.z + slope_sq * apex_delta * direction.y),
+			origin.x * origin.x + origin.z * origin.z - slope_sq * apex_delta * apex_delta, t0, t1)) {
+		const float roots[2] = {t0, t1};
+		for (float t : roots) {
+			const Vec3 point = origin + direction * t;
+			if (point.y < -half_height - k_tau_collision_epsilon || point.y > half_height + k_tau_collision_epsilon)
+				continue;
+			Vec3 normal(point.x, slope_sq * (half_height + side_margin / slope - point.y), point.z);
+			if (Len(normal) <= k_tau_collision_epsilon)
+				normal = Vec3::Up;
+			ConsiderTauRayHit(t, Normalize(normal), max_distance, hit);
+		}
+	}
+
+	IntersectTauRayDisc(origin, direction, -half_height, radius, -Vec3::Up, max_distance, hit);
+	return hit.t != std::numeric_limits<float>::max();
+}
+
+bool IntersectTauRayShape(const TauNode &node, const TauCollisionShape &shape, const Vec3 &world_origin, const Vec3 &world_direction,
+	float max_distance, TauRayShapeHit &world_hit) {
+	const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
+	const Vec3 origin = TauFrameWorldToLocal(frame, world_origin);
+	const Vec3 direction = TauFrameVectorToLocal(frame, world_direction);
+	const Vec3 scale = Abs(node.scale);
+	TauRayShapeHit local_hit;
+	bool intersected = false;
+
+	if (shape.type == CT_Cube) {
+		intersected = IntersectTauRayBox(origin, direction, scale * Abs(shape.size) * 0.5f, max_distance, local_hit);
+	} else if (shape.type == CT_Sphere) {
+		IntersectTauRaySphere(origin, direction, Vec3::Zero, shape.radius * std::max({scale.x, scale.y, scale.z}), max_distance, 0, local_hit);
+		intersected = local_hit.t != std::numeric_limits<float>::max();
+	} else {
+		const float radius = shape.radius * std::max(scale.x, scale.z);
+		const float height = Abs(shape.size.y) * scale.y;
+		if (shape.type == CT_Capsule)
+			intersected = IntersectTauRayCapsule(origin, direction, radius, height, max_distance, local_hit);
+		else if (shape.type == CT_Cylinder)
+			intersected = IntersectTauRayCylinder(origin, direction, radius, height, max_distance, local_hit);
+		else if (shape.type == CT_Cone)
+			intersected = IntersectTauRayCone(origin, direction, radius, height, max_distance, local_hit);
+	}
+
+	if (!intersected)
+		return false;
+	world_hit.t = local_hit.t;
+	world_hit.normal = Normalize(TauFrameVectorToWorld(frame, local_hit.normal));
+	return true;
+}
+
 TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 	TauBodyProxy proxy;
 	proxy.ref = ref;
@@ -318,6 +562,8 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 
 	for (uint32_t shape_index = 0; shape_index < node.shapes.size(); ++shape_index) {
 		const auto &shape = node.shapes[shape_index];
+		if (!IsTauSolverShape(shape.type))
+			continue;
 		TauWorldShape world_shape;
 		world_shape.ref = ref;
 		world_shape.node = &node;
@@ -397,6 +643,69 @@ void AppendTauSphereWireframe(Vertices &vtx, size_t &vtx_count, const Vec3 &cent
 			vtx.Begin(vtx_count++).SetPos(center + (plane[0] * Cos(angle1) + plane[1] * Sin(angle1)) * radius).SetColor0(color).End();
 		}
 	}
+}
+
+void AppendTauLine(Vertices &vtx, size_t &vtx_count, const Vec3 &a, const Vec3 &b, const Color &color) {
+	vtx.Begin(vtx_count++).SetPos(a).SetColor0(color).End();
+	vtx.Begin(vtx_count++).SetPos(b).SetColor0(color).End();
+}
+
+Vec3 TauFrameLocalToWorld(const TauPrimitiveFrame &frame, const Vec3 &point) {
+	return frame.center + TauFrameVectorToWorld(frame, point);
+}
+
+void AppendTauHorizontalCircle(
+	Vertices &vtx, size_t &vtx_count, const TauPrimitiveFrame &frame, float y, float radius, const Color &color) {
+	static constexpr int segment_count = 16;
+	for (int i = 0; i < segment_count; ++i) {
+		const float angle0 = 2.f * Pi * float(i) / float(segment_count);
+		const float angle1 = 2.f * Pi * float(i + 1) / float(segment_count);
+		AppendTauLine(vtx, vtx_count, TauFrameLocalToWorld(frame, Vec3(Cos(angle0) * radius, y, Sin(angle0) * radius)),
+			TauFrameLocalToWorld(frame, Vec3(Cos(angle1) * radius, y, Sin(angle1) * radius)), color);
+	}
+}
+
+void AppendTauCylinderWireframe(Vertices &vtx, size_t &vtx_count, const TauPrimitiveFrame &frame, float radius, float height, const Color &color) {
+	const float half_height = height * 0.5f;
+	AppendTauHorizontalCircle(vtx, vtx_count, frame, half_height, radius, color);
+	AppendTauHorizontalCircle(vtx, vtx_count, frame, -half_height, radius, color);
+	const Vec3 radial[4] = {Vec3(radius, 0.f, 0.f), Vec3(-radius, 0.f, 0.f), Vec3(0.f, 0.f, radius), Vec3(0.f, 0.f, -radius)};
+	for (const auto &point : radial)
+		AppendTauLine(vtx, vtx_count, TauFrameLocalToWorld(frame, point + Vec3(0.f, -half_height, 0.f)),
+			TauFrameLocalToWorld(frame, point + Vec3(0.f, half_height, 0.f)), color);
+}
+
+void AppendTauConeWireframe(Vertices &vtx, size_t &vtx_count, const TauPrimitiveFrame &frame, float radius, float height, const Color &color) {
+	const float half_height = height * 0.5f;
+	AppendTauHorizontalCircle(vtx, vtx_count, frame, -half_height, radius, color);
+	const Vec3 apex = TauFrameLocalToWorld(frame, Vec3(0.f, half_height, 0.f));
+	const Vec3 base[4] = {Vec3(radius, -half_height, 0.f), Vec3(-radius, -half_height, 0.f), Vec3(0.f, -half_height, radius),
+		Vec3(0.f, -half_height, -radius)};
+	for (const auto &point : base)
+		AppendTauLine(vtx, vtx_count, TauFrameLocalToWorld(frame, point), apex, color);
+}
+
+void AppendTauCapsuleHemisphere(Vertices &vtx, size_t &vtx_count, const TauPrimitiveFrame &frame, float center_y, float radius,
+	bool top, bool x_plane, const Color &color) {
+	static constexpr int segment_count = 8;
+	const float angle_offset = top ? 0.f : Pi;
+	for (int i = 0; i < segment_count; ++i) {
+		const float angle0 = angle_offset + Pi * float(i) / float(segment_count);
+		const float angle1 = angle_offset + Pi * float(i + 1) / float(segment_count);
+		const float radial0 = Cos(angle0) * radius, radial1 = Cos(angle1) * radius;
+		const Vec3 p0 = x_plane ? Vec3(radial0, center_y + Sin(angle0) * radius, 0.f) : Vec3(0.f, center_y + Sin(angle0) * radius, radial0);
+		const Vec3 p1 = x_plane ? Vec3(radial1, center_y + Sin(angle1) * radius, 0.f) : Vec3(0.f, center_y + Sin(angle1) * radius, radial1);
+		AppendTauLine(vtx, vtx_count, TauFrameLocalToWorld(frame, p0), TauFrameLocalToWorld(frame, p1), color);
+	}
+}
+
+void AppendTauCapsuleWireframe(Vertices &vtx, size_t &vtx_count, const TauPrimitiveFrame &frame, float radius, float height, const Color &color) {
+	const float half_height = height * 0.5f;
+	AppendTauCylinderWireframe(vtx, vtx_count, frame, radius, height, color);
+	AppendTauCapsuleHemisphere(vtx, vtx_count, frame, half_height, radius, true, true, color);
+	AppendTauCapsuleHemisphere(vtx, vtx_count, frame, half_height, radius, true, false, color);
+	AppendTauCapsuleHemisphere(vtx, vtx_count, frame, -half_height, radius, false, true, color);
+	AppendTauCapsuleHemisphere(vtx, vtx_count, frame, -half_height, radius, false, false, color);
 }
 
 void AppendTauManifoldPoint(Vertices &vtx, size_t &vtx_count, const Vec3 &point, const Vec3 &normal, float penetration) {
@@ -1244,8 +1553,11 @@ std::vector<TauContactConstraint> BuildTauContacts(
 	bodies.reserve(nodes.size());
 
 	for (auto &entry : nodes) {
-		if (!entry.second.shapes.empty())
-			bodies.push_back(BuildTauBodyProxy(entry.first, entry.second));
+		if (!entry.second.shapes.empty()) {
+			auto proxy = BuildTauBodyProxy(entry.first, entry.second);
+			if (!proxy.shapes.empty())
+				bodies.push_back(std::move(proxy));
+		}
 	}
 
 	std::vector<TauContactConstraint> contacts;
@@ -1769,6 +2081,60 @@ void SceneTauPhysics::NodeSetAngularFactor(NodeRef ref, const Vec3 &k) {
 		node->angular_factor = k;
 }
 
+std::vector<RaycastOut> SceneTauPhysics::RaycastAllHits(const Scene &scene, const Vec3 &world_p0, const Vec3 &world_p1) const {
+	const Vec3 ray = world_p1 - world_p0;
+	const float max_distance = Len(ray);
+	if (max_distance <= k_tau_collision_epsilon)
+		return {};
+	const Vec3 direction = ray / max_distance;
+
+	std::vector<RaycastOut> hits;
+	for (const auto &entry : nodes) {
+		if (!scene.IsValidNodeRef(entry.first))
+			continue;
+		for (const auto &shape : entry.second.shapes) {
+			TauRayShapeHit shape_hit;
+			if (!IntersectTauRayShape(entry.second, shape, world_p0, direction, max_distance, shape_hit))
+				continue;
+			RaycastOut out;
+			out.P = world_p0 + direction * shape_hit.t;
+			out.N = shape_hit.normal;
+			out.node = scene.GetNode(entry.first);
+			out.t = shape_hit.t;
+			hits.push_back(out);
+		}
+	}
+
+	// Bullet does not promise an order for all hits. Tau deliberately returns a
+	// stable near-to-far order, which makes QA captures deterministic.
+	std::stable_sort(std::begin(hits), std::end(hits), [](const RaycastOut &a, const RaycastOut &b) { return a.t < b.t; });
+	return hits;
+}
+
+RaycastOut SceneTauPhysics::RaycastFirstHit(const Scene &scene, const Vec3 &world_p0, const Vec3 &world_p1) const {
+	const Vec3 ray = world_p1 - world_p0;
+	const float max_distance = Len(ray);
+	if (max_distance <= k_tau_collision_epsilon)
+		return {};
+	const Vec3 direction = ray / max_distance;
+
+	RaycastOut closest;
+	for (const auto &entry : nodes) {
+		if (!scene.IsValidNodeRef(entry.first))
+			continue;
+		for (const auto &shape : entry.second.shapes) {
+			TauRayShapeHit shape_hit;
+			if (!IntersectTauRayShape(entry.second, shape, world_p0, direction, max_distance, shape_hit) || shape_hit.t >= closest.t)
+				continue;
+			closest.P = world_p0 + direction * shape_hit.t;
+			closest.N = shape_hit.normal;
+			closest.node = scene.GetNode(entry.first);
+			closest.t = shape_hit.t;
+		}
+	}
+	return closest;
+}
+
 void SceneTauPhysics::RenderCollision(
 	bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth) {
 	size_t shape_count = 0;
@@ -1782,7 +2148,7 @@ void SceneTauPhysics::RenderCollision(
 	if (shape_count == 0 && manifold_point_count == 0)
 		return;
 
-	Vertices vtx(vtx_decl, shape_count * 96 + manifold_point_count * 8);
+	Vertices vtx(vtx_decl, shape_count * 192 + manifold_point_count * 8);
 	size_t vtx_count = 0;
 
 	for (const auto &entry : nodes) {
@@ -1793,8 +2159,20 @@ void SceneTauPhysics::RenderCollision(
 			if (shape.type == CT_Sphere)
 				AppendTauSphereWireframe(vtx, vtx_count, BuildTauWorldSphereCenter(node, shape), BuildTauWorldSphereRadius(node, shape),
 					BuildTauWorldSphereRotation(node, shape), color);
-			else
+			else if (shape.type == CT_Cube)
 				AppendTauObbWireframe(vtx, vtx_count, BuildTauWorldOBB(node, shape), color);
+			else {
+				const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
+				const Vec3 scale = Abs(node.scale);
+				const float radius = shape.radius * std::max(scale.x, scale.z);
+				const float height = Abs(shape.size.y) * scale.y;
+				if (shape.type == CT_Capsule)
+					AppendTauCapsuleWireframe(vtx, vtx_count, frame, radius, height, color);
+				else if (shape.type == CT_Cone)
+					AppendTauConeWireframe(vtx, vtx_count, frame, radius, height, color);
+				else if (shape.type == CT_Cylinder)
+					AppendTauCylinderWireframe(vtx, vtx_count, frame, radius, height, color);
+			}
 		}
 	}
 

@@ -11,6 +11,25 @@ using namespace hg;
 
 namespace {
 
+Node CreateTauRaycastPrimitive(Scene &scene, CollisionType type, const Vec3 &position, float radius = 0.5f, float height = 1.f) {
+	Node node = scene.CreateNode();
+	node.SetTransform(scene.CreateTransform(TranslationMat4(position)));
+	auto rigid_body = scene.CreateRigidBody();
+	rigid_body.SetType(RBT_Dynamic);
+	node.SetRigidBody(rigid_body);
+	auto collision = scene.CreateCollision();
+	collision.SetType(type);
+	collision.SetMass(0.f);
+	if (type == CT_Cube)
+		collision.SetSize(Vec3::One);
+	else {
+		collision.SetRadius(radius);
+		collision.SetHeight(height);
+	}
+	node.SetCollision(0, collision);
+	return node;
+}
+
 void TestPreTickCallback() {
 	Scene scene;
 	const Node cube = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 2.f, 0.f)), InvalidModelRef, {}, 1.f);
@@ -53,9 +72,71 @@ void TestScenePhysicsPreTickAdapter() {
 	TEST_CHECK(callback_physics == &physics);
 }
 
+void TestRaycastVariousCollisionShapes() {
+	Scene scene;
+	const Node sphere = CreateTauRaycastPrimitive(scene, CT_Sphere, Vec3(2.f, 1.f, 2.5f));
+	const Node cube = CreateTauRaycastPrimitive(scene, CT_Cube, Vec3(0.f, 1.f, 2.5f));
+	const Node capsule = CreateTauRaycastPrimitive(scene, CT_Capsule, Vec3(-2.f, 1.f, 2.5f));
+	const Node cone = CreateTauRaycastPrimitive(scene, CT_Cone, Vec3(-4.f, 1.f, 2.5f));
+	const Node cylinder = CreateTauRaycastPrimitive(scene, CT_Cylinder, Vec3(-6.f, 1.f, 2.5f));
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	TEST_CHECK(physics.NodeHasBody(sphere));
+	TEST_CHECK(physics.NodeHasBody(cube));
+	TEST_CHECK(physics.NodeHasBody(capsule));
+	TEST_CHECK(physics.NodeHasBody(cone));
+	TEST_CHECK(physics.NodeHasBody(cylinder));
+
+	struct ExpectedHit {
+		Node node;
+		float x;
+		float z;
+	};
+	const ExpectedHit expected[] = {
+		{sphere, 2.f, 2.0669873f}, {cube, 0.f, 2.f}, {capsule, -2.f, 2.f}, {cone, -4.f, 2.0802786f}, {cylinder, -6.f, 2.f}};
+	for (const auto &item : expected) {
+		const RaycastOut hit = physics.RaycastFirstHit(scene, Vec3(item.x, 0.75f, -5.f), Vec3(item.x, 0.75f, 10.f));
+		TEST_CHECK(hit.node == item.node);
+		TEST_CHECK(Abs(hit.P.x - item.x) < 0.0001f);
+		TEST_CHECK(Abs(hit.P.y - 0.75f) < 0.0001f);
+		TEST_CHECK_(Abs(hit.P.z - item.z) < 0.001f, "shape x %.3f: expected z %.6f, got %.6f", item.x, item.z, hit.P.z);
+		TEST_CHECK_(Abs(hit.t - (item.z + 5.f)) < 0.001f, "shape x %.3f: expected t %.6f, got %.6f", item.x, item.z + 5.f, hit.t);
+		TEST_CHECK(hit.N.z < -0.8f);
+	}
+
+	const RaycastOut miss = physics.RaycastFirstHit(scene, Vec3(4.f, 0.75f, -5.f), Vec3(4.f, 0.75f, 10.f));
+	TEST_CHECK(!miss.node.IsValid());
+}
+
+void TestRaycastAllHitsAreStableAndBounded() {
+	Scene scene;
+	const Node near_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, -2.f)), InvalidModelRef, {}, 0.f);
+	const Node middle_node = CreatePhysicCube(scene, Vec3::One, Mat4::Identity, InvalidModelRef, {}, 0.f);
+	const Node far_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, 2.f)), InvalidModelRef, {}, 0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	const auto hits = physics.RaycastAllHits(scene, Vec3(0.f, 0.f, -5.f), Vec3(0.f, 0.f, 5.f));
+	TEST_CHECK(hits.size() == 3);
+	if (hits.size() == 3) {
+		TEST_CHECK(hits[0].node == near_node);
+		TEST_CHECK(hits[1].node == middle_node);
+		TEST_CHECK(hits[2].node == far_node);
+		TEST_CHECK(hits[0].t < hits[1].t && hits[1].t < hits[2].t);
+	}
+
+	const auto bounded_hits = physics.RaycastAllHits(scene, Vec3(0.f, 0.f, -5.f), Vec3(0.f, 0.f, -3.f));
+	TEST_CHECK(bounded_hits.empty());
+	const auto zero_length_hits = physics.RaycastAllHits(scene, Vec3::Zero, Vec3::Zero);
+	TEST_CHECK(zero_length_hits.empty());
+}
+
 } // namespace
 
 void test_scene_tau_physics() {
 	TestPreTickCallback();
 	TestScenePhysicsPreTickAdapter();
+	TestRaycastVariousCollisionShapes();
+	TestRaycastAllHitsAreStableAndBounded();
 }
