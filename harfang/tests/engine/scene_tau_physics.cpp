@@ -146,6 +146,176 @@ void TestScenePhysicsPreTickAdapter() {
 	TEST_CHECK(callback_physics == &physics);
 }
 
+void StepTauWorld(SceneTauPhysics &physics, int step_count) {
+	for (int step = 0; step < step_count; ++step)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+}
+
+void StepTauSceneWorld(Scene &scene, SceneTauPhysics &physics, int step_count) {
+	for (int step = 0; step < step_count; ++step) {
+		scene.StorePreviousWorldMatrices();
+		scene.ReadyWorldMatrices();
+		physics.SyncTransformsFromScene(scene);
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+		physics.SyncTransformsToScene(scene);
+		scene.ComputeWorldMatrices();
+		scene.FixupPreviousWorldMatrices();
+	}
+}
+
+void TestActiveBodyKeepsPublishedTransformWithoutSubstep() {
+	Scene scene;
+	const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 3.f, 0.f), RBT_Dynamic, 1.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	StepTauSceneWorld(scene, physics, 1);
+	const float stepped_y = GetT(body.GetWorld()).y;
+	TEST_CHECK(stepped_y < 3.f);
+
+	// Eight milliseconds do not complete the 16 ms fixed step. Scene matrix
+	// invalidation still occurs, so the active body must republish its current
+	// physics pose even though no integration marked it dirty this frame.
+	scene.StorePreviousWorldMatrices();
+	scene.ReadyWorldMatrices();
+	physics.SyncTransformsFromScene(scene);
+	physics.StepSimulation(time_from_ms(8), time_from_ms(16), 1);
+	physics.SyncTransformsToScene(scene);
+	scene.ComputeWorldMatrices();
+	scene.FixupPreviousWorldMatrices();
+	const float unstepped_y = GetT(body.GetWorld()).y;
+	TEST_CHECK_(Abs(unstepped_y - stepped_y) < 0.0001f, "active cube jumped from y=%.6f to y=%.6f", stepped_y, unstepped_y);
+}
+
+void TestSleepingBodyKeepsPublishedTransform() {
+	Scene scene;
+	const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 3.f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	StepTauSceneWorld(scene, physics, 360);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+
+	const float settled_y = GetT(body.GetWorld()).y;
+	TEST_CHECK_(settled_y > 0.45f && settled_y < 0.55f, "expected sleeping cube center near y=0.5, got %.6f", settled_y);
+
+	// A sleeping body is no longer dirty, so Tau does not publish its cached
+	// world matrix on this frame. The persistent Transform must nevertheless
+	// keep the settled pose when the scene rebuilds all world matrices.
+	StepTauSceneWorld(scene, physics, 1);
+	const float sleeping_y = GetT(body.GetWorld()).y;
+	TEST_CHECK_(Abs(sleeping_y - settled_y) < 0.0001f, "sleeping cube jumped from y=%.6f to y=%.6f", settled_y, sleeping_y);
+}
+
+void TestSleepingBodyWakeAndTrackedContacts() {
+	Scene scene;
+	const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+	const Node floor = CreatePhysicCube(
+		scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeStartTrackingCollisionEvents(body, CETM_EventAndContacts);
+	StepTauWorld(physics, 240);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+	TEST_CHECK(Len2(physics.NodeGetLinearVelocity(body)) == 0.f);
+	TEST_CHECK(Len2(physics.NodeGetAngularVelocity(body)) == 0.f);
+
+	// A tracked resting pair remains observable while its solver island sleeps.
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	NodePairContacts contacts;
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(body.ref, floor.ref, contacts).empty());
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+
+	physics.NodeWake(body);
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
+	physics.NodeAddImpulse(body, Vec3(1.f, 0.f, 0.f));
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(physics.NodeGetLinearVelocity(body).x > 0.5f);
+}
+
+void TestSleepingIslandWakePropagation() {
+	Scene scene;
+	const Node bottom = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+	const Node top = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 1.5f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	StepTauWorld(physics, 360);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, bottom.ref));
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, top.ref));
+
+	// The API mutation wakes the complete persisted contact island before the
+	// next fixed step, not only the addressed rigid body.
+	physics.NodeAddImpulse(bottom, Vec3(1.f, 0.f, 0.f));
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, bottom.ref));
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, top.ref));
+}
+
+void TestSleepingBodyWakesOnImpact() {
+	Scene scene;
+	const Node target = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	StepTauWorld(physics, 240);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, target.ref));
+
+	const Node projectile = CreateTauContactPrimitive(scene, CT_Cube, Vec3(-2.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+	physics.NodeCreatePhysicsFromAssets(projectile);
+	physics.NodeSetDeactivation(projectile, false);
+	physics.NodeSetLinearVelocity(projectile, Vec3(8.f, 0.f, 0.f));
+	for (int step = 0; step < 30 && tau_internal::IsNodeSleeping(physics, target.ref); ++step)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, target.ref));
+	TEST_CHECK(physics.NodeGetLinearVelocity(target).x > 0.f);
+}
+
+void TestDeactivationAndMovingSupportWake() {
+	{
+		Scene scene;
+		const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
+		CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+		scene.ReadyWorldMatrices();
+		SceneTauPhysics physics;
+		physics.SceneCreatePhysicsFromAssets(scene);
+		physics.NodeSetDeactivation(body, false);
+		StepTauWorld(physics, 240);
+		TEST_CHECK(!physics.NodeGetDeactivation(body));
+		TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
+		physics.NodeSetDeactivation(body, true);
+		StepTauWorld(physics, 240);
+		TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+	}
+
+	{
+		Scene scene;
+		const Node support = CreateTauContactPrimitive(scene, CT_Cube, Vec3::Zero, RBT_Kinematic, 0.f);
+		const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 1.f, 0.f), RBT_Dynamic, 1.f);
+		scene.ReadyWorldMatrices();
+		SceneTauPhysics physics;
+		physics.SceneCreatePhysicsFromAssets(scene);
+		StepTauWorld(physics, 240);
+		TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+
+		support.GetTransform().SetPos(Vec3(0.f, -0.25f, 0.f));
+		physics.SyncTransformsFromScene(scene);
+		TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+		TEST_CHECK(physics.NodeGetLinearVelocity(body).y < 0.f);
+	}
+}
+
 void TestRaycastVariousCollisionShapes() {
 	Scene scene;
 	const Node sphere = CreateTauRaycastPrimitive(scene, CT_Sphere, Vec3(2.f, 1.f, 2.5f));
@@ -401,6 +571,12 @@ void test_scene_tau_physics() {
 	TestPreTickCallback();
 	TestFixedStepAccumulation();
 	TestScenePhysicsPreTickAdapter();
+	TestActiveBodyKeepsPublishedTransformWithoutSubstep();
+	TestSleepingBodyKeepsPublishedTransform();
+	TestSleepingBodyWakeAndTrackedContacts();
+	TestSleepingIslandWakePropagation();
+	TestSleepingBodyWakesOnImpact();
+	TestDeactivationAndMovingSupportWake();
 	TestRaycastVariousCollisionShapes();
 	TestCapsuleCollisionPairs();
 	TestCapsuleSettlesOnCuboid();

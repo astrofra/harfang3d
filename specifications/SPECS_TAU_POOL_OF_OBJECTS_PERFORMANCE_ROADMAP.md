@@ -2,12 +2,11 @@
 
 Date: 2026-09-01
 
-Status: Phase 0 in progress with three measured optimizations implemented, and
-the Phase 2 broad-phase gate met. The deterministic physics benchmark, Tau
-phase instrumentation, diagnostic counters, Bullet-compatible fixed-step
-accumulator, and accumulator regression tests were implemented on 2026-09-01. An initial
-1,500-body Release baseline is recorded below. The rendered end-to-end pass and
-the complete body-count/shape matrix remain to close the Phase 0 gate.
+Status: the deterministic benchmark and fixed-step correction are in place;
+the hashed manifold lookup, Phase 2 dynamic broad phase, and Phase 4 sleeping
+and contact-island activation are implemented and measured. The rendered
+end-to-end pass and the complete body-count matrix remain to close Phase 0.
+Shape-specific and spread-layout spot checks are recorded below.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -225,11 +224,102 @@ gap strong evidence for prioritizing sleep/island deactivation.
 
 The next implementation order is now:
 
-1. reuse proxy, candidate, and contact scratch storage and remove dead proxy
-   fields/work;
-2. add wake/sleep state and contact islands;
-3. reduce repeated solver transforms, inverse-inertia work, and axis
-   normalization.
+1. avoid rebuilding sleeping body shapes and regenerating unchanged
+   sleeping/sleeping narrow-phase contacts while preserving event semantics;
+2. reuse proxy, candidate, contact, and island scratch storage and remove dead
+   proxy fields/work;
+3. complete shape-neutral contact persistence, then reduce repeated solver
+   transforms, inverse-inertia work, and axis normalization.
+
+### Fourth optimization result: sleeping and bounded activation cohorts
+
+Tau now has explicit `Awake`, `SleepCandidate`, and `Sleeping` states. A body
+accumulates two simulated seconds below the linear, angular, force, contact
+speed, and penetration thresholds. Small intermittent solver noise decays the
+timer instead of erasing it; motion or contact four times over the threshold
+resets it. This hysteresis was necessary because a strict reset allowed a few
+changing contacts at the top of the pool to keep almost every body active
+indefinitely.
+
+Each substep builds a deterministic dynamic-body contact/constraint graph.
+Sleep-ready bodies form activation cohorts capped at 64 bodies. The cap avoids
+a local impact waking all 1,500 bodies in the dense pool. API mutations and a
+moved static/kinematic support still traverse the persisted contact graph and
+wake every connected sleeping body before the mutation is applied; an actual
+dynamic impact wakes the bounded cohort it touches. Mixed awake/sleeping
+contacts treat the sleeping endpoint as immovable until that wake condition is
+met. Tests cover explicit wake propagation, collision-driven wake, disabled
+deactivation, moving supports, and tracked-contact continuity.
+
+Sleeping bodies keep broad-phase proxies, manifolds, and contact-event
+visibility. They skip integration, sleeping/sleeping solver constraints,
+motion-state updates, and unchanged scene-transform publication. Narrow phase
+is intentionally still regenerated in this first version, which keeps cache
+and event semantics simple and exposes the next measured optimization target.
+When a body first enters sleep, Tau persists its final world pose into the
+scene `Transform` once. This is required because `SetNodeWorldMatrix` only
+overrides Harfang's cache for the current frame; without the one-time write,
+the next `ReadyWorldMatrices` call would rebuild the node at its creation pose.
+Subsequent sleeping frames still avoid transform publication. Awake and sleep
+candidate bodies remain published every rendered frame, including frames where
+the fixed-step accumulator does not advance physics.
+
+On the deterministic mixed 1,500-body pool, 1,395 bodies (93.0%) are sleeping
+at step 600 and 1,448 (96.5%) at step 660. At step 660 only 54 motion states are
+updated and 5,728 contact points are skipped by the solver. The broad-phase
+oracle still reports zero missing and zero extra exact pairs.
+
+The authoritative Release comparison uses the same three-repetition setup as
+the previous milestones. Values are medians across repetition medians (and
+across repetition p95 values):
+
+| Backend / milestone | Window | Median step | p95 step | Relative to Bullet |
+|---|---:|---:|---:|---:|
+| Bullet | active | 9.669 ms | 12.418 ms | 1.00x |
+| Tau with dynamic tree | active | 16.045 ms | 19.785 ms | 1.66x |
+| Tau with sleeping/islands | active | 16.686 ms | 20.528 ms | 1.73x |
+| Bullet | after 300 settling steps | 14.678 ms | 15.423 ms | 1.00x |
+| Tau with dynamic tree | after 300 settling steps | 32.578 ms | 32.935 ms | 2.22x |
+| Tau with sleeping/islands | after 300 settling steps | 7.384 ms | 8.103 ms | 0.50x |
+
+Sleeping therefore cuts the Tau settled median by 77.3% and makes Tau about
+1.99 times faster than Bullet in the mixed settled window. The active Tau
+median regresses by 4.0%, inside the 10% milestone policy but still visible;
+island scratch reuse belongs in the next pass. Active mixed motion remains
+1.73 times slower than Bullet, so this result is not a general parity claim.
+
+The post-sleep profile attributes 4.74 ms of the 7.75 ms settled average to
+`BuildContacts`, including 3.58 ms of narrow phase. Velocity solving falls to
+1.39 ms and position solving to 0.841 ms. Island construction costs 0.265 ms
+and activation update 0.307 ms (0.154 ms and 0.159 ms in the active window).
+Caching unchanged sleeping contacts is consequently a higher-value next step
+than reducing iteration counts.
+
+The spread 2,000-body check improves from 13.768 ms to 9.462 ms active and
+reaches 3.677 ms settled, but Bullet needs only 2.944 ms and 0.605 ms. This
+sixfold settled spread gap is direct evidence that Tau still rebuilds proxies
+and contacts for sleeping bodies even when every body only rests on the floor.
+
+One-repetition shape spot checks produced:
+
+| Shape mix | Window | Tau | Bullet | Tau / Bullet |
+|---|---:|---:|---:|---:|
+| cubes | active | 28.780 ms | 9.506 ms | 3.03x |
+| cubes | after 300 steps | 14.868 ms | 13.775 ms | 1.08x |
+| spheres | active | 8.525 ms | 9.058 ms | 0.94x |
+| spheres | after 300 steps | 3.292 ms | 11.411 ms | 0.29x |
+
+All 54 C++ unit-test groups pass. Fresh 600-sample QA captures also pass the
+bounded cuboid-chain validator (4.466 m maximum vertical error, 16.792 m/s
+maximum Tau speed, zero static-ring drift). The impulse-callback capture stays
+within 0.0359 m maximum position error and differs from Bullet by only
+-0.00142 m peak-to-peak amplitude. A scene-loop regression now drops a cube
+from `y=3`, waits for sleep at `y=0.5`, invalidates and rebuilds scene world
+matrices, and verifies that the rendered pose remains at the settled height. A
+second regression verifies active-pose continuity on a frame too short to
+execute a fixed substep.
+The packaged Release 1,500-body mixed settled scene benchmark reports a
+6.450 ms median and 6.960 ms p95 over 120 samples (one validation repetition).
 
 ## Workload Characterization
 
@@ -619,6 +709,15 @@ or keep that pair in the event path.
   transforms stale.
 - The active-fill benchmark remains physically stable and does not repeatedly
   sleep/wake entire piles due threshold chatter.
+
+Implementation status (2026-09-01): met for the deterministic physics-only
+gate. The pool exceeds 90% sleeping by step 600; explicit/API and impact wake
+paths, moving supports, disabled deactivation, dirty transform publication,
+sleep-pose persistence across scene matrix invalidation, and sleeping contact
+events have dedicated tests. Bounded activation cohorts prevent local impacts
+from waking the complete dense pile. The full interactive rendered-tutorial
+gate remains part of Phase 0, and sleeping-contact narrow-phase reuse remains
+the next performance milestone.
 
 ## Phase 5: Optimize The Solver And Scene Synchronization
 

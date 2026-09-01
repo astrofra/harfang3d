@@ -24,7 +24,12 @@
 namespace hg {
 
 class Scene;
+class SceneTauPhysics;
 struct CollisionGeometry;
+
+namespace tau_internal {
+bool IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
+}
 
 struct TauCollisionShape {
 	CollisionType type{CT_Cube};
@@ -39,6 +44,8 @@ struct TauCollisionShape {
 	std::string collision_resource;
 	std::shared_ptr<const CollisionGeometry> collision_geometry;
 };
+
+enum class TauActivationState : uint8_t { Awake, SleepCandidate, Sleeping };
 
 struct TauNode {
 	tau_compat::NodeMotionAdapter motion{};
@@ -64,7 +71,15 @@ struct TauNode {
 	Vec3 accumulated_force{Vec3::Zero};
 	Vec3 accumulated_torque{Vec3::Zero};
 	DynamicAABBTreeProxy broadphase_proxy{InvalidDynamicAABBTreeProxy};
+	std::vector<NodeRef> sleep_supports;
+	std::vector<NodeRef> sleep_neighbors;
+	float sleep_timer{0.f};
+	uint32_t sleep_island_id{0};
+	uint32_t island_index{0xffffffff};
+	TauActivationState activation_state{TauActivationState::Awake};
 	bool deactivation_enabled{true};
+	bool externally_moved{false};
+	bool transform_dirty{true};
 };
 
 // Generic 6-DoF constraints are unconstrained until limits or motors are set.
@@ -181,6 +196,8 @@ public:
 	void TriggerPreTickCallback(hg::time_ns dt);
 
 private:
+	friend bool tau_internal::IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
+
 	std::shared_ptr<const CollisionGeometry> LoadCollisionGeometryResource(
 		const Reader &ir, const ReadProvider &ip, const std::string &resource);
 
@@ -192,6 +209,7 @@ private:
 	DynamicAABBTree broadphase_tree;
 	std::unordered_map<DynamicAABBTreeProxy, std::unordered_set<DynamicAABBTreeProxy>> broadphase_pairs;
 	uint32_t contact_step{0};
+	uint32_t next_sleep_island_id{1};
 	time_ns fixed_step_accumulator{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
