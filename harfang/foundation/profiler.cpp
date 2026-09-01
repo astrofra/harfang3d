@@ -164,7 +164,7 @@ void PrintProfilerFrame(const ProfilerFrame &frame) {
 		time_ns total = 0;
 
 		for (const auto section_id : task.section_indexes) {
-			const auto &section = sections[section_id];
+			const auto &section = frame.sections[section_id];
 			total += section.end - section.start;
 		}
 
@@ -177,13 +177,13 @@ void PrintProfilerFrame(const ProfilerFrame &frame) {
 	// output report
 	std::sort(std::begin(task_reports), std::end(task_reports), [](const TaskReport &a, const TaskReport &b) { return a.name < b.name; });
 
-	log(format("Profile for Frame %1 (duration: %2 ms)").arg(frame.frame).arg(time_to_ms(frame.end - frame.start)));
+	log(format("Profile for Frame %1 (duration: %2 ms)").arg(frame.frame).arg(time_to_ms_f(frame.end - frame.start), 3));
 	for (const auto &report : task_reports)
 		log(format("    Task %1 (%2 section): total %3 ms, average %4 ms")
 				.arg(report.name)
 				.arg(report.section_count)
-				.arg(time_to_ms(report.total))
-				.arg(time_to_ms(report.avg)));
+				.arg(time_to_ms_f(report.total), 3)
+				.arg(time_to_ms_f(report.avg), 3));
 }
 
 //

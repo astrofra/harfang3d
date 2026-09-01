@@ -2,10 +2,11 @@
 
 Date: 2026-09-01
 
-Status: Proposed implementation roadmap based on a local source audit and the
-provided Bullet/Tau screenshots. No instrumented CPU profile has been collected
-yet; Phase 0 exists to replace the preliminary FPS observation with controlled
-measurements.
+Status: Phase 0 in progress with two measured optimizations implemented. The deterministic physics benchmark, Tau phase
+instrumentation, diagnostic counters, Bullet-compatible fixed-step accumulator,
+and accumulator regression tests were implemented on 2026-09-01. An initial
+1,500-body Release baseline is recorded below. The rendered end-to-end pass and
+the complete body-count/shape matrix remain to close the Phase 0 gate.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -20,17 +21,17 @@ benchmark: the tutorial enables VSync and MSAA, renders about 1,500 objects,
 spawns objects per rendered frame, and allows up to four physics substeps per
 frame.
 
-The source audit nevertheless identifies several certain scalability problems
-that are sufficient to explain a large gap:
+The baseline source audit nevertheless identified several certain scalability
+problems that were sufficient to explain a large gap:
 
 1. Tau has no effective sleeping or island deactivation. The public flag is
    stored, but every dynamic body is integrated and solved on every substep,
    and `NodeWake` is empty.
-2. Tau's broad phase is a nested loop over every body pair. The displayed
-   1,505 dynamic bodies plus the five static container bodies produce
+2. At the audited baseline, Tau's broad phase was a nested loop over every body
+   pair. The displayed 1,505 dynamic bodies plus the five static container bodies produce
    1,139,295 body-pair loop iterations per substep before narrow phase.
-3. Cuboid manifold lookup is a linear scan through a vector capped at 4,096
-   entries. Dense contact sets can therefore add another near-quadratic cost
+3. At the audited baseline, cuboid manifold lookup was a linear scan through a
+   vector capped at 4,096 entries. Dense contact sets can therefore add another near-quadratic cost
    and can churn when the cap is reached.
 4. Sphere-related contacts are transient and receive no persistent warm start.
    This increases solver work and makes reliable sleeping harder.
@@ -40,8 +41,8 @@ that are sufficient to explain a large gap:
    not consumed by the current contact path.
 6. The solver repeatedly rebuilds world OBBs, normalizes OBB axes, and
    recomputes world inverse inertia inside contact iteration loops.
-7. Tau's fixed-step behavior differs from Bullet when a frame is shorter than
-   one fixed step or exceeds the substep cap. At 3 FPS with a cap of four, Tau
+7. At the audited baseline, Tau's fixed-step behavior differed from Bullet when
+   a frame was shorter than one fixed step or exceeded the substep cap. At 3 FPS with a cap of four, Tau
    can use substeps near 83 ms instead of four fixed 16.67 ms steps. This is a
    simulation-stability issue and makes the screenshots represent different
    simulation histories.
@@ -66,6 +67,128 @@ primitive pool is plausible because Tau can use compact specialized paths,
 but it must be demonstrated over active and settled windows rather than a
 single favorable frame.
 
+## Phase 0 Implementation And Initial Baseline
+
+The headless benchmark is `tutorials/physics_pool_benchmark.lua`. It creates
+the same deterministic body sequence for both backends, excludes body creation
+from samples, advances one exact 1/60 s substep per sample, and emits JSONL.
+Its environment variables select the backend, body count, shape mix, measured
+phase, warm-up and settling lengths, repetitions, execution mode, and output
+file. `HG_TAU_PROFILE=1` enables aggregate phase attribution; profiled samples
+are marked and must not be compared directly with unprofiled backend samples.
+
+Both backend packages were rebuilt from the same source tree before the final
+comparison. The first controlled run used a Release build, 1,500 dynamic
+bodies plus five static container bodies, the mixed cube/sphere sequence, 60 measured steps,
+10 warm-up steps, 300 pre-settling steps for the second window, three
+repetitions, and seed 5,521,749. Values below are medians across the three
+per-repetition medians; p95 is treated the same way.
+
+| Backend | Window | Median step | p95 step | Tau / Bullet median |
+|---|---:|---:|---:|---:|
+| Bullet | active | 9.971 ms | 12.175 ms | 1.00x |
+| Tau | active | 18.762 ms | 23.211 ms | 1.88x |
+| Bullet | after 300 settling steps | 14.463 ms | 15.564 ms | 1.00x |
+| Tau | after 300 settling steps | 39.229 ms | 39.811 ms | 2.71x |
+
+The second window is deliberately described as "after 300 settling steps",
+not fully settled. Tau does not yet sleep bodies and contact density was still
+increasing; the label prevents this preliminary window from overstating an
+equilibrium result.
+
+An attribution-only Tau run measured these average costs per substep:
+
+| Tau phase | Active | After 300 settling steps |
+|---|---:|---:|
+| `Tau.StepSimulation` | 19.8 ms | 38.5 ms |
+| `Tau.VelocitySolve` | 9.37 ms | 21.3 ms |
+| `Tau.BuildContacts` | 7.46 ms | 11.3 ms |
+| `Tau.BroadPhase` | 4.25 ms | 5.39 ms |
+| `Tau.NarrowPhase` | 2.60 ms | 5.52 ms |
+| `Tau.PositionSolve` | 2.46 ms | 5.36 ms |
+| `Tau.ProxyUpdate` | 0.408 ms | 0.317 ms |
+
+Diagnostics at 1,500 dynamic bodies confirm the scaling mechanism. Every Tau
+substep tests 1,131,760 theoretical body pairs. At step 240, 4,009 AABB
+candidates produce 1,721 constraints and 2,502 contact points. At step 540,
+7,147 candidates produce 4,298 constraints and 6,309 points; all 1,500 dynamic
+bodies are still integrated and published. The cuboid manifold lookup performs
+about 302,000 linear comparisons at step 240 and 1,229,512 at step 540.
+
+These results refine the first implementation order:
+
+1. make manifold lookup O(1) and retain/reuse all scratch capacity;
+2. replace the all-pairs scan with the reusable dynamic AABB tree;
+3. add wake/sleep state and islands before tuning solver iteration counts;
+4. then reduce repeated solver transforms and inertia/axis work.
+
+The velocity solver is currently the largest measured phase, but its work is
+driven by a contact set that keeps growing because every body stays active.
+Lowering solver iterations now would trade correctness for a temporary FPS
+gain and is therefore still outside the corrective path.
+
+### First optimization result: hashed cuboid manifold index
+
+The cuboid manifold vector now has a persistent hashed index. Lookup is
+expected O(1), stale and node-related removals use indexed swap removal, and
+the vector remains the authoritative compact storage so solver constraint
+indices stay inexpensive. A dedicated lifecycle test covers pruning, key
+reuse, node removal, and node recreation.
+
+The same unprofiled three-repetition run produced:
+
+| Window | Tau before | Tau with hashed cache | Improvement | New Tau / Bullet |
+|---|---:|---:|---:|---:|
+| active | 18.762 ms | 18.450 ms | 1.7% | 1.85x |
+| after 300 settling steps | 39.229 ms | 37.145 ms | 5.3% | 2.57x |
+
+At diagnostic steps 240 and 540, contact counts, manifold counts, accumulated
+impulses, friction clamps, and pre/post-solve penetration values are identical
+before and after the change. Cache key comparisons fell from 302,014 to 553
+at step 240 and from 1,229,512 to 1,461 at step 540. This removes the confirmed
+cache pathology without changing the simulated trajectory in the controlled
+run.
+
+### Second optimization result: shared foundation BVH broad phase
+
+Tau now builds Harfang's reusable `foundation/bvh` over body AABBs each
+substep and queries it for overlaps. This is runtime engine infrastructure, not
+an `assetc`-specific acceleration structure. Candidate pairs are sorted back
+into the previous `(body_a, body_b)` order before narrow phase so the sequential
+solver sees the same constraint sequence. The former all-pairs scan remains a
+correctness fallback if BVH construction rejects invalid bounds.
+
+The same unprofiled three-repetition run produced:
+
+| Window | Tau with hashed cache | Tau with cache + BVH | Additional improvement | Total improvement | New Tau / Bullet |
+|---|---:|---:|---:|---:|---:|
+| active | 18.450 ms | 16.288 ms | 11.7% | 13.2% | 1.63x |
+| after 300 settling steps | 37.145 ms | 34.157 ms | 8.0% | 12.9% | 2.36x |
+
+The attribution-only broad-phase average fell from 4.35 to 2.29 ms in the
+active window and from 5.36 to 2.29 ms after 300 settling steps. Diagnostics
+remain identical through step 540, including the 7,147 candidates, 4,298
+constraints, 6,309 contact points, accumulated impulses, friction clamps, and
+penetration values. The ordered BVH candidate stream therefore preserves the
+controlled trajectory while eliminating most theoretical pair visits.
+
+This first BVH integration still rebuilds and validates a static hierarchy
+every substep. It establishes a useful, low-risk speedup and a measured upper
+bound of about 2.29 ms per step for the current implementation. A reusable
+dynamic AABB tree with persistent proxies remains worthwhile: it can avoid full
+rebuild/validation, update only moved or awakened bodies, and later serve
+raycasts, scene queries, and other Harfang systems.
+
+The next implementation order is now:
+
+1. reuse proxy, candidate, and contact scratch storage and remove dead proxy
+   fields/work;
+2. add a persistent dynamic AABB tree API in `foundation` and migrate Tau from
+   rebuild-per-step BVH queries to incremental proxy updates;
+3. add wake/sleep state and islands;
+4. reduce repeated solver transforms, inverse-inertia work, and axis
+   normalization.
+
 ## Workload Characterization
 
 `physics_pool_of_objects.lua` creates:
@@ -78,7 +201,7 @@ single favorable frame.
 - a 1280x720 forward-rendered window with VSync and 4x MSAA.
 
 At the captured count, the Tau physics world contains approximately 1,510
-bodies. The current nested broad-phase loops therefore execute:
+bodies. The audited baseline's nested broad-phase loops therefore executed:
 
 ```text
 1,510 * 1,509 / 2 = 1,139,295 body-pair iterations per substep
@@ -113,7 +236,8 @@ for these reasons:
   all included in the counter.
 - Object creation is tied to rendered frames, not to a deterministic physics
   timeline.
-- The two backends do not currently handle the substep cap in the same way.
+- Before the fixed-step correction, the two backends did not handle the
+  substep cap in the same way.
 - The screenshots show different pile configurations and therefore potentially
   different numbers and types of active contacts.
 
@@ -137,9 +261,9 @@ The initial comparison is therefore not "mature multithreaded Bullet versus
 single-threaded Tau." Tau is primarily losing on algorithms, contact lifetime,
 and data handling.
 
-### Tau
+### Tau At The Audited Baseline
 
-Every Tau substep currently performs the following sequence:
+Every Tau substep at the audited baseline performed the following sequence:
 
 1. Traverse every node and integrate every dynamic body.
 2. Rebuild all body and world-shape proxies.
@@ -156,7 +280,11 @@ Every Tau substep currently performs the following sequence:
 
 There is currently no active-body filtering anywhere in this sequence.
 
-## Source-Audit Findings
+## Baseline Source-Audit Findings
+
+The fixed-step, broad-phase, and manifold-cache rows below describe the code at
+the start of this work. Their implemented corrections and measurements are
+recorded in the Phase 0 section above; the remaining rows are still current.
 
 | Priority | Finding | Evidence in the current implementation | Likely effect |
 |---|---|---|---|
@@ -495,7 +623,7 @@ After the single-thread algorithm and data layout are competitive:
   order;
 - retain a deterministic single-thread mode for QA and debugging.
 
-Parallelizing the current all-pairs and linear-cache implementation is not a
+Parallelizing the audited all-pairs and linear-cache implementation is not a
 substitute for Phases 1-5. It would consume cores while retaining the wrong
 scaling behavior.
 

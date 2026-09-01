@@ -16,6 +16,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace hg {
@@ -184,7 +185,9 @@ private:
 	std::map<std::string, std::shared_ptr<const CollisionGeometry>> collision_geometries;
 	std::vector<Tau6DofConstraint> constraints;
 	std::vector<TauContactManifold> contact_manifolds;
+	std::unordered_multimap<size_t, size_t> contact_manifold_lookup;
 	uint32_t contact_step{0};
+	time_ns fixed_step_accumulator{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
 	std::function<void(SceneTauPhysics &, hg::time_ns t)> pre_tick_callback;

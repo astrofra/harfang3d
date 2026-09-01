@@ -87,6 +87,51 @@ void TestPreTickCallback() {
 	TEST_CHECK(callback_count == 2);
 }
 
+void TestFixedStepAccumulation() {
+	SceneTauPhysics physics;
+	int callback_count = 0;
+	time_ns callback_dt = 0;
+	physics.SetPreTickCallback([&](SceneTauPhysics &, time_ns dt) {
+		++callback_count;
+		callback_dt = dt;
+	});
+
+	// A partial fixed step is accumulated without advancing the simulation.
+	physics.StepSimulation(time_from_ms(8), time_from_ms(16), 4);
+	TEST_CHECK(callback_count == 0);
+	physics.StepSimulation(time_from_ms(8), time_from_ms(16), 4);
+	TEST_CHECK(callback_count == 1);
+	TEST_CHECK(callback_dt == time_from_ms(16));
+
+	// Exact multiples execute fixed-duration callbacks.
+	physics.StepSimulation(time_from_ms(48), time_from_ms(16), 4);
+	TEST_CHECK(callback_count == 4);
+	TEST_CHECK(callback_dt == time_from_ms(16));
+
+	// Full fixed steps beyond the cap are dropped, while the fractional
+	// remainder is retained. The following 16 ms frame therefore runs once.
+	physics.StepSimulation(time_from_ms(80), time_from_ms(16), 2);
+	TEST_CHECK(callback_count == 6);
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 2);
+	TEST_CHECK(callback_count == 7);
+
+	// Bullet's maxSubSteps == 0 behavior is one variable-duration step.
+	physics.StepSimulation(time_from_ms(32), time_from_ms(16), 0);
+	TEST_CHECK(callback_count == 8);
+	TEST_CHECK(callback_dt == time_from_ms(32));
+
+	// Clearing the world also clears a partial fixed-step remainder.
+	SceneTauPhysics cleared_physics;
+	int cleared_callback_count = 0;
+	cleared_physics.SetPreTickCallback([&](SceneTauPhysics &, time_ns) { ++cleared_callback_count; });
+	cleared_physics.StepSimulation(time_from_ms(8), time_from_ms(16), 4);
+	cleared_physics.ClearNodes();
+	cleared_physics.StepSimulation(time_from_ms(8), time_from_ms(16), 4);
+	TEST_CHECK(cleared_callback_count == 0);
+	cleared_physics.StepSimulation(time_from_ms(8), time_from_ms(16), 4);
+	TEST_CHECK(cleared_callback_count == 1);
+}
+
 void TestScenePhysicsPreTickAdapter() {
 	ScenePhysics physics;
 	int callback_count = 0;
@@ -205,6 +250,45 @@ void TestCapsuleSettlesOnCuboid() {
 	TEST_CHECK(contact_steps > 100);
 }
 
+void TestCuboidManifoldCacheLifecycle() {
+	Scene scene;
+	const Node dynamic = CreateTauContactPrimitive(scene, CT_Cube, Vec3::Zero, RBT_Dynamic, 1.f);
+	const Node fixed = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.8f, 0.f, 0.f), RBT_Static, 0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeStartTrackingCollisionEvents(dynamic, CETM_EventAndContacts);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	NodePairContacts contacts;
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+
+	// Move away long enough to prune the persistent cuboid manifold, then
+	// recreate the same cache key. This exercises hash-index removal and reuse.
+	physics.NodeSetLinearVelocity(dynamic, Vec3(-100.f, 0.f, 0.f));
+	for (int step = 0; step < 6; ++step)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+
+	physics.NodeTeleport(dynamic, Mat4::Identity);
+	physics.NodeSetLinearVelocity(dynamic, Vec3::Zero);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+
+	// Node removal and recreation must clear and rebuild both manifold stores.
+	physics.NodeDestroyPhysics(fixed);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+	physics.NodeCreatePhysicsFromAssets(fixed);
+	physics.NodeTeleport(dynamic, Mat4::Identity);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+}
+
 void TestRaycastAllHitsAreStableAndBounded() {
 	Scene scene;
 	const Node near_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, -2.f)), InvalidModelRef, {}, 0.f);
@@ -315,10 +399,12 @@ void TestMeshColliderRaycast() {
 
 void test_scene_tau_physics() {
 	TestPreTickCallback();
+	TestFixedStepAccumulation();
 	TestScenePhysicsPreTickAdapter();
 	TestRaycastVariousCollisionShapes();
 	TestCapsuleCollisionPairs();
 	TestCapsuleSettlesOnCuboid();
+	TestCuboidManifoldCacheLifecycle();
 	TestRaycastAllHitsAreStableAndBounded();
 	TestMeshColliderRaycast();
 }

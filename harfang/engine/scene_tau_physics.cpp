@@ -7,12 +7,14 @@
 #include "engine/render_pipeline.h"
 #include "engine/scene.h"
 
+#include "foundation/bvh.h"
 #include "foundation/file_rw_interface.h"
 #include "foundation/format.h"
 #include "foundation/log.h"
 #include "foundation/matrix4.h"
 #include "foundation/minmax.h"
 #include "foundation/obb.h"
+#include "foundation/profiler.h"
 #include "foundation/string.h"
 
 #include <algorithm>
@@ -39,6 +41,34 @@ static constexpr uint32_t k_tau_manifold_lifetime = 3;
 static constexpr size_t k_tau_max_manifolds = 4096;
 static constexpr int k_tau_position_iterations = 3;
 static constexpr int k_tau_velocity_iterations = 8;
+
+bool TauProfilingEnabled() {
+	static const bool enabled = [] {
+		const char *value = std::getenv("HG_TAU_PROFILE");
+		return value != nullptr && value[0] != '\0' && value[0] != '0';
+	}();
+	return enabled;
+}
+
+class TauProfileSection {
+public:
+	explicit TauProfileSection(const char *name) {
+		if (TauProfilingEnabled())
+			section_index = BeginProfilerSection(name);
+	}
+	~TauProfileSection() {
+		if (section_index != std::numeric_limits<ProfilerSectionIndex>::max())
+			EndProfilerSection(section_index);
+	}
+
+	TauProfileSection(const TauProfileSection &) = delete;
+	TauProfileSection &operator=(const TauProfileSection &) = delete;
+
+private:
+	ProfilerSectionIndex section_index{std::numeric_limits<ProfilerSectionIndex>::max()};
+};
+
+bool TauContactDiagnosticsEnabled();
 
 bool HasTauResourceSuffix(const std::string &resource, const std::string &suffix) {
 	return resource.size() >= suffix.size() && resource.compare(resource.size() - suffix.size(), suffix.size(), suffix) == 0;
@@ -78,6 +108,10 @@ struct TauBodyProxy {
 	MinMax bounds;
 };
 
+struct TauBodyPair {
+	uint32_t a{0}, b{0};
+};
+
 struct TauContactConstraint {
 	NodeRef ref_a{};
 	NodeRef ref_b{};
@@ -100,11 +134,20 @@ struct TauContactConstraint {
 };
 
 struct TauContactDiagnostics {
+	bool enabled{false};
+	size_t total_bodies{0}, dynamic_bodies{0};
+	size_t proxy_bodies{0}, proxy_shapes{0}, proxy_shape_vector_reserves{0};
+	size_t body_pair_tests{0}, static_pair_rejects{0}, body_bounds_rejects{0}, body_pair_candidates{0};
+	size_t shape_body_bounds_tests{0}, shape_body_bounds_rejects{0};
+	size_t shape_pair_bounds_tests{0}, shape_pair_bounds_rejects{0}, narrowphase_calls{0};
 	size_t shape_pairs{0};
 	size_t face_a_manifolds{0}, face_b_manifolds{0}, edge_edge_manifolds{0};
 	size_t manifold_points{0};
 	size_t warm_start_hits{0}, warm_start_misses{0};
-	size_t stale_discards{0};
+	size_t manifold_cache_comparisons{0}, manifold_cache_evictions{0}, manifold_cache_overflows{0};
+	size_t stale_discards{0}, candidate_reallocations{0}, contact_reallocations{0};
+	size_t position_constraint_evaluations{0}, velocity_constraint_evaluations{0}, rolling_contact_evaluations{0};
+	size_t tracked_contact_evaluations{0}, motion_updates{0};
 	size_t friction_clamps{0};
 	float normal_impulse_total{0.f}, tangent_impulse_total{0.f};
 	float max_penetration{0.f}, max_post_solve_penetration{0.f};
@@ -1673,6 +1716,7 @@ void RefreshTauConstraintPoint(TauContactConstraint &contact) {
 }
 
 void SolveTauPositionConstraints(std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics) {
+	diagnostics.position_constraint_evaluations += contacts.size() * k_tau_position_iterations;
 	for (int iteration = 0; iteration < k_tau_position_iterations; ++iteration) {
 		for (auto &contact : contacts) {
 			RefreshTauConstraintPoint(contact);
@@ -1728,6 +1772,7 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 	if (dt_sec <= 0.f)
 		return;
 
+	diagnostics.velocity_constraint_evaluations += contacts.size() * k_tau_velocity_iterations;
 	WarmStartTauVelocityConstraints(contacts);
 
 	for (int iteration = 0; iteration < k_tau_velocity_iterations; ++iteration) {
@@ -1786,7 +1831,8 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 	}
 }
 
-void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, float dt_sec) {
+void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, float dt_sec, TauContactDiagnostics &diagnostics) {
+	diagnostics.rolling_contact_evaluations += contacts.size();
 	for (const auto &contact : contacts) {
 		// Rolling resistance is a body-pair effect; applying it once for every face point over-damps four-point manifolds.
 		if (contact.persistent && contact.manifold_point_index != 0)
@@ -1821,26 +1867,85 @@ void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, 
 	}
 }
 
-void PruneTauManifoldCache(std::vector<TauContactManifold> &manifolds, uint32_t step, TauContactDiagnostics &diagnostics) {
-	const auto old_size = manifolds.size();
-	manifolds.erase(std::remove_if(manifolds.begin(), manifolds.end(), [step](const TauContactManifold &manifold) {
-		return step - manifold.last_seen_step > k_tau_manifold_lifetime;
-	}), manifolds.end());
-	diagnostics.stale_discards += old_size - manifolds.size();
-}
-
 bool TauManifoldCacheKeyMatches(const TauContactManifold &a, const TauContactManifold &b) {
 	return a.ref_a == b.ref_a && a.ref_b == b.ref_b && a.shape_a == b.shape_a && a.shape_b == b.shape_b && a.feature == b.feature;
 }
 
-size_t UpdateTauManifoldCache(std::vector<TauContactManifold> &manifolds, TauContactManifold manifold, TauContactDiagnostics &diagnostics) {
-	size_t cache_index = std::numeric_limits<size_t>::max();
-	for (size_t i = 0; i < manifolds.size(); ++i) {
-		if (TauManifoldCacheKeyMatches(manifolds[i], manifold)) {
-			cache_index = i;
-			break;
-		}
+using TauManifoldLookup = std::unordered_multimap<size_t, size_t>;
+
+void TauHashCombine(size_t &seed, size_t value) {
+	seed ^= value + size_t(0x9e3779b9) + (seed << 6) + (seed >> 2);
+}
+
+size_t GetTauManifoldCacheHash(const TauContactManifold &manifold) {
+	size_t hash = std::hash<NodeRef>{}(manifold.ref_a);
+	TauHashCombine(hash, std::hash<NodeRef>{}(manifold.ref_b));
+	TauHashCombine(hash, manifold.shape_a);
+	TauHashCombine(hash, manifold.shape_b);
+	TauHashCombine(hash, size_t(manifold.feature.type));
+	TauHashCombine(hash, manifold.feature.axis_a);
+	TauHashCombine(hash, manifold.feature.axis_b);
+	TauHashCombine(hash, uint8_t(manifold.feature.sign_a));
+	TauHashCombine(hash, uint8_t(manifold.feature.sign_b));
+	TauHashCombine(hash, manifold.feature.edge_signs_a);
+	TauHashCombine(hash, manifold.feature.edge_signs_b);
+	return hash;
+}
+
+TauManifoldLookup::iterator FindTauManifoldLookupEntry(
+	TauManifoldLookup &lookup, const std::vector<TauContactManifold> &manifolds, const TauContactManifold &manifold, TauContactDiagnostics *diagnostics) {
+	const auto range = lookup.equal_range(GetTauManifoldCacheHash(manifold));
+	for (auto it = range.first; it != range.second; ++it) {
+		if (diagnostics != nullptr && diagnostics->enabled)
+			++diagnostics->manifold_cache_comparisons;
+		if (it->second < manifolds.size() && TauManifoldCacheKeyMatches(manifolds[it->second], manifold))
+			return it;
 	}
+	return lookup.end();
+}
+
+TauManifoldLookup::iterator FindTauManifoldLookupIndex(
+	TauManifoldLookup &lookup, const std::vector<TauContactManifold> &manifolds, size_t manifold_index) {
+	if (manifold_index >= manifolds.size())
+		return lookup.end();
+	const auto range = lookup.equal_range(GetTauManifoldCacheHash(manifolds[manifold_index]));
+	for (auto it = range.first; it != range.second; ++it)
+		if (it->second == manifold_index)
+			return it;
+	return lookup.end();
+}
+
+void RemoveTauManifoldAt(std::vector<TauContactManifold> &manifolds, TauManifoldLookup &lookup, size_t manifold_index) {
+	const size_t last_index = manifolds.size() - 1;
+	const auto removed_lookup = FindTauManifoldLookupIndex(lookup, manifolds, manifold_index);
+	if (removed_lookup != lookup.end())
+		lookup.erase(removed_lookup);
+
+	if (manifold_index != last_index) {
+		auto moved_lookup = FindTauManifoldLookupIndex(lookup, manifolds, last_index);
+		manifolds[manifold_index] = std::move(manifolds[last_index]);
+		if (moved_lookup != lookup.end())
+			moved_lookup->second = manifold_index;
+	}
+	manifolds.pop_back();
+}
+
+void PruneTauManifoldCache(
+	std::vector<TauContactManifold> &manifolds, TauManifoldLookup &lookup, uint32_t step, TauContactDiagnostics &diagnostics) {
+	const auto old_size = manifolds.size();
+	for (size_t i = 0; i < manifolds.size();) {
+		if (step - manifolds[i].last_seen_step > k_tau_manifold_lifetime)
+			RemoveTauManifoldAt(manifolds, lookup, i);
+		else
+			++i;
+	}
+	diagnostics.stale_discards += old_size - manifolds.size();
+}
+
+size_t UpdateTauManifoldCache(
+	std::vector<TauContactManifold> &manifolds, TauManifoldLookup &lookup, TauContactManifold manifold, TauContactDiagnostics &diagnostics) {
+	const auto cache_entry = FindTauManifoldLookupEntry(lookup, manifolds, manifold, &diagnostics);
+	const size_t cache_index = cache_entry != lookup.end() ? cache_entry->second : std::numeric_limits<size_t>::max();
 
 	if (cache_index != std::numeric_limits<size_t>::max()) {
 		const TauContactManifold previous = manifolds[cache_index];
@@ -1885,7 +1990,9 @@ size_t UpdateTauManifoldCache(std::vector<TauContactManifold> &manifolds, TauCon
 	diagnostics.warm_start_misses += manifold.point_count;
 	if (manifolds.size() < k_tau_max_manifolds) {
 		manifolds.push_back(manifold);
-		return manifolds.size() - 1;
+		const size_t new_index = manifolds.size() - 1;
+		lookup.emplace(GetTauManifoldCacheHash(manifold), new_index);
+		return new_index;
 	}
 
 	// Do not invalidate a constraint already emitted during this step. Replace only an inactive oldest entry.
@@ -1898,44 +2005,110 @@ size_t UpdateTauManifoldCache(std::vector<TauContactManifold> &manifolds, TauCon
 		}
 	}
 	if (oldest_index != std::numeric_limits<size_t>::max()) {
+		const auto oldest_lookup = FindTauManifoldLookupIndex(lookup, manifolds, oldest_index);
+		if (oldest_lookup != lookup.end())
+			lookup.erase(oldest_lookup);
 		manifolds[oldest_index] = manifold;
+		lookup.emplace(GetTauManifoldCacheHash(manifold), oldest_index);
 		++diagnostics.stale_discards;
+		++diagnostics.manifold_cache_evictions;
 		return oldest_index;
 	}
+	++diagnostics.manifold_cache_overflows;
 	return std::numeric_limits<size_t>::max();
 }
 
 std::vector<TauContactConstraint> BuildTauContacts(
-	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, uint32_t step, TauContactDiagnostics &diagnostics) {
-	PruneTauManifoldCache(manifolds, step, diagnostics);
+	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup, uint32_t step,
+	TauContactDiagnostics &diagnostics) {
+	TauProfileSection build_contacts_profile("Tau.BuildContacts");
+	if (manifold_lookup.bucket_count() < k_tau_max_manifolds)
+		manifold_lookup.reserve(k_tau_max_manifolds);
+	PruneTauManifoldCache(manifolds, manifold_lookup, step, diagnostics);
 	std::vector<TauBodyProxy> bodies;
 	bodies.reserve(nodes.size());
 
-	for (auto &entry : nodes) {
-		if (!entry.second.shapes.empty()) {
-			auto proxy = BuildTauBodyProxy(entry.first, entry.second);
-			if (!proxy.shapes.empty())
-				bodies.push_back(std::move(proxy));
+	{
+		TauProfileSection proxy_profile("Tau.ProxyUpdate");
+		for (auto &entry : nodes) {
+			if (!entry.second.shapes.empty()) {
+				++diagnostics.proxy_shape_vector_reserves;
+				auto proxy = BuildTauBodyProxy(entry.first, entry.second);
+				diagnostics.proxy_shapes += proxy.shapes.size();
+				if (!proxy.shapes.empty())
+					bodies.push_back(std::move(proxy));
+			}
 		}
 	}
+	diagnostics.proxy_bodies = bodies.size();
 
 	std::vector<TauContactConstraint> contacts;
+	std::vector<TauBodyPair> body_pairs;
+	body_pairs.reserve(bodies.size() * 8);
+	std::vector<MinMax> body_bounds;
+	body_bounds.reserve(bodies.size());
+	size_t static_body_count = 0;
+	for (const auto &body : bodies) {
+		body_bounds.push_back(body.bounds);
+		if (!IsDynamicTauNode(*body.node))
+			++static_body_count;
+	}
 
-	for (size_t i = 0; i < bodies.size(); ++i) {
-		for (size_t j = i + 1; j < bodies.size(); ++j) {
-			auto &body_a = bodies[i];
-			auto &body_b = bodies[j];
+	{
+		TauProfileSection broadphase_profile("Tau.BroadPhase");
+		auto append_overlapping_pair = [&](uint32_t i, uint32_t j) {
+			if ((!IsDynamicTauNode(*bodies[i].node) && !IsDynamicTauNode(*bodies[j].node)) || !Overlap(body_bounds[i], body_bounds[j]))
+				return;
+			if (diagnostics.enabled && body_pairs.size() == body_pairs.capacity())
+				++diagnostics.candidate_reallocations;
+			body_pairs.push_back({i, j});
+		};
 
-			if ((!IsDynamicTauNode(*body_a.node) && !IsDynamicTauNode(*body_b.node)) || !Overlap(body_a.bounds, body_b.bounds))
-				continue;
+		BVH body_bvh;
+		if (BuildBVH(body_bounds, body_bvh)) {
+			for (uint32_t i = 0; i < bodies.size(); ++i) {
+				TraverseBVH(body_bvh, body_bounds[i], [&](uint32_t j) {
+					if (j > i)
+						append_overlapping_pair(i, j);
+					return true;
+				});
+			}
+		} else {
+			// Invalid bounds should not disable collision detection. Preserve the
+			// former all-pairs path as a correctness fallback.
+			for (uint32_t i = 0; i < bodies.size(); ++i)
+				for (uint32_t j = i + 1; j < bodies.size(); ++j)
+					append_overlapping_pair(i, j);
+		}
+		std::sort(std::begin(body_pairs), std::end(body_pairs), [](const TauBodyPair &a, const TauBodyPair &b) {
+			return a.a == b.a ? a.b < b.b : a.a < b.a;
+		});
+	}
+	const size_t body_count = bodies.size();
+	diagnostics.body_pair_tests = body_count > 1 ? body_count * (body_count - 1) / 2 : 0;
+	diagnostics.static_pair_rejects = static_body_count > 1 ? static_body_count * (static_body_count - 1) / 2 : 0;
+	diagnostics.body_pair_candidates = body_pairs.size();
+	diagnostics.body_bounds_rejects = diagnostics.body_pair_tests - diagnostics.static_pair_rejects - diagnostics.body_pair_candidates;
 
+	{
+		TauProfileSection narrowphase_profile("Tau.NarrowPhase");
+		for (const auto &pair : body_pairs) {
+			auto &body_a = bodies[pair.a];
+			auto &body_b = bodies[pair.b];
 			for (const auto &shape_a : body_a.shapes) {
-				if (!Overlap(shape_a.bounds, body_b.bounds))
+				++diagnostics.shape_body_bounds_tests;
+				if (!Overlap(shape_a.bounds, body_b.bounds)) {
+					++diagnostics.shape_body_bounds_rejects;
 					continue;
+				}
 
 				for (const auto &shape_b : body_b.shapes) {
-					if (!Overlap(shape_a.bounds, shape_b.bounds))
+					++diagnostics.shape_pair_bounds_tests;
+					if (!Overlap(shape_a.bounds, shape_b.bounds)) {
+						++diagnostics.shape_pair_bounds_rejects;
 						continue;
+					}
+					++diagnostics.narrowphase_calls;
 
 					const float friction = CombineTauFriction(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
 					const float restitution = CombineTauRestitution(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
@@ -1960,7 +2133,7 @@ std::vector<TauContactConstraint> BuildTauContacts(
 						for (uint8_t point_index = 0; point_index < manifold.point_count; ++point_index)
 							diagnostics.max_penetration = std::max(diagnostics.max_penetration, manifold.points[point_index].penetration);
 
-						const size_t manifold_index = UpdateTauManifoldCache(manifolds, manifold, diagnostics);
+						const size_t manifold_index = UpdateTauManifoldCache(manifolds, manifold_lookup, manifold, diagnostics);
 						const TauContactManifold &active_manifold =
 							manifold_index != std::numeric_limits<size_t>::max() ? manifolds[manifold_index] : manifold;
 						for (uint8_t point_index = 0; point_index < active_manifold.point_count; ++point_index) {
@@ -1987,6 +2160,8 @@ std::vector<TauContactConstraint> BuildTauContacts(
 							contact.manifold_point_index = point_index;
 							contact.manifold_point_count = active_manifold.point_count;
 							contact.persistent = manifold_index != std::numeric_limits<size_t>::max();
+							if (diagnostics.enabled && contacts.size() == contacts.capacity())
+								++diagnostics.contact_reallocations;
 							contacts.push_back(contact);
 						}
 					} else {
@@ -2003,6 +2178,8 @@ std::vector<TauContactConstraint> BuildTauContacts(
 							++diagnostics.shape_pairs;
 							++diagnostics.manifold_points;
 							diagnostics.max_penetration = std::max(diagnostics.max_penetration, contact.penetration);
+							if (diagnostics.enabled && contacts.size() == contacts.capacity())
+								++diagnostics.contact_reallocations;
 							contacts.push_back(contact);
 						}
 					}
@@ -2034,10 +2211,13 @@ void ClearTauContactsForNode(NodePairContacts &contacts, NodeRef ref) {
 		entry.second.erase(ref);
 }
 
-void ClearTauManifoldsForNode(std::vector<TauContactManifold> &manifolds, NodeRef ref) {
-	manifolds.erase(std::remove_if(manifolds.begin(), manifolds.end(), [ref](const TauContactManifold &manifold) {
-		return manifold.ref_a == ref || manifold.ref_b == ref;
-	}), manifolds.end());
+void ClearTauManifoldsForNode(std::vector<TauContactManifold> &manifolds, TauManifoldLookup &lookup, NodeRef ref) {
+	for (size_t i = 0; i < manifolds.size();) {
+		if (manifolds[i].ref_a == ref || manifolds[i].ref_b == ref)
+			RemoveTauManifoldAt(manifolds, lookup, i);
+		else
+			++i;
+	}
 }
 
 void StoreTauContact(NodePairContacts &contacts, NodeRef ref_a, NodeRef ref_b, const Vec3 &point, const Vec3 &normal, float penetration) {
@@ -2045,9 +2225,12 @@ void StoreTauContact(NodePairContacts &contacts, NodeRef ref_a, NodeRef ref_b, c
 }
 
 void CollectTauTrackedContacts(const std::vector<TauContactConstraint> &contacts, const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes,
-	NodePairContacts &out_contacts) {
+	NodePairContacts &out_contacts, TauContactDiagnostics &diagnostics) {
 	out_contacts.clear();
+	if (tracking_modes.empty())
+		return;
 
+	diagnostics.tracked_contact_evaluations += contacts.size();
 	for (const auto &contact : contacts) {
 		if (tracking_modes.find(contact.ref_a) != std::end(tracking_modes))
 			StoreTauContact(out_contacts, contact.ref_a, contact.ref_b, contact.point, contact.normal, contact.penetration);
@@ -2067,19 +2250,51 @@ bool TauContactDiagnosticsEnabled() {
 void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &diagnostics, size_t cache_size) {
 	if (!TauContactDiagnosticsEnabled() || step % 60 != 0)
 		return;
-	std::string message = format("Tau contacts step %1: pairs=%2 manifolds(faceA=%3 faceB=%4 edge=%5) points=%6 cache=%7 warm=%8/%9 ")
+	std::string message = format("Tau contacts step %1: bodies=%2 dynamic=%3 proxies=%4/%5 proxy_allocs=%6 ")
 			 .arg(step)
+			 .arg(diagnostics.total_bodies)
+			 .arg(diagnostics.dynamic_bodies)
+			 .arg(diagnostics.proxy_bodies)
+			 .arg(diagnostics.proxy_shapes)
+			 .arg(diagnostics.proxy_shape_vector_reserves)
+			 .str();
+	message += format("broad(tests=%1 static=%2 aabb=%3 candidates=%4 reallocs=%5) ")
+			 .arg(diagnostics.body_pair_tests)
+			 .arg(diagnostics.static_pair_rejects)
+			 .arg(diagnostics.body_bounds_rejects)
+			 .arg(diagnostics.body_pair_candidates)
+			 .arg(diagnostics.candidate_reallocations)
+			 .str();
+	message += format("narrow(shape_body=%1/%2 shape_aabb=%3/%4 calls=%5 contacts=%6) ")
+			 .arg(diagnostics.shape_body_bounds_tests)
+			 .arg(diagnostics.shape_body_bounds_rejects)
+			 .arg(diagnostics.shape_pair_bounds_tests)
+			 .arg(diagnostics.shape_pair_bounds_rejects)
+			 .arg(diagnostics.narrowphase_calls)
 			 .arg(diagnostics.shape_pairs)
+			 .str();
+	message += format("manifolds(faceA=%1 faceB=%2 edge=%3 points=%4 cache=%5 scan=%6 warm=%7/%8 evict=%9")
 			 .arg(diagnostics.face_a_manifolds)
 			 .arg(diagnostics.face_b_manifolds)
 			 .arg(diagnostics.edge_edge_manifolds)
 			 .arg(diagnostics.manifold_points)
 			 .arg(cache_size)
+			 .arg(diagnostics.manifold_cache_comparisons)
 			 .arg(diagnostics.warm_start_hits)
 			 .arg(diagnostics.warm_start_misses)
+			 .arg(diagnostics.manifold_cache_evictions)
 			 .str();
-	message += format("stale=%1 impulses(n=%2 t=%3 clamps=%4) penetration=%5->%6")
+	message += format(" overflow=%1) ").arg(diagnostics.manifold_cache_overflows).str();
+	message += format("solver(pos=%1 vel=%2 rolling=%3 contact_reallocs=%4) events=%5 motion=%6 stale=%7 ")
+			 .arg(diagnostics.position_constraint_evaluations)
+			 .arg(diagnostics.velocity_constraint_evaluations)
+			 .arg(diagnostics.rolling_contact_evaluations)
+			 .arg(diagnostics.contact_reallocations)
+			 .arg(diagnostics.tracked_contact_evaluations)
+			 .arg(diagnostics.motion_updates)
 			 .arg(diagnostics.stale_discards)
+			 .str();
+	message += format("impulses(n=%1 t=%2 clamps=%3) penetration=%4->%5")
 			 .arg(diagnostics.normal_impulse_total)
 			 .arg(diagnostics.tangent_impulse_total)
 			 .arg(diagnostics.friction_clamps)
@@ -2089,40 +2304,67 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 	log(message.c_str());
 }
 
-void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, uint32_t step, float dt_sec,
-	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts) {
-	for (auto &entry : nodes) {
-		auto &node = entry.second;
-		if (!IsDynamicTauNode(node))
-			continue;
-
-		node.previous_position = node.position;
-		node.previous_orientation = node.orientation;
-		node.linear_velocity += (k_tau_gravity + node.accumulated_force * node.inverse_mass) * dt_sec;
-		node.linear_velocity *= std::max(0.f, 1.f - node.linear_damping * dt_sec);
-		node.linear_velocity = node.linear_velocity * node.linear_factor;
-
-		node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * node.accumulated_torque) * dt_sec;
-		node.angular_velocity *= std::max(0.f, 1.f - node.angular_damping * dt_sec);
-		node.angular_velocity = node.angular_velocity * node.angular_factor;
-
-		node.position += node.linear_velocity * dt_sec;
-		IntegrateTauOrientation(node, node.angular_velocity * dt_sec);
-	}
-
+void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
+	uint32_t step, float dt_sec, const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts) {
+	TauProfileSection substep_profile("Tau.Substep");
 	TauContactDiagnostics diagnostics;
-	auto contacts = BuildTauContacts(nodes, manifolds, step, diagnostics);
-	SolveTauPositionConstraints(contacts, diagnostics);
-	SolveTauVelocityConstraints(contacts, dt_sec, diagnostics);
-	SolveTauRollingFriction(contacts, dt_sec);
-	StoreTauSolvedManifoldImpulses(contacts, manifolds);
-	CollectTauTrackedContacts(contacts, tracking_modes, latest_contacts);
-	ReportTauContactDiagnostics(step, diagnostics, manifolds.size());
+	diagnostics.enabled = TauContactDiagnosticsEnabled();
+	diagnostics.total_bodies = nodes.size();
+	{
+		TauProfileSection integration_profile("Tau.Integrate");
+		for (auto &entry : nodes) {
+			auto &node = entry.second;
+			if (!IsDynamicTauNode(node))
+				continue;
+			++diagnostics.dynamic_bodies;
 
-	for (auto &entry : nodes) {
-		if (entry.second.body_type == RBT_Dynamic)
-			UpdateTauMotionFromState(entry.second);
+			node.previous_position = node.position;
+			node.previous_orientation = node.orientation;
+			node.linear_velocity += (k_tau_gravity + node.accumulated_force * node.inverse_mass) * dt_sec;
+			node.linear_velocity *= std::max(0.f, 1.f - node.linear_damping * dt_sec);
+			node.linear_velocity = node.linear_velocity * node.linear_factor;
+
+			node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * node.accumulated_torque) * dt_sec;
+			node.angular_velocity *= std::max(0.f, 1.f - node.angular_damping * dt_sec);
+			node.angular_velocity = node.angular_velocity * node.angular_factor;
+
+			node.position += node.linear_velocity * dt_sec;
+			IntegrateTauOrientation(node, node.angular_velocity * dt_sec);
+		}
 	}
+
+	auto contacts = BuildTauContacts(nodes, manifolds, manifold_lookup, step, diagnostics);
+	{
+		TauProfileSection position_profile("Tau.PositionSolve");
+		SolveTauPositionConstraints(contacts, diagnostics);
+	}
+	{
+		TauProfileSection velocity_profile("Tau.VelocitySolve");
+		SolveTauVelocityConstraints(contacts, dt_sec, diagnostics);
+	}
+	{
+		TauProfileSection rolling_profile("Tau.RollingFriction");
+		SolveTauRollingFriction(contacts, dt_sec, diagnostics);
+	}
+	{
+		TauProfileSection manifold_store_profile("Tau.StoreManifoldImpulses");
+		StoreTauSolvedManifoldImpulses(contacts, manifolds);
+	}
+	{
+		TauProfileSection contact_events_profile("Tau.ContactEvents");
+		CollectTauTrackedContacts(contacts, tracking_modes, latest_contacts, diagnostics);
+	}
+
+	{
+		TauProfileSection motion_profile("Tau.MotionUpdate");
+		for (auto &entry : nodes) {
+			if (entry.second.body_type == RBT_Dynamic) {
+				UpdateTauMotionFromState(entry.second);
+				++diagnostics.motion_updates;
+			}
+		}
+	}
+	ReportTauContactDiagnostics(step, diagnostics, manifolds.size());
 }
 
 } // namespace
@@ -2214,7 +2456,7 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	SetTauNodeWorld(tau_node, GetNodeWorld(node), TauWorldWriteMode::Reset);
 	RefreshTauMassProperties(tau_node);
 
-	ClearTauManifoldsForNode(contact_manifolds, node.ref);
+	ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, node.ref);
 	nodes[node.ref] = tau_node;
 }
 
@@ -2226,7 +2468,7 @@ void SceneTauPhysics::NodeStopTrackingCollisionEvents(NodeRef ref) { node_collis
 
 void SceneTauPhysics::NodeDestroyPhysics(const Node &node) {
 	nodes.erase(node.ref);
-	ClearTauManifoldsForNode(contact_manifolds, node.ref);
+	ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, node.ref);
 	constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [&node](const Tau6DofConstraint &constraint) {
 		return constraint.ref_a == node.ref || constraint.ref_b == node.ref;
 	}), std::end(constraints));
@@ -2246,24 +2488,40 @@ void SceneTauPhysics::Add6DofConstraint(
 }
 
 void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
-	const float dt_sec = time_to_sec_f(dt);
-	if (dt_sec <= 0.f)
+	TauProfileSection step_profile("Tau.StepSimulation");
+	if (dt <= 0)
 		return;
 
-	const float step_sec = step > 0 ? time_to_sec_f(step) : dt_sec;
-	const int requested_steps = step_sec > 0.f ? std::max(1, int(Ceil(dt_sec / step_sec))) : 1;
-	const int substep_count = max_step > 0 ? std::min(requested_steps, max_step) : requested_steps;
-	const float substep_dt = dt_sec / substep_count;
+	int substep_count = 0;
+	time_ns substep_time = dt;
+	if (step > 0 && max_step > 0) {
+		if (dt > std::numeric_limits<time_ns>::max() - fixed_step_accumulator)
+			fixed_step_accumulator = std::numeric_limits<time_ns>::max();
+		else
+			fixed_step_accumulator += dt;
 
-	latest_contacts.clear();
+		const time_ns requested_steps = fixed_step_accumulator / step;
+		fixed_step_accumulator %= step;
+		substep_count = static_cast<int>(std::min<time_ns>(requested_steps, max_step));
+		substep_time = step;
+	} else {
+		// Match Bullet's maxSubSteps == 0 mode: take one variable-duration step.
+		fixed_step_accumulator = 0;
+		substep_count = 1;
+	}
+
+	if (substep_count > 0)
+		latest_contacts.clear();
 
 	for (int substep = 0; substep < substep_count; ++substep) {
 		if (++contact_step == 0) {
 			contact_manifolds.clear();
+			contact_manifold_lookup.clear();
 			contact_step = 1;
 		}
-		TriggerPreTickCallback(time_from_sec_f(substep_dt));
-		StepTauSubstep(nodes, contact_manifolds, contact_step, substep_dt, node_collision_event_tracking_modes, latest_contacts);
+		TriggerPreTickCallback(substep_time);
+		StepTauSubstep(nodes, contact_manifolds, contact_manifold_lookup, contact_step, time_to_sec_f(substep_time),
+			node_collision_event_tracking_modes, latest_contacts);
 	}
 
 	for (auto &entry : nodes) {
@@ -2278,6 +2536,7 @@ void SceneTauPhysics::CollectCollisionEvents(const Scene &scene, NodePairContact
 }
 
 void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
+	TauProfileSection sync_profile("Tau.SyncFromScene");
 	for (auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
@@ -2287,6 +2546,7 @@ void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
 }
 
 void SceneTauPhysics::SyncTransformsToScene(Scene &scene) {
+	TauProfileSection sync_profile("Tau.SyncToScene");
 	for (auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
@@ -2301,7 +2561,7 @@ size_t SceneTauPhysics::GarbageCollect(const Scene &scene) {
 	for (auto it = nodes.begin(); it != nodes.end();) {
 		if (!scene.IsValidNodeRef(it->first)) {
 			const NodeRef ref = it->first;
-			ClearTauManifoldsForNode(contact_manifolds, ref);
+			ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
 			constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [ref](const Tau6DofConstraint &constraint) {
 				return constraint.ref_a == ref || constraint.ref_b == ref;
 			}), std::end(constraints));
@@ -2343,7 +2603,9 @@ void SceneTauPhysics::ClearNodes() {
 	nodes.clear();
 	constraints.clear();
 	contact_manifolds.clear();
+	contact_manifold_lookup.clear();
 	contact_step = 0;
+	fixed_step_accumulator = 0;
 	node_collision_event_tracking_modes.clear();
 	latest_contacts.clear();
 }
@@ -2368,7 +2630,7 @@ bool SceneTauPhysics::NodeGetDeactivation(NodeRef ref) const {
 
 void SceneTauPhysics::NodeResetWorld(NodeRef ref, const Mat4 &world) {
 	if (auto *node = FindTauNode(nodes, ref)) {
-		ClearTauManifoldsForNode(contact_manifolds, ref);
+		ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Reset);
 		RefreshTauMassProperties(*node);
 		ResetDynamicState(*node);
@@ -2377,7 +2639,7 @@ void SceneTauPhysics::NodeResetWorld(NodeRef ref, const Mat4 &world) {
 
 void SceneTauPhysics::NodeTeleport(NodeRef ref, const Mat4 &world) {
 	if (auto *node = FindTauNode(nodes, ref)) {
-		ClearTauManifoldsForNode(contact_manifolds, ref);
+		ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Solved);
 		RefreshTauMassProperties(*node);
 	}
