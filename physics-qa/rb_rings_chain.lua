@@ -1,4 +1,5 @@
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 hg.AddAssetsFolder('assets_compiled')
 
@@ -43,12 +44,22 @@ lgt = hg.CreateLinearLight(scene, hg.TransformationMat4(hg.Vec3(0, 0, 0), hg.Vec
 
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()
+
+ring_nodes = {}
+all_nodes = scene:GetAllNodes()
+for i = 0, all_nodes:size() - 1 do
+	node = all_nodes:at(i)
+	if node:HasRigidBody() and physics:NodeHasBody(node) then
+		table.insert(ring_nodes, node)
+	end
+end
+dump = qa_dump.Create("rb_rings_chain", physics_step, ring_nodes)
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
@@ -61,7 +72,7 @@ bottom_ring_root = scene:GetNodeChildren(bottom_ring):at(0)
 force = hg.Vec3(50,-30,0)
 time_switch = 0
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
     keyboard:Update()
 
 	dt = hg.TickClock()
@@ -78,6 +89,7 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 
     view_id = 0
     hg.SceneUpdateSystems(scene, clocks, dt_frame_step, physics, physics_step, 3)
+	qa_dump.Capture(dump, physics)
     view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
     physics:NodeAddForce(bottom_ring_root, force)
 
@@ -91,6 +103,8 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     hg.Frame()
     hg.UpdateWindow(win)
 end
+
+qa_dump.Close(dump)
 
 scene:Clear()
 scene:GarbageCollect()
