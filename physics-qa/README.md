@@ -170,6 +170,11 @@ The same mode on `rb_mesh_collider_raycast_mesh_terrain.lua` exercises 3,751
 rays against the 651k-triangle Island Chain asset and reports the raycast-only
 CPU time. This is the large-mesh regression check for the serialized BVH.
 
+`rb_mesh_collider_raycast_mesh_terrain_rotating.lua` exercises the same mesh
+through a kinematic body. In `raycast_check` mode it synchronizes a fixed 90
+degree rotation before casting and requires the Bullet/Tau reference result of
+403 hits and 3,348 misses. Its interactive mode keeps rotating the terrain.
+
 `plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
 default. It renders Bullet trajectories in blue and Tau trajectories in red on
 a black 3D plot. Use `--elevation` and `--azimuth` to change the view.

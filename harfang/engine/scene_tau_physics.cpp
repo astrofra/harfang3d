@@ -109,7 +109,7 @@ struct TauContactDiagnostics {
 };
 
 bool IsTauPhase1RigidBodyType(RigidBodyType type) {
-	return type == RBT_Dynamic || type == RBT_Static;
+	return type == RBT_Dynamic || type == RBT_Static || type == RBT_Kinematic;
 }
 
 bool IsDynamicTauNode(const TauNode &node) {
@@ -2019,7 +2019,7 @@ void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
 	for (auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
-		if (entry.second.body_type == RBT_Static)
+		if (entry.second.body_type == RBT_Static || entry.second.body_type == RBT_Kinematic)
 			SetTauNodeWorld(entry.second, GetNodeWorld(scene.GetNode(entry.first)), TauWorldWriteMode::CaptureSource);
 	}
 }

@@ -143,8 +143,8 @@ void TestRaycastAllHitsAreStableAndBounded() {
 void TestMeshColliderRaycast() {
 	CollisionGeometry source;
 	source.triangles = {
-		{Vec3(-1.f, 0.f, -1.f), Vec3(1.f, 0.f, 1.f), Vec3(1.f, 0.f, -1.f)},
-		{Vec3(-1.f, 0.f, -1.f), Vec3(-1.f, 0.f, 1.f), Vec3(1.f, 0.f, 1.f)},
+		{Vec3(-2.f, 0.f, -1.f), Vec3(2.f, 0.f, 1.f), Vec3(2.f, 0.f, -1.f)},
+		{Vec3(-2.f, 0.f, -1.f), Vec3(-2.f, 0.f, 1.f), Vec3(2.f, 0.f, 1.f)},
 	};
 
 	Data serialized;
@@ -153,8 +153,8 @@ void TestMeshColliderRaycast() {
 	CollisionGeometry round_trip;
 	TEST_ASSERT(LoadCollisionGeometry(g_data_reader, DataReadHandle(serialized), round_trip));
 	TEST_CHECK(round_trip.triangles.size() == source.triangles.size());
-	TEST_CHECK(round_trip.bounds.mn == Vec3(-1.f, 0.f, -1.f));
-	TEST_CHECK(round_trip.bounds.mx == Vec3(1.f, 0.f, 1.f));
+	TEST_CHECK(round_trip.bounds.mn == Vec3(-2.f, 0.f, -1.f));
+	TEST_CHECK(round_trip.bounds.mx == Vec3(2.f, 0.f, 1.f));
 	TEST_CHECK(ValidateBVH(round_trip.triangle_bvh, round_trip.triangles.size()));
 	TEST_CHECK(ValidateBVH(round_trip.boundary_bvh, round_trip.boundary_edges.size()));
 	TEST_CHECK(round_trip.boundary_edges.size() == 4);
@@ -184,7 +184,7 @@ void TestMeshColliderRaycast() {
 	Node mesh = scene.CreateNode();
 	mesh.SetTransform(scene.CreateTransform(TranslationMat4(Vec3(2.f, 0.f, 3.f))));
 	auto rigid_body = scene.CreateRigidBody();
-	rigid_body.SetType(RBT_Static);
+	rigid_body.SetType(RBT_Kinematic);
 	mesh.SetRigidBody(rigid_body);
 	auto collision = scene.CreateCollision();
 	collision.SetType(CT_Mesh);
@@ -202,10 +202,21 @@ void TestMeshColliderRaycast() {
 	TEST_CHECK(Abs(hit.t - 1.f) < 0.0001f);
 	TEST_CHECK(hit.N.y > 0.99f);
 
-	const RaycastOut miss = physics.RaycastFirstHit(scene, Vec3(4.f, 1.f, 3.f), Vec3(4.f, -1.f, 3.f));
+	const RaycastOut miss = physics.RaycastFirstHit(scene, Vec3(5.f, 1.f, 3.f), Vec3(5.f, -1.f, 3.f));
 	TEST_CHECK(!miss.node.IsValid());
-	const RaycastOut open_boundary = physics.RaycastFirstHit(scene, Vec3(3.f, 1.f, 3.f), Vec3(3.f, -1.f, 3.f));
+	const RaycastOut open_boundary = physics.RaycastFirstHit(scene, Vec3(4.f, 1.f, 3.f), Vec3(4.f, -1.f, 3.f));
 	TEST_CHECK(!open_boundary.node.IsValid());
+
+	// A kinematic body's scene transform is authoritative. After synchronization,
+	// the mesh's long X axis is rotated onto Z and the former miss becomes a hit.
+	const Vec3 rotated_probe(2.f, 1.f, 4.5f);
+	TEST_CHECK(!physics.RaycastFirstHit(scene, rotated_probe, Vec3(rotated_probe.x, -1.f, rotated_probe.z)).node.IsValid());
+	mesh.GetTransform().SetRot(Vec3(0.f, Deg(90.f), 0.f));
+	physics.SyncTransformsFromScene(scene);
+	const RaycastOut rotated_hit = physics.RaycastFirstHit(scene, rotated_probe, Vec3(rotated_probe.x, -1.f, rotated_probe.z));
+	TEST_CHECK(rotated_hit.node == mesh);
+	TEST_CHECK(Abs(rotated_hit.P.y) < 0.0001f);
+	TEST_CHECK(rotated_hit.N.y > 0.99f);
 
 	physics.NodeDestroyPhysics(mesh);
 	TEST_CHECK(physics.GarbageCollectResources() == 1);
