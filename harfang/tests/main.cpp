@@ -3,6 +3,7 @@
 
 // foundation tests
 extern void test_bvh();
+extern void test_dynamic_aabb_tree();
 extern void test_cext();
 extern void test_pack_float();
 extern void test_math();
@@ -67,6 +68,7 @@ extern void test_lua_vm();
 TEST_LIST = {
 	// foundation
 	{"foundation.bvh", test_bvh},
+	{"foundation.dynamic_aabb_tree", test_dynamic_aabb_tree},
 	{"foundation.cext", test_cext},
 	{"foundation.pack_float", test_pack_float},
 	{"foundation.math", test_math},

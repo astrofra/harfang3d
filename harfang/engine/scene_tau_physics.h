@@ -6,6 +6,7 @@
 #include "engine/physics.h"
 #include "engine/scene_tau_physics_contact.h"
 
+#include "foundation/dynamic_aabb_tree.h"
 #include "foundation/quaternion.h"
 #include "foundation/rw_interface.h"
 #include "foundation/time.h"
@@ -17,6 +18,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace hg {
@@ -61,6 +63,7 @@ struct TauNode {
 	Vec3 angular_factor{Vec3::One};
 	Vec3 accumulated_force{Vec3::Zero};
 	Vec3 accumulated_torque{Vec3::Zero};
+	DynamicAABBTreeProxy broadphase_proxy{InvalidDynamicAABBTreeProxy};
 	bool deactivation_enabled{true};
 };
 
@@ -186,6 +189,8 @@ private:
 	std::vector<Tau6DofConstraint> constraints;
 	std::vector<TauContactManifold> contact_manifolds;
 	std::unordered_multimap<size_t, size_t> contact_manifold_lookup;
+	DynamicAABBTree broadphase_tree;
+	std::unordered_map<DynamicAABBTreeProxy, std::unordered_set<DynamicAABBTreeProxy>> broadphase_pairs;
 	uint32_t contact_step{0};
 	time_ns fixed_step_accumulator{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;

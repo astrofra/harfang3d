@@ -4,11 +4,14 @@
 --
 --   set BENCH_BACKEND=tau
 --   set BENCH_BODIES=1500
+--   set BENCH_LAYOUT=pool
 --   set BENCH_OUTPUT=physics_pool_tau.jsonl
 --   ..\..\install\tau\hg_lua\lua.exe physics_pool_benchmark.lua
 --
 -- Set HG_TAU_PROFILE=1 for aggregate Tau phase timings. Profiled results are
 -- marked in JSON and should be used for attribution, not backend comparison.
+-- BENCH_LAYOUT=spread places bodies on a deterministic non-overlapping grid
+-- to expose broad-phase scaling independently from dense-pile contact growth.
 
 local hg = require("harfang")
 
@@ -66,6 +69,9 @@ assert(phase_selection == "active" or phase_selection == "settled" or phase_sele
 local shape_mix = env_string("BENCH_SHAPES", "mixed")
 assert(shape_mix == "mixed" or shape_mix == "cube" or shape_mix == "sphere",
 	"BENCH_SHAPES must be 'mixed', 'cube', or 'sphere'")
+
+local layout = env_string("BENCH_LAYOUT", "pool")
+assert(layout == "pool" or layout == "spread", "BENCH_LAYOUT must be 'pool' or 'spread'")
 
 local target_count = math.floor(env_number("BENCH_BODIES", 1500))
 local batch_size = math.floor(env_number("BENCH_BATCH", 7))
@@ -125,15 +131,16 @@ local function create_collision_body(scene, collision_type, position, size, radi
 	return node
 end
 
-local function create_container(scene)
-	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, 0), hg.Vec3(30, 1, 30), 0, hg.RBT_Static, 0)
-	create_collision_body(scene, hg.CT_Cube, hg.Vec3(-15.5, -0.5, 0), hg.Vec3(1, 11, 32), 0, hg.RBT_Static, 0)
-	create_collision_body(scene, hg.CT_Cube, hg.Vec3(15.5, -0.5, 0), hg.Vec3(1, 11, 32), 0, hg.RBT_Static, 0)
-	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, -15.5), hg.Vec3(32, 11, 1), 0, hg.RBT_Static, 0)
-	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, 15.5), hg.Vec3(32, 11, 1), 0, hg.RBT_Static, 0)
+local function create_container(scene, half_extent)
+	local span = half_extent * 2
+	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, 0), hg.Vec3(span, 1, span), 0, hg.RBT_Static, 0)
+	create_collision_body(scene, hg.CT_Cube, hg.Vec3(-half_extent - 0.5, -0.5, 0), hg.Vec3(1, 11, span + 2), 0, hg.RBT_Static, 0)
+	create_collision_body(scene, hg.CT_Cube, hg.Vec3(half_extent + 0.5, -0.5, 0), hg.Vec3(1, 11, span + 2), 0, hg.RBT_Static, 0)
+	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, -half_extent - 0.5), hg.Vec3(span + 2, 11, 1), 0, hg.RBT_Static, 0)
+	create_collision_body(scene, hg.CT_Cube, hg.Vec3(0, -0.5, half_extent + 0.5), hg.Vec3(span + 2, 11, 1), 0, hg.RBT_Static, 0)
 end
 
-local function create_dynamic_body(scene, rng)
+local function create_dynamic_body(scene, rng, body_index, spread_columns, spread_rows)
 	local collision_type
 	if shape_mix == "cube" then
 		collision_type = hg.CT_Cube
@@ -143,7 +150,16 @@ local function create_dynamic_body(scene, rng)
 		collision_type = rng() > 0.5 and hg.CT_Cube or hg.CT_Sphere
 	end
 
-	local position = hg.Vec3(-10 + rng() * 20, 18, -10 + rng() * 20)
+	local position
+	if layout == "spread" then
+		local spacing = 3
+		local column = body_index % spread_columns
+		local row = math.floor(body_index / spread_columns)
+		position = hg.Vec3((column - (spread_columns - 1) * 0.5) * spacing, 18,
+			(row - (spread_rows - 1) * 0.5) * spacing)
+	else
+		position = hg.Vec3(-10 + rng() * 20, 18, -10 + rng() * 20)
+	end
 	return create_collision_body(scene, collision_type, position, hg.Vec3(1, 1, 1), 0.5, hg.RBT_Dynamic, 1)
 end
 
@@ -154,7 +170,10 @@ local function make_world(seed)
 		physics = nil,
 		nodes = {},
 	}
-	create_container(world.scene)
+	local spread_columns = math.ceil(math.sqrt(target_count))
+	local spread_rows = math.ceil(target_count / spread_columns)
+	local container_half_extent = layout == "spread" and (math.max(spread_columns, spread_rows) * 1.5 + 2) or 15
+	create_container(world.scene, container_half_extent)
 
 	if mode ~= "no_physics" then
 		world.physics = hg.ScenePhysics()
@@ -165,8 +184,8 @@ local function make_world(seed)
 	local created = 0
 	while created < target_count do
 		local count_this_batch = math.min(batch_size, target_count - created)
-		for _ = 1, count_this_batch do
-			local node = create_dynamic_body(world.scene, rng)
+		for offset = 0, count_this_batch - 1 do
+			local node = create_dynamic_body(world.scene, rng, created + offset, spread_columns, spread_rows)
 			world.nodes[#world.nodes + 1] = node
 			if world.physics ~= nil then
 				world.physics:NodeCreatePhysicsFromAssets(node)
@@ -234,12 +253,12 @@ local function measure_phase(world, phase, repetition, seed)
 	local median_ns = percentile(samples, 0.50)
 	local p95_ns = percentile(samples, 0.95)
 	local record = string.format(
-		'{"schema":1,"timestamp_utc":%s,"backend":%s,"mode":%s,"phase":%s,"shape_mix":%s,' ..
+		'{"schema":1,"timestamp_utc":%s,"backend":%s,"mode":%s,"phase":%s,"shape_mix":%s,"layout":%s,' ..
 		'"bodies":%d,"static_bodies":5,"batch":%d,"seed":%d,"repetition":%d,"samples":%d,' ..
 		'"fixed_step_ns":%d,"warmup_steps":%d,"settle_steps":%d,"profiled":%s,' ..
 		'"total_ns":%d,"mean_us":%.3f,"median_us":%.3f,"p95_us":%.3f,"min_us":%.3f,"max_us":%.3f,' ..
 		'"revision":%s,"build_config":%s,"computer":%s,"processor":%s,"logical_processors":%s}',
-		json_string(os.date("!%Y-%m-%dT%H:%M:%SZ")), json_string(backend), json_string(mode), json_string(phase), json_string(shape_mix),
+		json_string(os.date("!%Y-%m-%dT%H:%M:%SZ")), json_string(backend), json_string(mode), json_string(phase), json_string(shape_mix), json_string(layout),
 		target_count, batch_size, seed, repetition, sample_steps, fixed_step, warmup_steps, settle_steps, profiling and "true" or "false",
 		total_ns, hg.time_to_us_f(total_ns) / sample_steps, hg.time_to_us_f(median_ns), hg.time_to_us_f(p95_ns),
 		hg.time_to_us_f(samples[1]), hg.time_to_us_f(samples[#samples]), json_string(env_string("BENCH_REVISION", "unknown")),
@@ -247,12 +266,12 @@ local function measure_phase(world, phase, repetition, seed)
 		json_string(env_string("PROCESSOR_IDENTIFIER", "unknown")), json_string(env_string("NUMBER_OF_PROCESSORS", "unknown")))
 
 	output:write(record, "\n")
-	print(string.format("[benchmark] backend=%s mode=%s phase=%s shapes=%s bodies=%d repetition=%d median=%.3f us p95=%.3f us",
-		backend, mode, phase, shape_mix, target_count, repetition, hg.time_to_us_f(median_ns), hg.time_to_us_f(p95_ns)))
+	print(string.format("[benchmark] backend=%s mode=%s phase=%s shapes=%s layout=%s bodies=%d repetition=%d median=%.3f us p95=%.3f us",
+		backend, mode, phase, shape_mix, layout, target_count, repetition, hg.time_to_us_f(median_ns), hg.time_to_us_f(p95_ns)))
 end
 
-print(string.format("[benchmark] backend=%s mode=%s phase=%s shapes=%s bodies=%d samples=%d repetitions=%d output=%s",
-	backend, mode, phase_selection, shape_mix, target_count, sample_steps, repetitions, output_path))
+print(string.format("[benchmark] backend=%s mode=%s phase=%s shapes=%s layout=%s bodies=%d samples=%d repetitions=%d output=%s",
+	backend, mode, phase_selection, shape_mix, layout, target_count, sample_steps, repetitions, output_path))
 
 for repetition = 1, repetitions do
 	local seed = base_seed + repetition - 1

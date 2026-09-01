@@ -2,9 +2,10 @@
 
 Date: 2026-09-01
 
-Status: Phase 0 in progress with two measured optimizations implemented. The deterministic physics benchmark, Tau phase
-instrumentation, diagnostic counters, Bullet-compatible fixed-step accumulator,
-and accumulator regression tests were implemented on 2026-09-01. An initial
+Status: Phase 0 in progress with three measured optimizations implemented, and
+the Phase 2 broad-phase gate met. The deterministic physics benchmark, Tau
+phase instrumentation, diagnostic counters, Bullet-compatible fixed-step
+accumulator, and accumulator regression tests were implemented on 2026-09-01. An initial
 1,500-body Release baseline is recorded below. The rendered end-to-end pass and
 the complete body-count/shape matrix remain to close the Phase 0 gate.
 
@@ -172,21 +173,62 @@ constraints, 6,309 contact points, accumulated impulses, friction clamps, and
 penetration values. The ordered BVH candidate stream therefore preserves the
 controlled trajectory while eliminating most theoretical pair visits.
 
-This first BVH integration still rebuilds and validates a static hierarchy
-every substep. It establishes a useful, low-risk speedup and a measured upper
-bound of about 2.29 ms per step for the current implementation. A reusable
-dynamic AABB tree with persistent proxies remains worthwhile: it can avoid full
-rebuild/validation, update only moved or awakened bodies, and later serve
-raycasts, scene queries, and other Harfang systems.
+This first BVH integration rebuilt and validated a static hierarchy every
+substep. It established a useful, low-risk speedup and a measured upper bound
+of about 2.29 ms per step for that implementation.
+
+### Third optimization result: persistent dynamic AABB tree
+
+A generic runtime `DynamicAABBTree` now lives in `foundation`, independently
+of Tau, scenes, rendering, cooked assets, and `assetc`. It provides
+generation-checked opaque proxies, insertion/removal/incremental update, fat
+AABBs, AABB and self-overlap queries, moved-proxy tracking, validation, and
+tree statistics. Randomized tests compare both query modes against brute-force
+fat-AABB oracles and cover proxy removal, reuse, and stale generations.
+
+Tau assigns a persistent proxy to each physics body. Only proxies that leave
+their fat AABB are reinserted. Cached fat-overlap adjacency is invalidated and
+rebuilt only for moved proxies, then exact body AABBs filter the cached pairs.
+The resulting `(body_a, body_b)` stream is sorted before narrow phase, retaining
+the previous deterministic solver order. Creation, destruction, garbage
+collection, reset, teleport, scale refresh, and static/kinematic scene sync all
+maintain proxy lifecycle. Invalid tree state still selects the all-pairs
+correctness fallback.
+
+The final unprofiled three-repetition run produced:
+
+| Window | Tau with rebuilt BVH | Tau with dynamic tree | Additional improvement | Total vs original Tau | Tau / Bullet |
+|---|---:|---:|---:|---:|---:|
+| active | 16.288 ms | 16.045 ms | 1.5% | 14.5% | 1.61x |
+| after 300 settling steps | 34.157 ms | 32.578 ms | 4.6% | 17.0% | 2.25x |
+
+The final p95 values are 19.785 ms active and 32.935 ms after 300 settling
+steps. Attribution puts `Tau.BroadPhase` at 1.67 ms active and 0.97 ms after
+300 settling steps, respectively about 10% and 3% of Tau step time. The
+velocity solver now dominates at 9.21 ms and 21.0 ms.
+
+The contact diagnostics oracle reported zero missing and zero extra exact
+pairs through step 540 of the 1,500-body pool. At step 540 only nine proxies
+were reinserted; 9,731 cached fat pairs filtered to the same 7,147 exact body
+candidates, 4,298 constraints, and 6,309 manifold points as the previous
+implementations.
+
+`BENCH_LAYOUT=spread` adds a deterministic non-overlapping layout to the
+benchmark. With 2,000 dynamic bodies and the normal staggered spawn history,
+the unprofiled median is 13.768 ms for Tau versus 2.916 ms for Bullet. A Tau
+profile attributes only 0.247 ms of its 14.1 ms average step to broad phase,
+while velocity solving costs 7.69 ms. In a batched 2,000-body oracle run, Tau
+examines the tree's eight conservative fat pairs, emits zero exact candidates
+instead of scanning 2,009,010 theoretical pairs, and reports `oracle=0/0`.
+This closes the quadratic broad-phase issue and makes the remaining spread
+gap strong evidence for prioritizing sleep/island deactivation.
 
 The next implementation order is now:
 
 1. reuse proxy, candidate, and contact scratch storage and remove dead proxy
    fields/work;
-2. add a persistent dynamic AABB tree API in `foundation` and migrate Tau from
-   rebuild-per-step BVH queries to incremental proxy updates;
-3. add wake/sleep state and islands;
-4. reduce repeated solver transforms, inverse-inertia work, and axis
+2. add wake/sleep state and contact islands;
+3. reduce repeated solver transforms, inverse-inertia work, and axis
    normalization.
 
 ## Workload Characterization
@@ -479,6 +521,12 @@ one-off implementation.
   movement correctly insert/update/remove proxies.
 - Broad phase is below 20% of Tau physics time in the 1,500-body mixed pool;
   otherwise profile and compare the sweep-and-prune alternative.
+
+Implementation status (2026-09-01): met. Randomized component tests and Tau's
+brute-force diagnostics report no missed pair; exact candidates are sorted;
+all body lifecycle paths maintain persistent proxies; the 2,000-body spread
+case emits zero exact candidates; and broad phase is approximately 10% active
+and 3% after 300 settling steps in the 1,500-body pool.
 
 ## Phase 3: Make Contact Persistence Scalable And Shape-Neutral
 

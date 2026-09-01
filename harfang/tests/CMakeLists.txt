@@ -29,6 +29,7 @@ install(TARGETS DummyAudioStream
 
 set(TEST_FOUNDATION_SRCS
 	foundation/bvh.cpp
+	foundation/dynamic_aabb_tree.cpp
 	foundation/cext.cpp
 	foundation/curve.cpp
 	foundation/pack_float.cpp

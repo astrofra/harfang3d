@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <iterator>
 #include <limits>
 
 namespace hg {
@@ -138,6 +139,10 @@ struct TauContactDiagnostics {
 	size_t total_bodies{0}, dynamic_bodies{0};
 	size_t proxy_bodies{0}, proxy_shapes{0}, proxy_shape_vector_reserves{0};
 	size_t body_pair_tests{0}, static_pair_rejects{0}, body_bounds_rejects{0}, body_pair_candidates{0};
+	size_t broadphase_proxy_inserts{0}, broadphase_proxy_reinsertions{0}, broadphase_fat_pairs{0};
+	size_t broadphase_oracle_misses{0}, broadphase_oracle_extras{0};
+	size_t broadphase_tree_height{0}, broadphase_tree_balance{0}, broadphase_moved_proxies{0};
+	float broadphase_area_ratio{0.f};
 	size_t shape_body_bounds_tests{0}, shape_body_bounds_rejects{0};
 	size_t shape_pair_bounds_tests{0}, shape_pair_bounds_rejects{0}, narrowphase_calls{0};
 	size_t shape_pairs{0};
@@ -763,6 +768,44 @@ TauBodyProxy BuildTauBodyProxy(NodeRef ref, TauNode &node) {
 	}
 
 	return proxy;
+}
+
+using TauBroadphasePairCache = std::unordered_map<DynamicAABBTreeProxy, std::unordered_set<DynamicAABBTreeProxy>>;
+
+void ClearTauBroadphasePairsForProxy(TauBroadphasePairCache &pairs, DynamicAABBTreeProxy proxy) {
+	const auto found = pairs.find(proxy);
+	if (found == std::end(pairs))
+		return;
+	for (const DynamicAABBTreeProxy other : found->second) {
+		const auto other_found = pairs.find(other);
+		if (other_found != std::end(pairs))
+			other_found->second.erase(proxy);
+	}
+	pairs.erase(found);
+}
+
+void RemoveTauBroadphaseProxy(DynamicAABBTree &tree, TauBroadphasePairCache &pairs, TauNode &node) {
+	ClearTauBroadphasePairsForProxy(pairs, node.broadphase_proxy);
+	tree.Remove(node.broadphase_proxy);
+	node.broadphase_proxy = InvalidDynamicAABBTreeProxy;
+}
+
+void RefreshTauBroadphaseProxy(
+	DynamicAABBTree &tree, TauBroadphasePairCache &pairs, NodeRef ref, TauNode &node, const Vec3 &displacement = Vec3::Zero) {
+	auto body = BuildTauBodyProxy(ref, node);
+	if (body.shapes.empty()) {
+		RemoveTauBroadphaseProxy(tree, pairs, node);
+		return;
+	}
+
+	uint32_t user_data = 0;
+	if (!tree.IsValidProxy(node.broadphase_proxy)) {
+		ClearTauBroadphasePairsForProxy(pairs, node.broadphase_proxy);
+		node.broadphase_proxy = tree.Insert(body.bounds, user_data, displacement);
+	} else {
+		tree.GetUserData(node.broadphase_proxy, user_data);
+		tree.Update(node.broadphase_proxy, body.bounds, displacement);
+	}
 }
 
 Color GetTauDebugColor(const TauNode &node) {
@@ -2019,14 +2062,16 @@ size_t UpdateTauManifoldCache(
 }
 
 std::vector<TauContactConstraint> BuildTauContacts(
-	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup, uint32_t step,
-	TauContactDiagnostics &diagnostics) {
+	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
+	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, TauContactDiagnostics &diagnostics) {
 	TauProfileSection build_contacts_profile("Tau.BuildContacts");
 	if (manifold_lookup.bucket_count() < k_tau_max_manifolds)
 		manifold_lookup.reserve(k_tau_max_manifolds);
 	PruneTauManifoldCache(manifolds, manifold_lookup, step, diagnostics);
 	std::vector<TauBodyProxy> bodies;
 	bodies.reserve(nodes.size());
+	std::vector<MinMax> body_bounds;
+	body_bounds.reserve(nodes.size());
 
 	{
 		TauProfileSection proxy_profile("Tau.ProxyUpdate");
@@ -2035,8 +2080,22 @@ std::vector<TauContactConstraint> BuildTauContacts(
 				++diagnostics.proxy_shape_vector_reserves;
 				auto proxy = BuildTauBodyProxy(entry.first, entry.second);
 				diagnostics.proxy_shapes += proxy.shapes.size();
-				if (!proxy.shapes.empty())
+				if (!proxy.shapes.empty()) {
+					const uint32_t body_index = uint32_t(bodies.size());
+					const Vec3 displacement = entry.second.position - entry.second.previous_position;
+					if (!broadphase_tree.IsValidProxy(entry.second.broadphase_proxy)) {
+						ClearTauBroadphasePairsForProxy(broadphase_pairs, entry.second.broadphase_proxy);
+						entry.second.broadphase_proxy = broadphase_tree.Insert(proxy.bounds, body_index, displacement);
+						++diagnostics.broadphase_proxy_inserts;
+					} else {
+						broadphase_tree.SetUserData(entry.second.broadphase_proxy, body_index);
+						if (broadphase_tree.Update(entry.second.broadphase_proxy, proxy.bounds, displacement))
+							++diagnostics.broadphase_proxy_reinsertions;
+					}
+					body_bounds.push_back(proxy.bounds);
 					bodies.push_back(std::move(proxy));
+				} else
+					RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, entry.second);
 			}
 		}
 	}
@@ -2045,11 +2104,8 @@ std::vector<TauContactConstraint> BuildTauContacts(
 	std::vector<TauContactConstraint> contacts;
 	std::vector<TauBodyPair> body_pairs;
 	body_pairs.reserve(bodies.size() * 8);
-	std::vector<MinMax> body_bounds;
-	body_bounds.reserve(bodies.size());
 	size_t static_body_count = 0;
 	for (const auto &body : bodies) {
-		body_bounds.push_back(body.bounds);
 		if (!IsDynamicTauNode(*body.node))
 			++static_body_count;
 	}
@@ -2064,18 +2120,62 @@ std::vector<TauContactConstraint> BuildTauContacts(
 			body_pairs.push_back({i, j});
 		};
 
-		BVH body_bvh;
-		if (BuildBVH(body_bounds, body_bvh)) {
-			for (uint32_t i = 0; i < bodies.size(); ++i) {
-				TraverseBVH(body_bvh, body_bounds[i], [&](uint32_t j) {
-					if (j > i)
-						append_overlapping_pair(i, j);
+		const size_t moved_proxy_count = broadphase_tree.GetMovedProxyCount();
+		std::vector<DynamicAABBTreeProxy> moved_proxies;
+		bool tree_ready = broadphase_tree.GetProxyCount() == bodies.size();
+		if (tree_ready) {
+			moved_proxies.reserve(moved_proxy_count);
+			broadphase_tree.VisitMoved([&](DynamicAABBTreeProxy proxy, uint32_t) {
+				moved_proxies.push_back(proxy);
+				return true;
+			});
+			for (const DynamicAABBTreeProxy proxy : moved_proxies)
+				ClearTauBroadphasePairsForProxy(broadphase_pairs, proxy);
+			for (const DynamicAABBTreeProxy proxy : moved_proxies) {
+				MinMax fat_bounds;
+				if (!broadphase_tree.GetFatBounds(proxy, fat_bounds)) {
+					tree_ready = false;
+					break;
+				}
+				broadphase_tree.Query(fat_bounds, [&](DynamicAABBTreeProxy other, uint32_t) {
+					if (other != proxy) {
+						broadphase_pairs[proxy].insert(other);
+						broadphase_pairs[other].insert(proxy);
+					}
 					return true;
 				});
 			}
-		} else {
-			// Invalid bounds should not disable collision detection. Preserve the
-			// former all-pairs path as a correctness fallback.
+		}
+		if (tree_ready) {
+			for (const auto &entry : broadphase_pairs) {
+				if (!broadphase_tree.IsValidProxy(entry.first)) {
+					tree_ready = false;
+					break;
+				}
+				for (const DynamicAABBTreeProxy other : entry.second) {
+					if (entry.first >= other)
+						continue;
+					uint32_t body_a = 0, body_b = 0;
+					if (!broadphase_tree.GetUserData(entry.first, body_a) || !broadphase_tree.GetUserData(other, body_b) ||
+						body_a >= bodies.size() || body_b >= bodies.size() || body_a == body_b) {
+						tree_ready = false;
+						break;
+					}
+					if (diagnostics.enabled)
+						++diagnostics.broadphase_fat_pairs;
+					append_overlapping_pair(std::min(body_a, body_b), std::max(body_a, body_b));
+				}
+				if (!tree_ready)
+					break;
+			}
+		}
+		if (tree_ready)
+			for (const DynamicAABBTreeProxy proxy : moved_proxies)
+				broadphase_tree.ClearMoved(proxy);
+		if (!tree_ready) {
+			// Invalid proxy state must not disable collision detection. Preserve
+			// the all-pairs path as a correctness fallback.
+			body_pairs.clear();
 			for (uint32_t i = 0; i < bodies.size(); ++i)
 				for (uint32_t j = i + 1; j < bodies.size(); ++j)
 					append_overlapping_pair(i, j);
@@ -2083,6 +2183,30 @@ std::vector<TauContactConstraint> BuildTauContacts(
 		std::sort(std::begin(body_pairs), std::end(body_pairs), [](const TauBodyPair &a, const TauBodyPair &b) {
 			return a.a == b.a ? a.b < b.b : a.a < b.a;
 		});
+
+		if (diagnostics.enabled) {
+			std::vector<TauBodyPair> oracle_pairs;
+			for (uint32_t i = 0; i < bodies.size(); ++i)
+				for (uint32_t j = i + 1; j < bodies.size(); ++j)
+					if ((IsDynamicTauNode(*bodies[i].node) || IsDynamicTauNode(*bodies[j].node)) && Overlap(body_bounds[i], body_bounds[j]))
+						oracle_pairs.push_back({i, j});
+			auto pair_less = [](const TauBodyPair &a, const TauBodyPair &b) { return a.a == b.a ? a.b < b.b : a.a < b.a; };
+			std::vector<TauBodyPair> difference;
+			std::set_difference(std::begin(oracle_pairs), std::end(oracle_pairs), std::begin(body_pairs), std::end(body_pairs),
+				std::back_inserter(difference), pair_less);
+			diagnostics.broadphase_oracle_misses = difference.size();
+			difference.clear();
+			std::set_difference(std::begin(body_pairs), std::end(body_pairs), std::begin(oracle_pairs), std::end(oracle_pairs),
+				std::back_inserter(difference), pair_less);
+			diagnostics.broadphase_oracle_extras = difference.size();
+		}
+		if (diagnostics.enabled) {
+			const auto tree_stats = broadphase_tree.GetStats();
+			diagnostics.broadphase_tree_height = tree_stats.height;
+			diagnostics.broadphase_tree_balance = tree_stats.max_balance;
+			diagnostics.broadphase_moved_proxies = moved_proxy_count;
+			diagnostics.broadphase_area_ratio = tree_stats.area_ratio;
+		}
 	}
 	const size_t body_count = bodies.size();
 	diagnostics.body_pair_tests = body_count > 1 ? body_count * (body_count - 1) / 2 : 0;
@@ -2265,6 +2389,17 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.body_pair_candidates)
 			 .arg(diagnostics.candidate_reallocations)
 			 .str();
+	message += format("tree(h=%1 balance=%2 area=%3 moved=%4 insert=%5 reinsert=%6 fat=%7 oracle=%8/%9) ")
+			 .arg(diagnostics.broadphase_tree_height)
+			 .arg(diagnostics.broadphase_tree_balance)
+			 .arg(diagnostics.broadphase_area_ratio)
+			 .arg(diagnostics.broadphase_moved_proxies)
+			 .arg(diagnostics.broadphase_proxy_inserts)
+			 .arg(diagnostics.broadphase_proxy_reinsertions)
+			 .arg(diagnostics.broadphase_fat_pairs)
+			 .arg(diagnostics.broadphase_oracle_misses)
+			 .arg(diagnostics.broadphase_oracle_extras)
+			 .str();
 	message += format("narrow(shape_body=%1/%2 shape_aabb=%3/%4 calls=%5 contacts=%6) ")
 			 .arg(diagnostics.shape_body_bounds_tests)
 			 .arg(diagnostics.shape_body_bounds_rejects)
@@ -2305,7 +2440,8 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 }
 
 void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
-	uint32_t step, float dt_sec, const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts) {
+	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, float dt_sec,
+	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts) {
 	TauProfileSection substep_profile("Tau.Substep");
 	TauContactDiagnostics diagnostics;
 	diagnostics.enabled = TauContactDiagnosticsEnabled();
@@ -2333,7 +2469,7 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 		}
 	}
 
-	auto contacts = BuildTauContacts(nodes, manifolds, manifold_lookup, step, diagnostics);
+	auto contacts = BuildTauContacts(nodes, manifolds, manifold_lookup, broadphase_tree, broadphase_pairs, step, diagnostics);
 	{
 		TauProfileSection position_profile("Tau.PositionSolve");
 		SolveTauPositionConstraints(contacts, diagnostics);
@@ -2457,7 +2593,11 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	RefreshTauMassProperties(tau_node);
 
 	ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, node.ref);
-	nodes[node.ref] = tau_node;
+	auto existing = nodes.find(node.ref);
+	if (existing != std::end(nodes))
+		RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, existing->second);
+	auto &created = nodes[node.ref] = std::move(tau_node);
+	RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, node.ref, created);
 }
 
 void SceneTauPhysics::NodeCreatePhysicsFromFile(const Node &node) { NodeCreatePhysics(node, g_file_reader, g_file_read_provider); }
@@ -2467,7 +2607,11 @@ void SceneTauPhysics::NodeStartTrackingCollisionEvents(NodeRef ref, CollisionEve
 void SceneTauPhysics::NodeStopTrackingCollisionEvents(NodeRef ref) { node_collision_event_tracking_modes.erase(ref); }
 
 void SceneTauPhysics::NodeDestroyPhysics(const Node &node) {
-	nodes.erase(node.ref);
+	auto existing = nodes.find(node.ref);
+	if (existing != std::end(nodes)) {
+		RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, existing->second);
+		nodes.erase(existing);
+	}
 	ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, node.ref);
 	constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [&node](const Tau6DofConstraint &constraint) {
 		return constraint.ref_a == node.ref || constraint.ref_b == node.ref;
@@ -2520,8 +2664,8 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 			contact_step = 1;
 		}
 		TriggerPreTickCallback(substep_time);
-		StepTauSubstep(nodes, contact_manifolds, contact_manifold_lookup, contact_step, time_to_sec_f(substep_time),
-			node_collision_event_tracking_modes, latest_contacts);
+		StepTauSubstep(nodes, contact_manifolds, contact_manifold_lookup, broadphase_tree, broadphase_pairs, contact_step,
+			time_to_sec_f(substep_time), node_collision_event_tracking_modes, latest_contacts);
 	}
 
 	for (auto &entry : nodes) {
@@ -2540,8 +2684,11 @@ void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
 	for (auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
-		if (entry.second.body_type == RBT_Static || entry.second.body_type == RBT_Kinematic)
+		if (entry.second.body_type == RBT_Static || entry.second.body_type == RBT_Kinematic) {
 			SetTauNodeWorld(entry.second, GetNodeWorld(scene.GetNode(entry.first)), TauWorldWriteMode::CaptureSource);
+			RefreshTauBroadphaseProxy(
+				broadphase_tree, broadphase_pairs, entry.first, entry.second, entry.second.position - entry.second.previous_position);
+		}
 	}
 }
 
@@ -2561,6 +2708,7 @@ size_t SceneTauPhysics::GarbageCollect(const Scene &scene) {
 	for (auto it = nodes.begin(); it != nodes.end();) {
 		if (!scene.IsValidNodeRef(it->first)) {
 			const NodeRef ref = it->first;
+			RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, it->second);
 			ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
 			constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [ref](const Tau6DofConstraint &constraint) {
 				return constraint.ref_a == ref || constraint.ref_b == ref;
@@ -2604,6 +2752,8 @@ void SceneTauPhysics::ClearNodes() {
 	constraints.clear();
 	contact_manifolds.clear();
 	contact_manifold_lookup.clear();
+	broadphase_tree.Clear();
+	broadphase_pairs.clear();
 	contact_step = 0;
 	fixed_step_accumulator = 0;
 	node_collision_event_tracking_modes.clear();
@@ -2634,6 +2784,7 @@ void SceneTauPhysics::NodeResetWorld(NodeRef ref, const Mat4 &world) {
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Reset);
 		RefreshTauMassProperties(*node);
 		ResetDynamicState(*node);
+		RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, ref, *node);
 	}
 }
 
@@ -2642,6 +2793,7 @@ void SceneTauPhysics::NodeTeleport(NodeRef ref, const Mat4 &world) {
 		ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Solved);
 		RefreshTauMassProperties(*node);
+		RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, ref, *node);
 	}
 }
 
