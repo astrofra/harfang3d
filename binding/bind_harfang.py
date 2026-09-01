@@ -1748,6 +1748,7 @@ def bind_scene_physics(gen):
 	physics = gen.begin_class('hg::ScenePhysics', noncopyable=True)
 	gen.bind_constructor(physics, ['?int thread_count'])
 	bind_scene_physics_common_methods(gen, physics)
+	gen.bind_method(physics, 'Add6DofConstraint', 'void', ['const hg::Node &nodeA', 'const hg::Node &nodeB', 'const hg::Mat4 &anchorALocal', 'const hg::Mat4 &anchorBInLocalSpaceA'])
 	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS') and not gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
 		# The legacy factory must return the canonical Lua ScenePhysics type so that
 		# SceneUpdateSystems and other common API overloads accept the result.

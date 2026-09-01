@@ -844,8 +844,22 @@ void SceneTauPhysics::NodeStopTrackingCollisionEvents(NodeRef ref) { node_collis
 
 void SceneTauPhysics::NodeDestroyPhysics(const Node &node) {
 	nodes.erase(node.ref);
+	constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [&node](const Tau6DofConstraint &constraint) {
+		return constraint.ref_a == node.ref || constraint.ref_b == node.ref;
+	}), std::end(constraints));
 	node_collision_event_tracking_modes.erase(node.ref);
 	ClearTauContactsForNode(latest_contacts, node.ref);
+}
+
+void SceneTauPhysics::Add6DofConstraint(
+	const NodeRef &node_a_ref, const NodeRef &node_b_ref, const Mat4 &anchor_a_local, const Mat4 &anchor_b_local) {
+	if (!NodeHasBody(node_a_ref) || !NodeHasBody(node_b_ref))
+		return;
+
+	// btGeneric6DofConstraint defaults every axis to free. The current Harfang
+	// API exposes creation only, not limit or motor setup, so applying a fixed
+	// joint here would diverge from Bullet and break existing scenes.
+	constraints.push_back({node_a_ref, node_b_ref, anchor_a_local, anchor_b_local});
 }
 
 void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
@@ -897,6 +911,10 @@ size_t SceneTauPhysics::GarbageCollect(const Scene &scene) {
 
 	for (auto it = nodes.begin(); it != nodes.end();) {
 		if (!scene.IsValidNodeRef(it->first)) {
+			const NodeRef ref = it->first;
+			constraints.erase(std::remove_if(std::begin(constraints), std::end(constraints), [ref](const Tau6DofConstraint &constraint) {
+				return constraint.ref_a == ref || constraint.ref_b == ref;
+			}), std::end(constraints));
 			node_collision_event_tracking_modes.erase(it->first);
 			ClearTauContactsForNode(latest_contacts, it->first);
 			it = nodes.erase(it);
@@ -922,6 +940,7 @@ size_t SceneTauPhysics::GarbageCollectResources() { return 0; }
 
 void SceneTauPhysics::ClearNodes() {
 	nodes.clear();
+	constraints.clear();
 	node_collision_event_tracking_modes.clear();
 	latest_contacts.clear();
 }

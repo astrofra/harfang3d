@@ -56,6 +56,16 @@ struct TauNode {
 	bool deactivation_enabled{true};
 };
 
+// Generic 6-DoF constraints are unconstrained until limits or motors are set.
+// Keep their frames so Tau can preserve Bullet's current creation semantics and
+// grow the implementation without changing the public physics API again.
+struct Tau6DofConstraint {
+	NodeRef ref_a{};
+	NodeRef ref_b{};
+	Mat4 frame_in_a{Mat4::Identity};
+	Mat4 frame_in_b{Mat4::Identity};
+};
+
 class SceneTauPhysics {
 public:
 	SceneTauPhysics(int thread_count = 1) { (void)thread_count; }
@@ -144,10 +154,16 @@ public:
 	Vec3 NodeGetAngularFactor(const Node &node) const { return NodeGetAngularFactor(node.ref); }
 	void NodeSetAngularFactor(const Node &node, const Vec3 &k) { NodeSetAngularFactor(node.ref, k); }
 
+	void Add6DofConstraint(const NodeRef &node_a_ref, const NodeRef &node_b_ref, const Mat4 &anchor_a_local, const Mat4 &anchor_b_local);
+	void Add6DofConstraint(const Node &node_a, const Node &node_b, const Mat4 &anchor_a_local, const Mat4 &anchor_b_local) {
+		Add6DofConstraint(node_a.ref, node_b.ref, anchor_a_local, anchor_b_local);
+	}
+
 	void RenderCollision(bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth);
 
 private:
 	std::map<NodeRef, TauNode> nodes;
+	std::vector<Tau6DofConstraint> constraints;
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
 };
