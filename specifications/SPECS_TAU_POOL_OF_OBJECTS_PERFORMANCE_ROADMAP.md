@@ -252,13 +252,15 @@ met. Tests cover explicit wake propagation, collision-driven wake, disabled
 deactivation, moving supports, and tracked-contact continuity.
 
 Dynamic support dependencies are directional: a contact whose normal opposes
-gravity records the lower body as a support for the upper body. If that support
-cohort is awake and moves faster than 0.5 m/s (or 0.5 rad/s), the directly
-supported sleeping cohort wakes on the next fixed step; higher layers follow
-on subsequent steps. A remembered dependency also survives a one-step contact
-loss, preventing a fast-moving foundation from leaving frozen Kapla sections
-in mid-air. Side contacts do not propagate this wake, and bounded inline
-support storage avoids per-contact heap allocation.
+gravity records the lower body as a support for the upper body. Entering sleep
+captures each dynamic support's position and orientation. A supported sleeper
+wakes after 2 cm of cumulative support translation, 2 degrees of rotation, or
+two consecutive fixed steps without a snapshotted support contact. This catches
+slow drift that an instantaneous velocity threshold misses while tolerating a
+single frame of manifold churn. Higher layers follow on subsequent steps. Side
+contacts do not propagate this wake, and bounded inline support storage avoids
+per-contact heap allocation. Diagnostics split support-pose and support-loss
+wakes so remaining sleep/contact failures can be distinguished in captures.
 
 Sleeping bodies keep broad-phase proxies, manifolds, and contact-event
 visibility. They skip integration, sleeping/sleeping solver constraints,
@@ -319,7 +321,7 @@ One-repetition shape spot checks produced:
 | spheres | after 300 steps | 3.292 ms | 11.411 ms | 0.29x |
 
 All 54 C++ unit-test groups pass. Fresh 600-sample QA captures also pass the
-bounded cuboid-chain validator (4.466 m maximum vertical error, 16.792 m/s
+bounded cuboid-chain validator (4.45449 m maximum vertical error, 16.8203 m/s
 maximum Tau speed, zero static-ring drift). The impulse-callback capture stays
 within 0.0359 m maximum position error and differs from Bullet by only
 -0.00142 m peak-to-peak amplitude. A scene-loop regression now drops a cube
@@ -330,14 +332,18 @@ execute a fixed substep.
 
 A 65-body cohort-boundary regression now verifies dynamic-support wake: the
 lower support occupies the last slot of one 64-body cohort, the upper cuboid
-the first slot of the next, and moving only the lower cohort wakes the upper on
-the following fixed step. A same-machine A/B of the 1,500-body mixed settled
-pool measured 6.646 ms median / 7.398 ms p95 without support tracking and
-6.806 ms / 7.333 ms with it (one 120-sample validation repetition), a 2.4%
-median cost within the 10% milestone policy. Active timings were unchanged
-within run-to-run noise.
+the first slot of the next, and moving only the lower cohort in 3 mm increments
+wakes the upper once cumulative displacement invalidates its support snapshot.
+The same regression re-settles the pair and verifies a 3-degree support
+rotation. A same-machine A/B of the initial directional support tracking on the
+1,500-body mixed settled pool measured 6.646 ms median / 7.398 ms p95 without
+support tracking and 6.806 ms / 7.333 ms with it (one 120-sample validation
+repetition), a 2.4% median cost within the 10% milestone policy. The final
+persistent-pose implementation reports 6.632 ms / 7.021 ms under the same
+one-repetition setup, so the stronger invalidation adds no measured regression.
+Active timings were unchanged within run-to-run noise.
 The packaged Release 1,500-body mixed settled scene benchmark reports a
-6.450 ms median and 6.960 ms p95 over 120 samples (one validation repetition).
+6.632 ms median and 7.021 ms p95 over 120 samples (one validation repetition).
 
 ## Workload Characterization
 

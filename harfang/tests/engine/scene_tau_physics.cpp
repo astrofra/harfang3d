@@ -300,6 +300,8 @@ void TestSleepingBodyWakesWithDynamicSupportCohort() {
 
 	SceneTauPhysics physics;
 	physics.SceneCreatePhysicsFromAssets(scene);
+	// Prevent gravity from perturbing the test-authored support pose.
+	physics.NodeSetLinearFactor(support, Vec3(1.f, 0.f, 0.f));
 	for (size_t i = 0; i + 1 < graph_bodies.size(); ++i)
 		physics.Add6DofConstraint(graph_bodies[i], graph_bodies[i + 1], Mat4::Identity, Mat4::Identity);
 	for (size_t i = 0; i < 63; ++i) {
@@ -310,11 +312,28 @@ void TestSleepingBodyWakesWithDynamicSupportCohort() {
 	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, support.ref));
 	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, supported.ref));
 	TEST_CHECK(tau_internal::GetNodeSleepIslandId(physics, support.ref) != tau_internal::GetNodeSleepIslandId(physics, supported.ref));
+	TEST_ASSERT(tau_internal::HasNodeSleepingSupportSnapshot(physics, supported.ref));
 
 	// Emulate the bounded wake performed by an impact on the lower cohort. The
 	// supported body is deliberately in the next cohort and initially remains
-	// asleep; the following step must propagate the wake dependency upward.
-	tau_internal::WakeNodeSleepCohortWithVelocityForTest(physics, support.ref, Vec3(0.6f, 0.f, 0.f));
+	// asleep. Move the support in 3 mm increments: no individual change reaches
+	// the 2 cm tolerance, but cumulative displacement must wake the dependency.
+	for (int step = 0; step < 10 && tau_internal::IsNodeSleeping(physics, supported.ref); ++step) {
+		tau_internal::TransformNodeSleepCohortForTest(
+			physics, support.ref, Vec3(0.003f, 0.f, 0.f), Quaternion::Identity);
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	}
+	TEST_ASSERT(!tau_internal::IsNodeSleeping(physics, support.ref));
+	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, supported.ref));
+
+	// Re-settle at the displaced pose and validate the rotational half of the
+	// same invariant independently of translation.
+	StepTauWorld(physics, 240);
+	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, support.ref));
+	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, supported.ref));
+	TEST_ASSERT(tau_internal::HasNodeSleepingSupportSnapshot(physics, supported.ref));
+	tau_internal::TransformNodeSleepCohortForTest(
+		physics, support.ref, Vec3::Zero, QuaternionFromAxisAngle(Deg(3.f), Vec3::Up));
 	TEST_ASSERT(!tau_internal::IsNodeSleeping(physics, support.ref));
 	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, supported.ref));
 	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);

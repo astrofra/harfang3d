@@ -31,7 +31,9 @@ struct CollisionGeometry;
 namespace tau_internal {
 bool IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
 uint32_t GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
-void WakeNodeSleepCohortWithVelocityForTest(SceneTauPhysics &physics, NodeRef ref, const Vec3 &linear_velocity);
+bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
+void TransformNodeSleepCohortForTest(
+	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 }
 
 struct TauCollisionShape {
@@ -49,6 +51,12 @@ struct TauCollisionShape {
 };
 
 enum class TauActivationState : uint8_t { Awake, SleepCandidate, Sleeping };
+
+struct TauSleepSupportSnapshot {
+	NodeRef ref{};
+	Vec3 position{Vec3::Zero};
+	Quaternion orientation{Quaternion::Identity};
+};
 
 struct TauNode {
 	tau_compat::NodeMotionAdapter motion{};
@@ -77,9 +85,10 @@ struct TauNode {
 	std::vector<NodeRef> sleep_supports;
 	std::vector<NodeRef> sleep_neighbors;
 	std::array<NodeRef, 8> sleep_dynamic_supports{};
-	std::array<NodeRef, 8> previous_sleep_dynamic_supports{};
+	std::array<TauSleepSupportSnapshot, 8> sleeping_support_snapshots{};
 	uint8_t sleep_dynamic_support_count{0};
-	uint8_t previous_sleep_dynamic_support_count{0};
+	uint8_t sleeping_support_snapshot_count{0};
+	uint8_t unsupported_sleep_steps{0};
 	float sleep_timer{0.f};
 	uint32_t sleep_island_id{0};
 	uint32_t island_index{0xffffffff};
@@ -205,8 +214,9 @@ public:
 private:
 	friend bool tau_internal::IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
 	friend uint32_t tau_internal::GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
-	friend void tau_internal::WakeNodeSleepCohortWithVelocityForTest(
-		SceneTauPhysics &physics, NodeRef ref, const Vec3 &linear_velocity);
+	friend bool tau_internal::HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
+	friend void tau_internal::TransformNodeSleepCohortForTest(
+		SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 
 	std::shared_ptr<const CollisionGeometry> LoadCollisionGeometryResource(
 		const Reader &ir, const ReadProvider &ip, const std::string &resource);

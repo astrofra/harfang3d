@@ -53,8 +53,10 @@ static constexpr float k_tau_sleep_hard_reject_multiplier = 4.f;
 static constexpr float k_tau_sleep_timer_decay = 0.5f;
 static constexpr uint32_t k_tau_sleep_cohort_size = 64;
 static constexpr float k_tau_sleep_support_normal_y = 0.25f;
-static constexpr float k_tau_wake_support_linear_speed = 0.5f;
-static constexpr float k_tau_wake_support_angular_speed = 0.5f;
+static constexpr float k_tau_wake_support_translation = 0.02f;
+// Quaternion dot is cos(half-angle): cos(1 degree) detects a 2-degree rotation.
+static constexpr float k_tau_wake_support_orientation_dot = 0.999847695f;
+static constexpr uint8_t k_tau_wake_unsupported_steps = 2;
 
 bool TauProfilingEnabled() {
 	static const bool enabled = [] {
@@ -168,7 +170,7 @@ struct TauContactDiagnostics {
 	size_t tracked_contact_evaluations{0}, motion_updates{0};
 	size_t awake_bodies{0}, sleep_candidate_bodies{0}, sleeping_bodies{0};
 	size_t contact_islands{0}, sleeping_islands{0}, bodies_woken{0}, bodies_put_to_sleep{0}, sleeping_solver_contacts{0};
-	size_t support_wake_cohorts{0};
+	size_t support_wake_cohorts{0}, support_pose_wake_cohorts{0}, support_loss_wake_cohorts{0};
 	size_t sleep_linear_rejects{0}, sleep_angular_rejects{0}, sleep_force_rejects{0};
 	size_t sleep_penetration_rejects{0}, sleep_contact_speed_rejects{0};
 	size_t friction_clamps{0};
@@ -250,6 +252,8 @@ void WakeTauNodeState(TauNode &node) {
 	node.activation_state = TauActivationState::Awake;
 	node.sleep_timer = 0.f;
 	node.sleep_island_id = 0;
+	node.sleeping_support_snapshot_count = 0;
+	node.unsupported_sleep_steps = 0;
 }
 
 void WakeTauIsland(std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
@@ -1904,9 +1908,19 @@ bool HasTauDynamicSleepSupport(const TauNode &node, NodeRef support) {
 	return false;
 }
 
-bool IsTauDynamicSupportMoving(const TauNode &node) {
-	return Len2(node.linear_velocity) > k_tau_wake_support_linear_speed * k_tau_wake_support_linear_speed ||
-		Len2(node.angular_velocity) > k_tau_wake_support_angular_speed * k_tau_wake_support_angular_speed;
+void CaptureTauSleepingSupportSnapshots(TauNode &node, const std::map<NodeRef, TauNode> &nodes) {
+	node.sleeping_support_snapshot_count = 0;
+	node.unsupported_sleep_steps = 0;
+	for (uint8_t i = 0; i < node.sleep_dynamic_support_count; ++i) {
+		const NodeRef support_ref = node.sleep_dynamic_supports[i];
+		const TauNode *support = FindTauNode(nodes, support_ref);
+		if (support == nullptr || node.sleeping_support_snapshot_count >= node.sleeping_support_snapshots.size())
+			continue;
+		auto &snapshot = node.sleeping_support_snapshots[node.sleeping_support_snapshot_count++];
+		snapshot.ref = support_ref;
+		snapshot.position = support->position;
+		snapshot.orientation = support->orientation;
+	}
 }
 
 TauIslandGraph BuildTauIslandGraph(
@@ -1921,8 +1935,6 @@ TauIslandGraph BuildTauIslandGraph(
 			continue;
 		node.sleep_supports.clear();
 		node.sleep_neighbors.clear();
-		node.previous_sleep_dynamic_supports = node.sleep_dynamic_supports;
-		node.previous_sleep_dynamic_support_count = node.sleep_dynamic_support_count;
 		node.sleep_dynamic_support_count = 0;
 		node.island_index = uint32_t(graph.bodies.size());
 		graph.bodies.push_back(&node);
@@ -2009,48 +2021,64 @@ void WakeTauMergedIslands(
 
 	// Bounded cohorts prevent a surface impact from waking a complete dense
 	// pile, but they must not turn an upper structure into a frozen island when
-	// its lower support cohort wakes or moves away. Propagate wake state only in
-	// the gravity-opposing support direction. Successive supported layers wake
-	// on subsequent fixed steps without waking unrelated side contacts.
+	// its lower support cohort wakes or moves away. Compare each support against
+	// the pose captured when the upper body entered sleep: cumulative slow drift
+	// then wakes the supported cohort even when instantaneous velocity stays low.
+	// A short contact-loss grace filters one-frame manifold churn. Propagation is
+	// gravity-opposing and layer-by-layer, so unrelated side contacts stay asleep.
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		TauNode &node = *graph.bodies[i];
 		if (!IsTauSleeping(node))
 			continue;
 
 		bool wake_supported_body = false;
-		for (uint8_t support_index = 0; support_index < node.sleep_dynamic_support_count; ++support_index) {
-			const NodeRef support_ref = node.sleep_dynamic_supports[support_index];
-			const TauNode *support = FindTauNode(nodes, support_ref);
-			if (support == nullptr || (!IsTauSleeping(*support) && IsTauDynamicSupportMoving(*support))) {
+		bool wake_due_to_pose = false;
+		bool wake_due_to_loss = false;
+		bool has_current_snapshotted_support = false;
+		for (uint8_t support_index = 0; support_index < node.sleeping_support_snapshot_count; ++support_index) {
+			const auto &snapshot = node.sleeping_support_snapshots[support_index];
+			const TauNode *support = FindTauNode(nodes, snapshot.ref);
+			if (support == nullptr) {
 				wake_supported_body = true;
+				wake_due_to_loss = true;
+				break;
+			}
+			has_current_snapshotted_support |= HasTauDynamicSleepSupport(node, snapshot.ref);
+			if (Len2(support->position - snapshot.position) >
+					k_tau_wake_support_translation * k_tau_wake_support_translation ||
+				Abs(Dot(support->orientation, snapshot.orientation)) < k_tau_wake_support_orientation_dot) {
+				wake_supported_body = true;
+				wake_due_to_pose = true;
 				break;
 			}
 		}
-		if (!wake_supported_body) {
-			for (uint8_t support_index = 0; support_index < node.previous_sleep_dynamic_support_count; ++support_index) {
-				const NodeRef previous_support_ref = node.previous_sleep_dynamic_supports[support_index];
-				if (HasTauDynamicSleepSupport(node, previous_support_ref))
-					continue;
-				const TauNode *previous_support = FindTauNode(nodes, previous_support_ref);
-				if (previous_support == nullptr ||
-					(!IsTauSleeping(*previous_support) && IsTauDynamicSupportMoving(*previous_support))) {
-					wake_supported_body = true;
-					break;
-				}
+		if (!wake_supported_body && node.sleeping_support_snapshot_count != 0) {
+			if (has_current_snapshotted_support)
+				node.unsupported_sleep_steps = 0;
+			else if (++node.unsupported_sleep_steps >= k_tau_wake_unsupported_steps) {
+				wake_supported_body = true;
+				wake_due_to_loss = true;
 			}
 		}
 		if (!wake_supported_body)
 			continue;
 
+		bool cohort_was_added = false;
 		if (node.sleep_island_id != 0) {
-			if (wake_cohorts.insert(node.sleep_island_id).second)
+			cohort_was_added = wake_cohorts.insert(node.sleep_island_id).second;
+			if (cohort_was_added)
 				++diagnostics.support_wake_cohorts;
 		} else {
 			const uint32_t root = graph.Find(i);
-			if (!wake_root[root])
+			cohort_was_added = !wake_root[root];
+			if (cohort_was_added)
 				++diagnostics.support_wake_cohorts;
 			wake_root[root] = 1;
 		}
+		if (cohort_was_added && wake_due_to_pose)
+			++diagnostics.support_pose_wake_cohorts;
+		else if (cohort_was_added && wake_due_to_loss)
+			++diagnostics.support_loss_wake_cohorts;
 	}
 
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
@@ -2079,7 +2107,7 @@ uint32_t AllocateTauSleepIslandId(uint32_t &next_sleep_island_id) {
 	return id;
 }
 
-void UpdateTauIslandSleeping(TauIslandGraph &graph, const std::vector<TauContactConstraint> &contacts,
+void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, const std::vector<TauContactConstraint> &contacts,
 	const std::vector<Tau6DofConstraint> &constraints, float dt_sec, uint32_t &next_sleep_island_id, TauContactDiagnostics &diagnostics) {
 	const float linear_speed_sq = k_tau_sleep_linear_speed * k_tau_sleep_linear_speed;
 	const float angular_speed_sq = k_tau_sleep_angular_speed * k_tau_sleep_angular_speed;
@@ -2210,6 +2238,7 @@ void UpdateTauIslandSleeping(TauIslandGraph &graph, const std::vector<TauContact
 		node.angular_velocity = Vec3::Zero;
 		node.accumulated_force = Vec3::Zero;
 		node.accumulated_torque = Vec3::Zero;
+		CaptureTauSleepingSupportSnapshots(node, nodes);
 	}
 
 	std::unordered_set<uint32_t> sleeping_island_ids;
@@ -2912,16 +2941,20 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.motion_updates)
 			 .arg(diagnostics.stale_discards)
 			 .str();
-	message += format("sleep(awake=%1 candidate=%2 sleeping=%3 islands=%4/%5 wake=%6 support_wake=%7 sleep=%8 skipped=%9) ")
+	message += format("sleep(awake=%1 candidate=%2 sleeping=%3 islands=%4/%5 wake=%6 sleep=%7 skipped=%8) ")
 			 .arg(diagnostics.awake_bodies)
 			 .arg(diagnostics.sleep_candidate_bodies)
 			 .arg(diagnostics.sleeping_bodies)
 			 .arg(diagnostics.sleeping_islands)
 			 .arg(diagnostics.contact_islands)
 			 .arg(diagnostics.bodies_woken)
-			 .arg(diagnostics.support_wake_cohorts)
 			 .arg(diagnostics.bodies_put_to_sleep)
 			 .arg(diagnostics.sleeping_solver_contacts)
+			 .str();
+	message += format("support_wake(total=%1 pose=%2 loss=%3) ")
+			 .arg(diagnostics.support_wake_cohorts)
+			 .arg(diagnostics.support_pose_wake_cohorts)
+			 .arg(diagnostics.support_loss_wake_cohorts)
 			 .str();
 	message += format("sleep_reject(body=%1/%2/%3 contact=%4/%5 max=%6/%7/%8) ")
 			 .arg(diagnostics.sleep_linear_rejects)
@@ -3017,7 +3050,7 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	}
 	{
 		TauProfileSection sleeping_profile("Tau.SleepUpdate");
-		UpdateTauIslandSleeping(islands, contacts, constraints, dt_sec, next_sleep_island_id, diagnostics);
+		UpdateTauIslandSleeping(nodes, islands, contacts, constraints, dt_sec, next_sleep_island_id, diagnostics);
 	}
 	for (auto &entry : nodes)
 		if (!IsDynamicTauNode(entry.second))
@@ -3062,20 +3095,33 @@ uint32_t GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref) {
 	return 0;
 }
 
-void WakeNodeSleepCohortWithVelocityForTest(SceneTauPhysics &physics, NodeRef ref, const Vec3 &linear_velocity) {
+bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref) {
+	if (const TauNode *node = FindTauNode(physics.nodes, ref))
+		return node->sleeping_support_snapshot_count != 0;
+	return false;
+}
+
+void TransformNodeSleepCohortForTest(
+	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation) {
 	TauNode *node = FindTauNode(physics.nodes, ref);
 	if (node == nullptr)
 		return;
 	const uint32_t sleep_island_id = node->sleep_island_id;
-	if (sleep_island_id == 0)
-		return;
-	for (auto &entry : physics.nodes) {
-		if (entry.second.sleep_island_id != sleep_island_id)
-			continue;
-		WakeTauNodeState(entry.second);
-		entry.second.transform_dirty = true;
+	if (sleep_island_id != 0) {
+		for (auto &entry : physics.nodes) {
+			if (entry.second.sleep_island_id != sleep_island_id)
+				continue;
+			WakeTauNodeState(entry.second);
+			entry.second.transform_dirty = true;
+		}
 	}
-	node->linear_velocity = linear_velocity;
+	node->previous_position = node->position;
+	node->position += displacement;
+	node->linear_velocity = Vec3::Zero;
+	node->previous_orientation = node->orientation;
+	node->orientation = Normalize(rotation * node->orientation);
+	node->angular_velocity = Vec3::Zero;
+	node->transform_dirty = true;
 }
 
 } // namespace tau_internal
