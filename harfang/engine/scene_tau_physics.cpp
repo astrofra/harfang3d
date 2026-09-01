@@ -1555,6 +1555,7 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 			contact_manifolds.clear();
 			contact_step = 1;
 		}
+		TriggerPreTickCallback(time_from_sec_f(substep_dt));
 		StepTauSubstep(nodes, contact_manifolds, contact_step, substep_dt, node_collision_event_tracking_modes, latest_contacts);
 	}
 
@@ -1814,6 +1815,13 @@ void SceneTauPhysics::RenderCollision(
 	}
 
 	DrawLines(view_id, vtx, program, state, depth);
+}
+
+void SceneTauPhysics::SetPreTickCallback(const std::function<void(SceneTauPhysics &, hg::time_ns t)> &cbk) { pre_tick_callback = cbk; }
+
+void SceneTauPhysics::TriggerPreTickCallback(hg::time_ns dt) {
+	if (pre_tick_callback)
+		pre_tick_callback(*this, dt);
 }
 
 } // namespace hg

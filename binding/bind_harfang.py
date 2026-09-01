@@ -1739,6 +1739,8 @@ def bind_tau_physics(gen):
 	tau = gen.begin_class('hg::SceneTauPhysics', noncopyable=True)
 	gen.bind_constructor(tau, ['?int thread_count'])
 	bind_scene_physics_common_methods(gen, tau)
+	lib.stl.bind_function_T(gen, 'std::function<void(hg::SceneTauPhysics&, hg::time_ns)>', 'SceneTauPhysicsPreTickCallback')
+	gen.bind_method(tau, 'SetPreTickCallback', 'void', ['const std::function<void(hg::SceneTauPhysics&, hg::time_ns)>& cbk'])
 	gen.end_class(tau)
 
 
@@ -1749,6 +1751,8 @@ def bind_scene_physics(gen):
 	gen.bind_constructor(physics, ['?int thread_count'])
 	bind_scene_physics_common_methods(gen, physics)
 	gen.bind_method(physics, 'Add6DofConstraint', 'void', ['const hg::Node &nodeA', 'const hg::Node &nodeB', 'const hg::Mat4 &anchorALocal', 'const hg::Mat4 &anchorBInLocalSpaceA'])
+	lib.stl.bind_function_T(gen, 'std::function<void(hg::ScenePhysics&, hg::time_ns)>', 'ScenePhysicsPreTickCallback')
+	gen.bind_method(physics, 'SetPreTickCallback', 'void', ['const std::function<void(hg::ScenePhysics&, hg::time_ns)>& cbk'])
 	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS') and not gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
 		# The legacy factory must return the canonical Lua ScenePhysics type so that
 		# SceneUpdateSystems and other common API overloads accept the result.

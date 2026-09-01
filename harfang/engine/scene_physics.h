@@ -15,11 +15,25 @@ namespace hg {
 class ScenePhysics : public SceneBullet3Physics {
 public:
 	using SceneBullet3Physics::SceneBullet3Physics;
+
+	void SetPreTickCallback(const std::function<void(ScenePhysics &, hg::time_ns t)> &cbk) {
+		if (cbk)
+			SceneBullet3Physics::SetPreTickCallback([this, cbk](SceneBullet3Physics &, hg::time_ns t) { cbk(*this, t); });
+		else
+			SceneBullet3Physics::SetPreTickCallback({});
+	}
 };
 #elif HG_ENABLE_TAU_SCENE_PHYSICS
 class ScenePhysics : public SceneTauPhysics {
 public:
 	using SceneTauPhysics::SceneTauPhysics;
+
+	void SetPreTickCallback(const std::function<void(ScenePhysics &, hg::time_ns t)> &cbk) {
+		if (cbk)
+			SceneTauPhysics::SetPreTickCallback([this, cbk](SceneTauPhysics &, hg::time_ns t) { cbk(*this, t); });
+		else
+			SceneTauPhysics::SetPreTickCallback({});
+	}
 };
 
 // Keep source code using the historical physics entry point buildable with Tau.

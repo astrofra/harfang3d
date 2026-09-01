@@ -12,6 +12,7 @@
 
 #include "tau/compat/tau_harfang_runtime.h"
 
+#include <functional>
 #include <map>
 #include <vector>
 
@@ -162,6 +163,11 @@ public:
 
 	void RenderCollision(bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth);
 
+	// Match Bullet's internal pre-tick contract: one call immediately before
+	// each physics sub-step, with that sub-step's duration.
+	void SetPreTickCallback(const std::function<void(SceneTauPhysics &, hg::time_ns t)> &cbk);
+	void TriggerPreTickCallback(hg::time_ns dt);
+
 private:
 	std::map<NodeRef, TauNode> nodes;
 	std::vector<Tau6DofConstraint> constraints;
@@ -169,6 +175,7 @@ private:
 	uint32_t contact_step{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
+	std::function<void(SceneTauPhysics &, hg::time_ns t)> pre_tick_callback;
 };
 
 } // namespace hg

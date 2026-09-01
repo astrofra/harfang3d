@@ -82,7 +82,7 @@ set(TEST_ENGINE_SRCS
 )
 
 if(HG_ENABLE_TAU_SCENE_PHYSICS)
-	list(APPEND TEST_ENGINE_SRCS engine/scene_tau_physics_contact.cpp)
+	list(APPEND TEST_ENGINE_SRCS engine/scene_tau_physics.cpp engine/scene_tau_physics_contact.cpp)
 endif()
 
 set(TEST_SCRIPT_SRCS

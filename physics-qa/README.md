@@ -87,9 +87,9 @@ run-all.bat
 
 ## Deterministic Physics Dumps
 
-`rb_dynamic_variable_friction.lua` supports a fixed-step JSON Lines capture for
-backend comparisons. The capture records each cuboid's world matrix, linear
-velocity, and angular velocity after every physics update.
+Several scenarios support a fixed-step JSON Lines capture for backend
+comparisons. The capture records each body's world matrix, linear velocity,
+and angular velocity after every physics update.
 
 Capture the Bullet reference and Tau candidate:
 
@@ -98,6 +98,18 @@ dump-one.bat bullet rb_dynamic_variable_friction.lua
 dump-one.bat tau rb_dynamic_variable_friction.lua
 python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
 python plot_physics_trajectories.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
+```
+
+The impulse-callback scenario additionally verifies that its pre-tick callback
+is invoked once per fixed physics sub-step and that the callback-driven cube
+tracks the render-loop-driven cube. It captures both cubes in the same run.
+The velocity override accounts for the single backend-specific ground-contact
+spike; the mean velocity difference remains much smaller:
+
+```bat
+dump-one.bat bullet rb_dynamic_impulse_callback.lua
+dump-one.bat tau rb_dynamic_impulse_callback.lua
+python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl --linear-velocity-threshold 0.4
 ```
 
 The cuboid-chain scenario has a dedicated bounded-envelope check. It requires
