@@ -550,44 +550,44 @@ bool IntersectTauRayMesh(const TauNode &node, const TauCollisionShape &shape, co
 
 	const Vec3 origin = world_to_local * world_origin;
 	const Vec3 direction = world_to_local * (world_origin + world_direction) - origin;
-	float bounds_near = 0.f, bounds_far = 0.f;
-	if (!IntersectRay(shape.collision_geometry->bounds, origin, direction, bounds_near, bounds_far) || bounds_far < 0.f ||
-		bounds_near > max_distance + k_tau_collision_epsilon)
-		return false;
 
 	TauRayShapeHit local_hit;
 	auto is_on_open_boundary = [&](const Vec3 &point) {
-		for (const auto &edge : shape.collision_geometry->boundary_edges) {
+		bool on_boundary = false;
+		const Vec3 tolerance(k_tau_collision_epsilon, k_tau_collision_epsilon, k_tau_collision_epsilon);
+		TraverseBVH(shape.collision_geometry->boundary_bvh, MinMax(point - tolerance, point + tolerance), [&](uint32_t edge_index) {
+			const auto &edge = shape.collision_geometry->boundary_edges[edge_index];
 			const Vec3 edge_direction = edge.b - edge.a;
 			const float edge_length_squared = Len2(edge_direction);
 			if (edge_length_squared <= k_tau_collision_epsilon * k_tau_collision_epsilon)
-				continue;
-			const float edge_t = Clamp(Dot(point - edge.a, edge_direction) / edge_length_squared, 0.f, 1.f);
-			if (Len2(point - (edge.a + edge_direction * edge_t)) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
 				return true;
-		}
-		return false;
+			const float edge_t = Clamp(Dot(point - edge.a, edge_direction) / edge_length_squared, 0.f, 1.f);
+			on_boundary = Len2(point - (edge.a + edge_direction * edge_t)) <= k_tau_collision_epsilon * k_tau_collision_epsilon;
+			return !on_boundary;
+		});
+		return on_boundary;
 	};
 
-	for (size_t triangle_index = 0; triangle_index < shape.collision_geometry->triangles.size(); ++triangle_index) {
+	float traversal_distance = max_distance + k_tau_collision_epsilon;
+	TraverseBVHRay(shape.collision_geometry->triangle_bvh, origin, direction, traversal_distance, [&](uint32_t triangle_index) {
 		const auto &triangle = shape.collision_geometry->triangles[triangle_index];
 		const Vec3 edge_ab = triangle.b - triangle.a;
 		const Vec3 edge_ac = triangle.c - triangle.a;
 		const Vec3 p = Cross(direction, edge_ac);
 		const float determinant = Dot(edge_ab, p);
 		if (Abs(determinant) <= k_tau_collision_epsilon)
-			continue;
+			return true;
 
 		const float inverse_determinant = 1.f / determinant;
 		const Vec3 from_a = origin - triangle.a;
 		const float u = Dot(from_a, p) * inverse_determinant;
 		if (u < -k_tau_collision_epsilon || u > 1.f + k_tau_collision_epsilon)
-			continue;
+			return true;
 
 		const Vec3 q = Cross(from_a, edge_ab);
 		const float v = Dot(direction, q) * inverse_determinant;
 		if (v < -k_tau_collision_epsilon || u + v > 1.f + k_tau_collision_epsilon)
-			continue;
+			return true;
 
 		const float triangle_t = Dot(edge_ac, q) * inverse_determinant;
 		// Bullet's cooked triangle mesh treats its open boundary as an open
@@ -597,16 +597,19 @@ bool IntersectTauRayMesh(const TauNode &node, const TauCollisionShape &shape, co
 		// one of its incident internal edges.
 		if (std::min({u, v, 1.f - u - v}) <= k_tau_collision_epsilon &&
 			is_on_open_boundary(origin + direction * triangle_t))
-			continue;
+			return true;
 
 		Vec3 normal = Cross(edge_ab, edge_ac);
 		if (Len2(normal) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
-			continue;
+			return true;
 		normal = Normalize(normal);
 		if (Dot(normal, direction) > 0.f)
 			normal = -normal;
 		ConsiderTauRayHit(triangle_t, normal, max_distance, local_hit);
-	}
+		if (local_hit.t != std::numeric_limits<float>::max())
+			traversal_distance = local_hit.t;
+		return true;
+	});
 
 	if (local_hit.t == std::numeric_limits<float>::max())
 		return false;

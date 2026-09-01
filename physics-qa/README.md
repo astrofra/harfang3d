@@ -154,13 +154,21 @@ and raycast analytically at runtime.
 The mesh-collider raycast sample uses the same one-frame mode, but requires its
 assets to be rebuilt first. `assetc` cooks `Plan_38.physics_triangles` beside
 the existing Bullet-specific blob; the Lua sample references the logical
-`Plan_38.physics` manifest and each backend resolves its own companion:
+`Plan_38.physics` manifest and each backend resolves its own companion.
+
+The triangle companion contains backend-neutral BVHs built offline for the
+triangles and open-boundary edges. Tau loads those indices directly and does
+not rebuild or scan the complete mesh during a raycast. Rebuild and run with:
 
 ```bat
 build-assets.bat
 set HG_PHYSICS_QA_MODE=raycast_check
 run-one.bat rb_mesh_collider_raycast.lua
 ```
+
+The same mode on `rb_mesh_collider_raycast_mesh_terrain.lua` exercises 3,751
+rays against the 651k-triangle Island Chain asset and reports the raycast-only
+CPU time. This is the large-mesh regression check for the serialized BVH.
 
 `plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
 default. It renders Bullet trajectories in blue and Tau trajectories in red on

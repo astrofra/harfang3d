@@ -4,6 +4,7 @@
 #include "acutest.h"
 
 #include "engine/collision_geometry.h"
+#include "engine/file_format.h"
 #include "engine/scene.h"
 #include "engine/scene_physics.h"
 #include "engine/scene_tau_physics.h"
@@ -154,6 +155,24 @@ void TestMeshColliderRaycast() {
 	TEST_CHECK(round_trip.triangles.size() == source.triangles.size());
 	TEST_CHECK(round_trip.bounds.mn == Vec3(-1.f, 0.f, -1.f));
 	TEST_CHECK(round_trip.bounds.mx == Vec3(1.f, 0.f, 1.f));
+	TEST_CHECK(ValidateBVH(round_trip.triangle_bvh, round_trip.triangles.size()));
+	TEST_CHECK(ValidateBVH(round_trip.boundary_bvh, round_trip.boundary_edges.size()));
+	TEST_CHECK(round_trip.boundary_edges.size() == 4);
+
+	// Version 0 contained triangles only. Keep loading it by building the same
+	// reusable acceleration structures at runtime for backward compatibility.
+	Data legacy_serialized;
+	const DataWriteHandle legacy_write(legacy_serialized);
+	TEST_ASSERT(Write(g_data_writer, legacy_write, HarfangMagic));
+	TEST_ASSERT(Write(g_data_writer, legacy_write, CollisionGeometryMarker));
+	TEST_ASSERT(Write(g_data_writer, legacy_write, uint32_t(0)));
+	TEST_ASSERT(Write(g_data_writer, legacy_write, uint32_t(source.triangles.size())));
+	TEST_ASSERT(g_data_writer.write(legacy_write, source.triangles.data(), source.triangles.size() * sizeof(CollisionTriangle)) ==
+		source.triangles.size() * sizeof(CollisionTriangle));
+	legacy_serialized.Rewind();
+	CollisionGeometry legacy_round_trip;
+	TEST_ASSERT(LoadCollisionGeometry(g_data_reader, DataReadHandle(legacy_serialized), legacy_round_trip));
+	TEST_CHECK(ValidateBVH(legacy_round_trip.triangle_bvh, legacy_round_trip.triangles.size()));
 
 	const std::string temporary = test::CreateTempFilepath();
 	Unlink(temporary.c_str());

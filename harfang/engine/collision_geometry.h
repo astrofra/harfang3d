@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "foundation/minmax.h"
+#include "foundation/bvh.h"
 #include "foundation/rw_interface.h"
 
 #include <cstdint>
@@ -24,11 +24,17 @@ struct CollisionEdge {
 struct CollisionGeometry {
 	std::vector<CollisionTriangle> triangles;
 	MinMax bounds;
-	// Transient topology derived while loading, not serialized.
 	std::vector<CollisionEdge> boundary_edges;
+	BVH triangle_bvh;
+	BVH boundary_bvh;
 };
 
 uint32_t GetCollisionGeometryBinaryFormatVersion();
+
+// Derive bounds and open-boundary topology, then build the reusable spatial
+// indices. assetc calls this offline; version-0 resources use it as a runtime
+// compatibility path.
+bool PrepareCollisionGeometry(CollisionGeometry &geometry, uint32_t max_primitives_per_leaf = 8);
 
 bool LoadCollisionGeometry(const Reader &ir, const Handle &h, CollisionGeometry &geometry);
 bool SaveCollisionGeometry(const Writer &iw, const Handle &h, const CollisionGeometry &geometry);

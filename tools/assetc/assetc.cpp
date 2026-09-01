@@ -1590,6 +1590,14 @@ static bool CompileCollisionGeometry(const json &js, const std::string &output) 
 		error("Physics resource produced no collision triangles");
 		return false;
 	}
+	if (!PrepareCollisionGeometry(cooked)) {
+		error("Failed to build collision geometry acceleration structures");
+		return false;
+	}
+	log(format("    Built collision BVH: %1 triangles, %2 nodes, %3 boundary edges")
+			.arg(cooked.triangles.size())
+			.arg(cooked.triangle_bvh.nodes.size())
+			.arg(cooked.boundary_edges.size()));
 	return SaveCollisionGeometryToFile(output.c_str(), cooked);
 }
 
