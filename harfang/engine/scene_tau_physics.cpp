@@ -170,6 +170,9 @@ struct TauContactDiagnostics {
 	size_t cuboid_coherent_reuses{0}, cuboid_coherent_points_reused{0}, cuboid_coherent_fallbacks{0};
 	size_t stale_discards{0}, candidate_reallocations{0}, contact_reallocations{0};
 	size_t position_constraint_evaluations{0}, velocity_constraint_evaluations{0}, rolling_contact_evaluations{0};
+	size_t zero_restitution_constraints{0}, nonzero_restitution_constraints{0};
+	size_t zero_friction_constraints{0}, nonzero_friction_constraints{0};
+	size_t rolling_friction_pass_skips{0};
 	size_t tracked_contact_evaluations{0}, motion_updates{0};
 	size_t awake_bodies{0}, sleep_candidate_bodies{0}, sleeping_bodies{0};
 	size_t contact_islands{0}, sleeping_islands{0}, bodies_woken{0}, bodies_put_to_sleep{0}, sleeping_solver_contacts{0};
@@ -2065,6 +2068,7 @@ struct TauStepScratch {
 	std::vector<uint32_t> assigned_island_ids;
 	std::vector<uint32_t> assigned_island_sizes;
 	std::unordered_set<uint32_t> sleeping_island_ids;
+	bool has_nonzero_rolling_friction{false};
 
 	std::array<size_t, 22> GetCapacitySnapshot() const {
 		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), velocity_constraints.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
@@ -2492,13 +2496,24 @@ void SolveTauPositionConstraints(std::vector<TauContactConstraint> &contacts, Ta
 	}
 }
 
-void PrepareTauVelocityConstraints(
-	std::vector<TauContactConstraint> &contacts, float dt_sec, std::vector<TauVelocityConstraint> &velocity_constraints) {
+bool PrepareTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, float dt_sec,
+	std::vector<TauVelocityConstraint> &velocity_constraints, TauContactDiagnostics &diagnostics) {
 	velocity_constraints.clear();
 	velocity_constraints.reserve(contacts.size());
+	bool has_nonzero_restitution = false;
 	for (auto &contact : contacts) {
 		if (!IsTauContactSolverActive(contact))
 			continue;
+		if (contact.restitution == 0.f)
+			++diagnostics.zero_restitution_constraints;
+		else {
+			++diagnostics.nonzero_restitution_constraints;
+			has_nonzero_restitution = true;
+		}
+		if (contact.friction <= 0.f)
+			++diagnostics.zero_friction_constraints;
+		else
+			++diagnostics.nonzero_friction_constraints;
 
 		TauVelocityConstraint prepared;
 		prepared.contact = &contact;
@@ -2508,24 +2523,33 @@ void PrepareTauVelocityConstraints(
 		prepared.bias = dt_sec > 0.f ? k_tau_baumgarte * std::max(contact.penetration - k_tau_position_slop, 0.f) / dt_sec : 0.f;
 		velocity_constraints.push_back(prepared);
 	}
+	return has_nonzero_restitution;
 }
 
 Vec3 GetTauPreparedPointVelocity(const TauNode &node, const Vec3 &arm) {
 	return node.linear_velocity + Cross(node.angular_velocity, arm);
 }
 
-void WarmStartTauVelocityConstraints(const std::vector<TauVelocityConstraint> &velocity_constraints) {
+void WarmStartTauVelocityConstraints(
+	const std::vector<TauVelocityConstraint> &velocity_constraints, bool has_nonzero_restitution) {
 	for (const auto &prepared : velocity_constraints) {
 		TauContactConstraint &contact = *prepared.contact;
-		const Vec3 relative_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
-			GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
-		const float normal_speed = Dot(relative_velocity, contact.normal);
-		contact.restitution_velocity = normal_speed < -k_tau_restitution_threshold ? -contact.restitution * normal_speed : 0.f;
-		contact.accumulated_tangent_impulse -= contact.normal * Dot(contact.accumulated_tangent_impulse, contact.normal);
-		const float max_friction_impulse = std::max(contact.friction, 0.f) * contact.accumulated_normal_impulse;
-		const float tangent_length = Len(contact.accumulated_tangent_impulse);
-		if (tangent_length > max_friction_impulse && tangent_length > k_tau_collision_epsilon)
-			contact.accumulated_tangent_impulse *= max_friction_impulse / tangent_length;
+		contact.restitution_velocity = 0.f;
+		if (has_nonzero_restitution && contact.restitution != 0.f) {
+			const Vec3 relative_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
+				GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
+			const float normal_speed = Dot(relative_velocity, contact.normal);
+			contact.restitution_velocity = normal_speed < -k_tau_restitution_threshold ? -contact.restitution * normal_speed : 0.f;
+		}
+		if (contact.friction <= 0.f) {
+			contact.accumulated_tangent_impulse = Vec3::Zero;
+		} else {
+			contact.accumulated_tangent_impulse -= contact.normal * Dot(contact.accumulated_tangent_impulse, contact.normal);
+			const float max_friction_impulse = std::max(contact.friction, 0.f) * contact.accumulated_normal_impulse;
+			const float tangent_length = Len(contact.accumulated_tangent_impulse);
+			if (tangent_length > max_friction_impulse && tangent_length > k_tau_collision_epsilon)
+				contact.accumulated_tangent_impulse *= max_friction_impulse / tangent_length;
+		}
 
 		const Vec3 impulse = contact.normal * contact.accumulated_normal_impulse + contact.accumulated_tangent_impulse;
 		if (Len2(impulse) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
@@ -2540,8 +2564,8 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 	if (dt_sec <= 0.f)
 		return;
 
-	PrepareTauVelocityConstraints(contacts, dt_sec, velocity_constraints);
-	WarmStartTauVelocityConstraints(velocity_constraints);
+	const bool has_nonzero_restitution = PrepareTauVelocityConstraints(contacts, dt_sec, velocity_constraints, diagnostics);
+	WarmStartTauVelocityConstraints(velocity_constraints, has_nonzero_restitution);
 
 	for (int iteration = 0; iteration < k_tau_velocity_iterations; ++iteration) {
 		for (const auto &prepared : velocity_constraints) {
@@ -2563,6 +2587,8 @@ void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, fl
 
 			ApplyTauImpulse(*contact.node_a, -normal_impulse, prepared.arm_a);
 			ApplyTauImpulse(*contact.node_b, normal_impulse, prepared.arm_b);
+			if (contact.friction <= 0.f)
+				continue;
 
 			const Vec3 post_normal_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
 				GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
@@ -2860,6 +2886,7 @@ void BuildTauContacts(
 	auto &body_bounds = scratch.body_bounds;
 	bodies.clear();
 	body_bounds.clear();
+	scratch.has_nonzero_rolling_friction = false;
 	bodies.reserve(nodes.size());
 	body_bounds.reserve(nodes.size());
 
@@ -2869,6 +2896,7 @@ void BuildTauContacts(
 			TauNode &node = entry.second;
 			if (node.shapes.empty())
 				continue;
+			scratch.has_nonzero_rolling_friction |= node.rolling_friction != 0.f;
 			const bool update_proxy = !node.world_proxy_cache_valid || (IsDynamicTauNode(node) && !IsTauSleeping(node));
 			if (update_proxy) {
 				const size_t previous_capacity = node.world_shapes.capacity();
@@ -3239,6 +3267,13 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.motion_updates)
 			 .arg(diagnostics.stale_discards)
 			 .str();
+	message += format("coeff(restitution=%1/%2 friction=%3/%4 rolling_skip=%5) ")
+			 .arg(diagnostics.zero_restitution_constraints)
+			 .arg(diagnostics.nonzero_restitution_constraints)
+			 .arg(diagnostics.zero_friction_constraints)
+			 .arg(diagnostics.nonzero_friction_constraints)
+			 .arg(diagnostics.rolling_friction_pass_skips)
+			 .str();
 	message += format("sleep(awake=%1 candidate=%2 sleeping=%3 islands=%4/%5 wake=%6 sleep=%7 skipped=%8) ")
 			 .arg(diagnostics.awake_bodies)
 			 .arg(diagnostics.sleep_candidate_bodies)
@@ -3328,7 +3363,10 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	}
 	{
 		TauProfileSection rolling_profile("Tau.RollingFriction");
-		SolveTauRollingFriction(contacts, dt_sec, diagnostics);
+		if (scratch.has_nonzero_rolling_friction)
+			SolveTauRollingFriction(contacts, dt_sec, diagnostics);
+		else
+			++diagnostics.rolling_friction_pass_skips;
 	}
 	{
 		TauProfileSection manifold_store_profile("Tau.StoreManifoldImpulses");
@@ -3366,6 +3404,12 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	reuse_stats.primitive_manifolds = diagnostics.primitive_manifolds;
 	reuse_stats.warm_start_hits = diagnostics.warm_start_hits;
 	reuse_stats.warm_start_misses = diagnostics.warm_start_misses;
+	reuse_stats.zero_restitution_constraints = diagnostics.zero_restitution_constraints;
+	reuse_stats.nonzero_restitution_constraints = diagnostics.nonzero_restitution_constraints;
+	reuse_stats.zero_friction_constraints = diagnostics.zero_friction_constraints;
+	reuse_stats.nonzero_friction_constraints = diagnostics.nonzero_friction_constraints;
+	reuse_stats.rolling_friction_pass_skips = diagnostics.rolling_friction_pass_skips;
+	reuse_stats.rolling_friction_contact_evaluations = diagnostics.rolling_contact_evaluations;
 	const auto final_scratch_capacity = scratch.GetCapacitySnapshot();
 	reuse_stats.scratch_growths = 0;
 	for (size_t i = 0; i < initial_scratch_capacity.size(); ++i)

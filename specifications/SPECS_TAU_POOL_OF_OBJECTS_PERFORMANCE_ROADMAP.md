@@ -8,10 +8,12 @@ contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
 per-world step scratch, shape-neutral contact persistence, solver
 pose/inertia/cuboid-axis caches, and prepared active velocity constraints are
 implemented and measured. Active face-feature cuboid manifold coherence is
-also implemented with conservative validation and periodic full refresh. The complete physics-only body-count/shape matrix
+also implemented with conservative validation and periodic full refresh.
+Zero-restitution, non-positive-friction, and world-wide zero-rolling-friction
+solver fast paths are implemented and measured. The complete physics-only body-count/shape matrix
 and controlled scene/render passes are also complete. Tau meets the
-representative active, settled, and end-to-end parity gates; coefficient fast
-paths are the next measured solver target.
+representative active, settled, and end-to-end parity gates; the guarded
+all-sleeping small-world shortcut is the next measured target.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -731,6 +733,52 @@ maximum Tau speed, and zero static-ring drift. The callback amplitude remains
 unchanged at a -0.00141478 m Tau/Bullet delta; fresh chair, friction,
 restitution, and rolling-friction captures also complete successfully.
 
+### Twelfth optimization result: coefficient fast paths
+
+The prepared active-constraint pass now classifies restitution and friction
+once per constraint. A zero-restitution constraint no longer evaluates either
+point velocity during warm start; when every active constraint has zero
+restitution the whole restitution velocity workload is absent. A constraint
+with non-positive friction clears its cached tangent impulse once and skips
+all tangent velocity, tangent effective-mass, Coulomb-limit, and tangent
+impulse work in each of the eight velocity iterations. The general nonzero
+material paths and their arithmetic order remain unchanged.
+
+Contact construction also records whether any shaped body in the world has
+nonzero rolling friction. When none does, Tau omits the complete rolling
+friction contact pass. This world-level guard is conservative: a single
+nonzero body keeps the original per-contact combination and solve path for the
+whole substep. Position and velocity iteration counts remain three and eight.
+
+A temporary same-binary legacy switch was used only for measurement and then
+removed. Five seeds alternated fast/legacy execution order for the 1,500-cube
+active workload, with 120 samples per seed:
+
+| Path | Median | p95 | Change from legacy |
+|---|---:|---:|---:|
+| prepared/coherent solver, coefficient work retained | 16.183 ms | 19.721 ms | baseline |
+| coefficient fast paths | 15.991 ms | 19.477 ms | 1.2% / 1.2% faster |
+
+The median of per-run means also improves from 15.929 ms to 15.784 ms (0.9%).
+At active step 300, diagnostics classified all 6,122 active constraints as
+zero restitution, all 6,122 as positive friction, and skipped the rolling pass;
+therefore this pool cell exercises the restitution and rolling shortcuts but
+not the friction shortcut. Three attribution runs place the remaining
+velocity solve at 6.21-6.44 ms per step. The skipped rolling scope measures
+0.00034-0.00046 ms, effectively only profiling and branch overhead.
+
+Focused tests cover both all-zero and nonzero material paths. Same-binary
+legacy/fast captures for restitution, friction, rolling friction, and the
+impulse callback are byte-identical. All 54 C++ test groups and the three
+capsule pair checks pass. Repeated 600-sample chain captures remain
+byte-identical and preserve the established 4.64718 m vertical envelope,
+16.4712 m/s maximum speed, and zero static-ring drift. The callback amplitude
+delta remains -0.00141478 m.
+
+The next implementation target is the guarded all-sleeping small-world
+shortcut. A complete matrix rerun remains required after that stage; solver
+iteration tuning stays deferred.
+
 ## Workload Characterization
 
 `physics_pool_of_objects.lua` creates:
@@ -1358,8 +1406,9 @@ fixed benchmark and timestep
 Tau now reaches measured parity for the representative mixed workload and
 outperforms Bullet strongly once the pool settles. Prepared active constraints
 reduce the cube velocity solve by about 23%, while coherent cuboid refresh cuts
-the focused active-cube p95 by another 5.5%. The remaining path to a suite-wide
-win is narrower and measured: coefficient fast paths and a small-world
-all-sleeping shortcut, followed by parallel independent islands.
+the focused active-cube p95 by another 5.5%. Coefficient fast paths then reduce
+the focused active-cube median and p95 by another 1.2% without changing any
+measured QA trajectory. The remaining path to a suite-wide win is narrower and
+measured: a small-world all-sleeping shortcut, followed by parallel independent islands.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.

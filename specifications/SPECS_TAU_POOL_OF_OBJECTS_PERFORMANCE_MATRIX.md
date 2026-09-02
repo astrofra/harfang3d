@@ -190,9 +190,10 @@ counts unchanged:
    validate the previous separating/contact features before falling back to a
    complete SAT and clipping pass. Preserve deterministic contact ordering and
    use the current generator whenever the cached feature is invalid.
-2. **Next:** add measured coefficient fast paths, especially zero restitution and zero
-   rolling friction, without changing the general material path.
-3. Add an all-sleeping fast path for small worlds when no proxy moved, no wake
+2. **Completed:** add measured coefficient fast paths for zero restitution,
+   non-positive friction, and world-wide zero rolling friction, without
+   changing the general nonzero material paths.
+3. **Next:** add an all-sleeping fast path for small worlds when no proxy moved, no wake
    request is pending, and no tracked-contact publication requires traversal.
    This targets the 0.287 ms fixed floor revealed by the 250-cube cell.
 4. Re-run the complete matrix and the existing physics QA after every stage.
@@ -264,6 +265,32 @@ full SAT/clipping, approximately 38% of the emitted cuboid manifolds. The full
 C++ suite and the deterministic chain envelope pass; the impulse callback
 amplitude delta remains -0.00141478 m.
 
-The next matrix candidate is profile-justified zero-restitution and
-zero-rolling-friction work, followed by the small-world all-sleeping shortcut.
+## Post-Matrix Follow-Up: Coefficient Fast Paths
+
+The prepared constraint stream now classifies restitution and friction while
+it is built. Zero-restitution constraints skip their warm-start point-velocity
+evaluation. Non-positive-friction constraints clear any cached tangent impulse
+and skip tangent solving in all eight velocity iterations. Contact construction
+also detects a world with no nonzero rolling-friction body and omits the full
+rolling contact pass. Any nonzero rolling-friction body conservatively retains
+the original general pass, and all nonzero material arithmetic remains in its
+original order.
+
+A five-seed same-binary interleaved A/B on the 1,500-cube active cell produced:
+
+| Path | Median | p95 | Improvement |
+|---|---:|---:|---:|
+| prepared/coherent solver, coefficient work retained | 16.183 ms | 19.721 ms | baseline |
+| coefficient fast paths | 15.991 ms | 19.477 ms | 1.2% / 1.2% |
+
+At active step 300, all 6,122 solver-active constraints had zero restitution,
+all had positive friction, and the rolling pass was skipped. The workload thus
+validates that the measured gain comes from the restitution and rolling guards;
+the friction branch is covered by focused tests and the variable-friction QA.
+Legacy/fast captures for variable restitution, variable friction, variable
+rolling friction, and the impulse callback are byte-identical. The complete
+C++ suite, capsule pairs, deterministic chain envelope, and callback amplitude
+gate pass with no solver iteration change.
+
+The next matrix candidate is the guarded small-world all-sleeping shortcut.
 Iteration tuning remains deferred.

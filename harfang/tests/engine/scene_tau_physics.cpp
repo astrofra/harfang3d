@@ -754,6 +754,52 @@ void TestActiveCuboidCoherenceRejectsLargeMotion() {
 	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
 }
 
+void TestZeroCoefficientSolverFastPaths() {
+	Scene scene;
+	Node dynamic = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+	Node fixed = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, -0.5f, 0.f), RBT_Static, 0.f);
+	dynamic.GetRigidBody().SetFriction(0.f);
+	fixed.GetRigidBody().SetFriction(0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(dynamic, false);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.zero_restitution_constraints >= 1);
+	TEST_CHECK(stats.nonzero_restitution_constraints == 0);
+	TEST_CHECK(stats.zero_friction_constraints >= 1);
+	TEST_CHECK(stats.nonzero_friction_constraints == 0);
+	TEST_CHECK(stats.rolling_friction_pass_skips == 1);
+	TEST_CHECK(stats.rolling_friction_contact_evaluations == 0);
+}
+
+void TestNonzeroCoefficientSolverPaths() {
+	Scene scene;
+	Node dynamic = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+	Node fixed = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, -0.5f, 0.f), RBT_Static, 0.f);
+	dynamic.GetRigidBody().SetRestitution(1.f);
+	fixed.GetRigidBody().SetRestitution(1.f);
+	dynamic.GetRigidBody().SetRollingFriction(1.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(dynamic, false);
+	physics.NodeSetLinearVelocity(dynamic, Vec3(0.f, -2.f, 0.f));
+	physics.NodeSetAngularVelocity(dynamic, Vec3::Right);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.zero_restitution_constraints == 0);
+	TEST_CHECK(stats.nonzero_restitution_constraints >= 1);
+	TEST_CHECK(stats.zero_friction_constraints == 0);
+	TEST_CHECK(stats.nonzero_friction_constraints >= 1);
+	TEST_CHECK(stats.rolling_friction_pass_skips == 0);
+	TEST_CHECK(stats.rolling_friction_contact_evaluations >= 1);
+	TEST_CHECK(physics.NodeGetLinearVelocity(dynamic).y > 0.f);
+}
+
 void TestRaycastAllHitsAreStableAndBounded() {
 	Scene scene;
 	const Node near_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, -2.f)), InvalidModelRef, {}, 0.f);
@@ -884,6 +930,8 @@ void test_scene_tau_physics() {
 	TestCuboidManifoldCacheLifecycle();
 	TestActiveCuboidCoherentManifoldReuse();
 	TestActiveCuboidCoherenceRejectsLargeMotion();
+	TestZeroCoefficientSolverFastPaths();
+	TestNonzeroCoefficientSolverPaths();
 	TestRaycastAllHitsAreStableAndBounded();
 	TestMeshColliderRaycast();
 }

@@ -41,6 +41,12 @@ struct TauStepReuseStats {
 	size_t primitive_manifolds{0};
 	size_t warm_start_hits{0};
 	size_t warm_start_misses{0};
+	size_t zero_restitution_constraints{0};
+	size_t nonzero_restitution_constraints{0};
+	size_t zero_friction_constraints{0};
+	size_t nonzero_friction_constraints{0};
+	size_t rolling_friction_pass_skips{0};
+	size_t rolling_friction_contact_evaluations{0};
 	size_t scratch_growths{0};
 	size_t body_proxy_capacity{0};
 	size_t candidate_capacity{0};
