@@ -6,9 +6,10 @@ Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
 contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
 per-world step scratch, shape-neutral contact persistence, and solver
-pose/inertia/cuboid-axis caches are implemented and measured. The rendered
-end-to-end pass and the complete body-count matrix remain to close Phase 0.
-Shape-specific and spread-layout spot checks are recorded below.
+pose/inertia/cuboid-axis caches are implemented and measured. The complete
+physics-only body-count/shape matrix and controlled scene/render passes are
+also complete. Tau meets the representative active, settled, and end-to-end
+parity gates; active cube-only constraints are the next measured hotspot.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -569,7 +570,7 @@ and rotated 651k-triangle terrain raycast checks pass; the latter retains the
 expected 403 hits and 3,348 misses. Position and velocity solver iterations
 remain unchanged at three and eight.
 
-The next implementation order is now:
+The next implementation order at that milestone was:
 
 1. complete the rendered end-to-end and 250/500/1,000/1,500/2,000 body-count
    acceptance matrix against freshly packaged Bullet and Tau builds;
@@ -580,6 +581,51 @@ The next implementation order is now:
    them;
 4. consider iteration tuning only after those behavior-preserving changes and
    only behind the existing QA gates.
+
+### Ninth optimization result: complete acceptance matrix
+
+The complete dated report is
+`specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`. Fresh Release
+Bullet and Tau packages from the same source revision were compared over 250,
+500, 1,000, 1,500, and 2,000 bodies; mixed, cube-only, and sphere-only shapes;
+active and 600-step-settled windows; 120 samples; and five deterministic
+seeds. Controlled scene, rendered, and no-physics passes cover the 1,500-body
+mixed workload.
+
+The primary 1,500-body mixed gates are now met:
+
+| Gate | Bullet | Tau | Tau / Bullet | Result |
+|---|---:|---:|---:|---|
+| active physics p95 | 14.261 ms | 15.179 ms | 1.064x | pass |
+| settled physics p95 | 15.249 ms | 3.612 ms | 0.237x | pass |
+| active rendered p95 | 26.420 ms | 26.541 ms | 1.005x | pass |
+| settled rendered p95 | 27.019 ms | 16.699 ms | 0.618x | pass |
+
+Across all 30 physics cells, the equal-cell mean Tau/Bullet ratio is 0.856x
+by median and 0.945x by p95. The ratio of summed cell times is 0.658x and
+0.722x, respectively. Tau is faster in every measured sphere-only active and
+settled cell, and in every settled cell at 500 bodies or more. The stretch
+gate is nevertheless not met: active cube-only cells are 1.18x to 1.84x
+slower by median, and a 250-cube fully sleeping case exposes a fixed Tau step
+floor of 0.287 ms versus 0.073 ms for Bullet.
+
+A fresh three-repetition 1,500-cube active profile attributes approximately
+8.20 ms per step to velocity solving, 6.01 ms to contact construction
+(including 3.74 ms of narrow phase), 2.98 ms to position solving, and only
+1.65 ms to broad phase. Scene synchronization is not the leading delta: the
+controlled active scene pass is 1.005x by median and 1.043x by p95. The next
+implementation order is therefore:
+
+1. build compact active velocity constraints after position solving and
+   precompute iteration-invariant arms, Jacobians, normal effective masses,
+   bias/restitution inputs, and friction limits;
+2. exploit active cuboid manifold feature coherence before falling back to a
+   full SAT/clipping regeneration;
+3. add profile-justified zero-coefficient fast paths;
+4. add a guarded all-sleeping small-world fast path for the residual fixed
+   step overhead;
+5. defer dense scene-sync work, parallelism, and any iteration tuning until
+   these behavior-preserving stages have passed the complete matrix and QA.
 
 ## Workload Characterization
 
@@ -618,7 +664,7 @@ Bullet advantage unused.
 ## Why The Screenshot FPS Is Preliminary Evidence
 
 The screenshots are useful as a user-visible symptom and establish that the
-current gap is large. They should not be used as the final acceptance metric
+then-current gap was large. They should not be used as the final acceptance metric
 for these reasons:
 
 - VSync quantizes visible FPS into coarse divisors of the display refresh
@@ -783,6 +829,13 @@ the semantic correction is not mistaken for an algorithmic speedup.
   within a documented tolerance.
 - The original screenshots remain attached to the benchmark report as
   preliminary evidence, not as the numeric baseline.
+
+Implementation status (2026-09-02): complete for the current deterministic
+acceptance protocol. The full matrix and scene/render controls are archived in
+`SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`. The freshly packaged code
+does not reproduce the original 12 FPS Bullet / 3 FPS Tau symptom; the
+screenshots therefore remain evidence of the former interactive
+spawn/substep implementation rather than a current numeric baseline.
 
 ## Phase 1: Remove Allocation And Redundant Per-Step Work
 
@@ -977,11 +1030,12 @@ sleep-pose persistence across scene matrix invalidation, and sleeping contact
 events have dedicated tests. Directional dynamic-support wake also crosses a
 bounded-cohort boundary without waking unrelated lateral contacts. Bounded
 activation cohorts prevent local impacts from waking the complete dense pile.
-The full interactive rendered-tutorial gate remains part of Phase 0, and
-unchanged sleeping cuboid contacts now reuse their cached manifolds while
-preserving the contact graph and event path. Shape-neutral persistence,
-scratch retention, and pose/inertia/axis caching are recorded in the sixth,
-seventh, and eighth optimization results above.
+The controlled rendered gate is now complete and archived in the ninth
+result. The interactive tutorial remains a user-visible smoke test rather than
+the numeric baseline. Unchanged sleeping cuboid contacts reuse their cached
+manifolds while preserving the contact graph and event path. Shape-neutral
+persistence, scratch retention, and pose/inertia/axis caching are recorded in
+the sixth, seventh, and eighth optimization results above.
 
 ## Phase 5: Optimize The Solver And Scene Synchronization
 
@@ -1072,6 +1126,12 @@ These are decision gates, not promised gains from the source audit. If the
 render-only control already consumes most of Bullet's frame budget, the
 end-to-end FPS target must be interpreted through total frame milliseconds,
 not a VSync plateau.
+
+Acceptance status (2026-09-02): settled parity, active parity, and end-to-end
+parity pass. The stretch gate remains open because active cube-only workloads
+and the 250-cube settled fixed-overhead case exceed the per-cell 1.10x limit.
+See `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md` for the complete values
+and aggregation method.
 
 ## No-Regression Matrix
 
@@ -1188,9 +1248,10 @@ fixed benchmark and timestep
     -> compact solver and dirty scene sync
 ```
 
-Tau has a plausible path to outperform Bullet in this workload after that
-foundation is in place: it can specialize for Harfang's common primitive
-combinations, retain compact contiguous data, skip inactive islands, and later
-parallelize them. Until Phase 0 timings exist, however, the responsible claim
-is a roadmap to measured parity and a stretch target beyond Bullet, not a
-guaranteed FPS number.
+Tau now reaches measured parity for the representative mixed workload and
+outperforms Bullet strongly once the pool settles. The remaining path to a
+suite-wide win is narrower and measured: compact/precomputed active cuboid
+constraints, coherent cuboid manifold refresh, coefficient fast paths, and a
+small-world all-sleeping shortcut, followed by parallel independent islands.
+The active cube-only and per-cell stretch gates must pass before claiming that
+Tau beats Bullet without qualification.

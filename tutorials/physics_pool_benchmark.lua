@@ -1,4 +1,4 @@
--- Deterministic, headless benchmark for the physics_pool_of_objects workload.
+-- Deterministic benchmark for the physics_pool_of_objects workload.
 --
 -- Run this script with the matching Bullet or Tau HG Lua package. Example:
 --
@@ -12,6 +12,15 @@
 -- marked in JSON and should be used for attribution, not backend comparison.
 -- BENCH_LAYOUT=spread places bodies on a deterministic non-overlapping grid
 -- to expose broad-phase scaling independently from dense-pile contact growth.
+-- BENCH_MODE selects how much of the frame is measured:
+--   physics            physics backend only, with bare scene nodes;
+--   scene              physics plus SceneUpdateSystems, without rendering;
+--   no_physics         SceneUpdateSystems with bare nodes and no physics;
+--   render             scene, physics, forward rendering, and presentation;
+--   render_no_physics  the same rendered scene without a physics backend.
+-- Render modes use a 1280x720 forward pipeline with 4x MSAA and no RF_VSync.
+-- The untimed settling transition skips GPU submission, then the complete
+-- render path is warmed again before the settled measurement window.
 
 local hg = require("harfang")
 
@@ -59,8 +68,10 @@ else
 end
 
 local mode = env_string("BENCH_MODE", "physics")
-assert(mode == "physics" or mode == "scene" or mode == "no_physics",
-	"BENCH_MODE must be 'physics', 'scene', or 'no_physics'")
+assert(mode == "physics" or mode == "scene" or mode == "no_physics" or mode == "render" or mode == "render_no_physics",
+	"BENCH_MODE must be 'physics', 'scene', 'no_physics', 'render', or 'render_no_physics'")
+local render_enabled = mode == "render" or mode == "render_no_physics"
+local physics_enabled = mode ~= "no_physics" and mode ~= "render_no_physics"
 
 local phase_selection = env_string("BENCH_PHASE", "both")
 assert(phase_selection == "active" or phase_selection == "settled" or phase_selection == "both",
@@ -99,6 +110,32 @@ if profiling and env_flag("HG_TAU_CONTACT_DIAGNOSTICS") then
 	print("[benchmark] warning: contact diagnostics logging will perturb profiled timings")
 end
 
+local render_context = nil
+if render_enabled then
+	hg.AddAssetsFolder("resources_compiled")
+	hg.InputInit()
+	hg.WindowSystemInit()
+	local width, height = 1280, 720
+	local window = hg.RenderInit("Harfang - Physics Pool Benchmark", width, height, hg.RF_MSAA4X)
+	local pipeline = hg.CreateForwardPipeline()
+	local resources = hg.PipelineResources()
+	local vertex_layout = hg.VertexLayoutPosFloatNormUInt8()
+	local program = hg.LoadPipelineProgramRefFromAssets("core/shader/default.hps", resources, hg.GetForwardPipelineInfo())
+	local material = hg.CreateMaterial(program, "uDiffuseColor", hg.Vec4(0.5, 0.5, 0.5), "uSpecularColor", hg.Vec4(1, 1, 1))
+	hg.SetMaterialValue(material, "uSelfColor", hg.Vec4(0, 0, 0))
+	render_context = {
+		width = width,
+		height = height,
+		window = window,
+		pipeline = pipeline,
+		resources = resources,
+		vertex_layout = vertex_layout,
+		material = material,
+		cube_models = {},
+		sphere_model = resources:AddModel("benchmark_sphere", hg.CreateSphereModel(vertex_layout, 0.5, 12, 24)),
+	}
+end
+
 local output, output_error = io.open(output_path, append_output and "a" or "w")
 assert(output ~= nil, string.format("failed to open BENCH_OUTPUT '%s': %s", output_path, output_error or "unknown error"))
 output:setvbuf("line")
@@ -111,9 +148,28 @@ local function make_rng(seed)
 	end
 end
 
+local function get_render_model(collision_type, size)
+	if collision_type == hg.CT_Sphere then
+		return render_context.sphere_model
+	end
+	local key = string.format("%.3f_%.3f_%.3f", size.x, size.y, size.z)
+	local model = render_context.cube_models[key]
+	if model == nil then
+		model = render_context.resources:AddModel("benchmark_cube_" .. key,
+			hg.CreateCubeModel(render_context.vertex_layout, size.x, size.y, size.z))
+		render_context.cube_models[key] = model
+	end
+	return model
+end
+
 local function create_collision_body(scene, collision_type, position, size, radius, body_type, mass)
-	local node = scene:CreateNode()
-	node:SetTransform(scene:CreateTransform(position))
+	local node
+	if render_context ~= nil then
+		node = hg.CreateObject(scene, hg.TranslationMat4(position), get_render_model(collision_type, size), {render_context.material})
+	else
+		node = scene:CreateNode()
+		node:SetTransform(scene:CreateTransform(position))
+	end
 
 	local rigid_body = scene:CreateRigidBody()
 	rigid_body:SetType(body_type)
@@ -173,9 +229,22 @@ local function make_world(seed)
 	local spread_columns = math.ceil(math.sqrt(target_count))
 	local spread_rows = math.ceil(target_count / spread_columns)
 	local container_half_extent = layout == "spread" and (math.max(spread_columns, spread_rows) * 1.5 + 2) or 15
+	if render_context ~= nil then
+		world.scene.canvas.color = hg.ColorI(22, 56, 76)
+		world.scene.environment.fog_color = world.scene.canvas.color
+		world.scene.environment.fog_near = 20
+		world.scene.environment.fog_far = 80
+		local camera_matrix = hg.TransformationMat4(hg.Vec3(0, 20, -30), hg.Deg3(30, 0, 0))
+		local camera = hg.CreateCamera(world.scene, camera_matrix, 0.01, 5000)
+		world.scene:SetCurrentCamera(camera)
+		hg.CreateLinearLight(world.scene, hg.TransformationMat4(hg.Vec3.Zero, hg.Deg3(30, 59, 0)),
+			hg.Color(1, 0.8, 0.7), hg.Color(1, 0.8, 0.7), 10, hg.LST_Map, 0.002, hg.Vec4(50, 100, 200, 400))
+		hg.CreatePointLight(world.scene, hg.TranslationMat4(hg.Vec3(0, 10, 10)), 100,
+			hg.ColorI(94, 155, 228), hg.ColorI(94, 255, 228))
+	end
 	create_container(world.scene, container_half_extent)
 
-	if mode ~= "no_physics" then
+	if physics_enabled then
 		world.physics = hg.ScenePhysics()
 		world.physics:SceneCreatePhysicsFromAssets(world.scene)
 	end
@@ -197,7 +266,7 @@ local function make_world(seed)
 		-- deterministic fixed step. This preparation is never timed.
 		if mode == "physics" then
 			world.physics:StepSimulation(fixed_step, fixed_step, 1)
-		elseif mode == "scene" then
+		elseif mode == "scene" or mode == "render" then
 			hg.SceneUpdateSystems(world.scene, world.clocks, fixed_step, world.physics, fixed_step, 1)
 		else
 			hg.SceneUpdateSystems(world.scene, world.clocks, fixed_step)
@@ -207,19 +276,25 @@ local function make_world(seed)
 	return world
 end
 
-local function step_world(world)
+local function step_world(world, submit_render)
 	if mode == "physics" then
 		world.physics:StepSimulation(fixed_step, fixed_step, 1)
-	elseif mode == "scene" then
+	elseif mode == "scene" or mode == "render" then
 		hg.SceneUpdateSystems(world.scene, world.clocks, fixed_step, world.physics, fixed_step, 1)
 	else
 		hg.SceneUpdateSystems(world.scene, world.clocks, fixed_step)
 	end
+	if render_context ~= nil and submit_render ~= false then
+		hg.SubmitSceneToPipeline(0, world.scene, hg.IntRect(0, 0, render_context.width, render_context.height), true,
+			render_context.pipeline, render_context.resources)
+		hg.Frame()
+		hg.UpdateWindow(render_context.window)
+	end
 end
 
-local function run_steps(world, count)
+local function run_steps(world, count, submit_render)
 	for _ = 1, count do
-		step_world(world)
+		step_world(world, submit_render)
 	end
 end
 
@@ -282,7 +357,10 @@ for repetition = 1, repetitions do
 	end
 
 	if phase_selection == "settled" or phase_selection == "both" then
-		run_steps(world, settle_steps)
+		-- Rendering does not affect the deterministic physics state. Skip GPU
+		-- submission during this untimed transition and warm the complete render
+		-- path again before measuring the settled window.
+		run_steps(world, settle_steps, false)
 		measure_phase(world, "settled", repetition, seed)
 	end
 
@@ -294,4 +372,10 @@ for repetition = 1, repetitions do
 end
 
 output:close()
+if render_context ~= nil then
+	hg.RenderShutdown()
+	hg.DestroyWindow(render_context.window)
+	hg.WindowSystemShutdown()
+	hg.InputShutdown()
+end
 print("[benchmark] done")
