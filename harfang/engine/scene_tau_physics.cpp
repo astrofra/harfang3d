@@ -457,14 +457,8 @@ OBB BuildTauWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
 	return BuildTauWorldOBB(node.position, node.orientation, node.scale, shape);
 }
 
-OBB BuildTauPreviousWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
-	return BuildTauWorldOBB(node.previous_position, node.previous_orientation, node.scale, shape);
-}
-
-Vec3 BuildTauWorldSphereCenter(const TauNode &node, const TauCollisionShape &shape, bool previous = false) {
-	const Quaternion orientation = previous ? node.previous_orientation : node.orientation;
-	const Vec3 position = previous ? node.previous_position : node.position;
-	return position + ToMatrix3(orientation) * (node.scale * shape.local_position);
+Vec3 BuildTauWorldSphereCenter(const TauNode &node, const TauCollisionShape &shape) {
+	return node.position + ToMatrix3(node.orientation) * (node.scale * shape.local_position);
 }
 
 float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &shape) {
@@ -491,10 +485,9 @@ TauPrimitiveFrame BuildTauPrimitiveFrame(const TauNode &node, const TauCollision
 	return {BuildTauWorldSphereCenter(node, shape), Normalize(GetX(rotation)), Normalize(GetY(rotation)), Normalize(GetZ(rotation))};
 }
 
-TauCapsuleGeometry BuildTauWorldCapsule(const TauNode &node, const TauCollisionShape &shape, bool previous = false) {
-	const Quaternion orientation = previous ? node.previous_orientation : node.orientation;
-	const Mat3 rotation = ToMatrix3(orientation) * shape.local_rotation;
-	const Vec3 center = BuildTauWorldSphereCenter(node, shape, previous);
+TauCapsuleGeometry BuildTauWorldCapsule(const TauNode &node, const TauCollisionShape &shape) {
+	const Mat3 rotation = ToMatrix3(node.orientation) * shape.local_rotation;
+	const Vec3 center = BuildTauWorldSphereCenter(node, shape);
 	const Vec3 scale = Abs(node.scale);
 	const float half_height = Abs(shape.size.y) * scale.y * 0.5f;
 	const Vec3 half_axis = Normalize(GetY(rotation)) * half_height;
@@ -819,22 +812,17 @@ void UpdateTauBodyProxyCache(TauNode &node) {
 		world_shape.shape_index = shape_index;
 		if (shape.type == CT_Sphere) {
 			world_shape.position = BuildTauWorldSphereCenter(node, shape);
-			world_shape.previous_position = BuildTauWorldSphereCenter(node, shape, true);
 			world_shape.radius = BuildTauWorldSphereRadius(node, shape);
 			world_shape.bounds = {world_shape.position - Vec3(world_shape.radius), world_shape.position + Vec3(world_shape.radius)};
 		} else if (shape.type == CT_Capsule) {
 			world_shape.capsule = BuildTauWorldCapsule(node, shape);
-			world_shape.previous_capsule = BuildTauWorldCapsule(node, shape, true);
 			world_shape.position = (world_shape.capsule.a + world_shape.capsule.b) * 0.5f;
-			world_shape.previous_position = (world_shape.previous_capsule.a + world_shape.previous_capsule.b) * 0.5f;
 			const Vec3 radius(world_shape.capsule.radius);
 			world_shape.bounds = {Min(world_shape.capsule.a, world_shape.capsule.b) - radius,
 				Max(world_shape.capsule.a, world_shape.capsule.b) + radius};
 		} else {
 			world_shape.obb = BuildTauWorldOBB(node, shape);
-			world_shape.previous_obb = BuildTauPreviousWorldOBB(node, shape);
 			world_shape.position = world_shape.obb.pos;
-			world_shape.previous_position = world_shape.previous_obb.pos;
 			world_shape.bounds = MinMaxFromOBB(world_shape.obb);
 		}
 
@@ -1864,6 +1852,36 @@ struct TauIslandGraph {
 	}
 };
 
+} // namespace
+
+struct TauStepScratch {
+	std::vector<TauBodyProxy> bodies;
+	std::vector<MinMax> body_bounds;
+	std::vector<TauContactConstraint> contacts;
+	std::vector<TauBodyPair> body_pairs;
+	std::vector<DynamicAABBTreeProxy> moved_proxies;
+	TauIslandGraph islands;
+	std::vector<uint8_t> wake_roots;
+	std::unordered_set<uint32_t> wake_cohorts;
+	TauIslandGraph ready_islands;
+	std::vector<uint8_t> body_stable;
+	std::vector<uint8_t> body_hard_unstable;
+	std::vector<uint8_t> ready;
+	std::vector<uint32_t> assigned_island_ids;
+	std::vector<uint32_t> assigned_island_sizes;
+	std::unordered_set<uint32_t> sleeping_island_ids;
+
+	std::array<size_t, 21> GetCapacitySnapshot() const {
+		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
+			islands.bodies.capacity(), islands.refs.capacity(), islands.parents.capacity(), islands.ranks.capacity(), wake_roots.capacity(),
+			wake_cohorts.bucket_count(), ready_islands.bodies.capacity(), ready_islands.refs.capacity(), ready_islands.parents.capacity(),
+			ready_islands.ranks.capacity(), body_stable.capacity(), body_hard_unstable.capacity(), ready.capacity(),
+			assigned_island_ids.capacity(), assigned_island_sizes.capacity(), sleeping_island_ids.bucket_count()}};
+	}
+};
+
+namespace {
+
 void AddTauSleepSupport(TauNode &node, NodeRef support) {
 	if (std::find(std::begin(node.sleep_supports), std::end(node.sleep_supports), support) == std::end(node.sleep_supports))
 		node.sleep_supports.push_back(support);
@@ -1904,9 +1922,12 @@ void CaptureTauSleepingSupportSnapshots(TauNode &node, const std::map<NodeRef, T
 	}
 }
 
-TauIslandGraph BuildTauIslandGraph(
-	std::map<NodeRef, TauNode> &nodes, const std::vector<TauContactConstraint> &contacts, const std::vector<Tau6DofConstraint> &constraints) {
-	TauIslandGraph graph;
+void BuildTauIslandGraph(std::map<NodeRef, TauNode> &nodes, const std::vector<TauContactConstraint> &contacts,
+	const std::vector<Tau6DofConstraint> &constraints, TauIslandGraph &graph) {
+	graph.bodies.clear();
+	graph.refs.clear();
+	graph.parents.clear();
+	graph.ranks.clear();
 	graph.bodies.reserve(nodes.size());
 	graph.refs.reserve(nodes.size());
 	for (auto &entry : nodes) {
@@ -1922,7 +1943,7 @@ TauIslandGraph BuildTauIslandGraph(
 		graph.refs.push_back(entry.first);
 	}
 	graph.parents.resize(graph.bodies.size());
-	graph.ranks.resize(graph.bodies.size(), 0);
+	graph.ranks.assign(graph.bodies.size(), 0);
 	for (uint32_t i = 0; i < graph.parents.size(); ++i)
 		graph.parents[i] = i;
 
@@ -1952,13 +1973,15 @@ TauIslandGraph BuildTauIslandGraph(
 			AddTauSleepNeighbor(*node_b, constraint.ref_a);
 		}
 	}
-	return graph;
 }
 
 void WakeTauMergedIslands(
-	std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics) {
-	std::vector<uint8_t> wake_root(graph.bodies.size(), 0);
-	std::unordered_set<uint32_t> wake_cohorts;
+	std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics,
+	TauStepScratch &scratch) {
+	auto &wake_root = scratch.wake_roots;
+	wake_root.assign(graph.bodies.size(), 0);
+	auto &wake_cohorts = scratch.wake_cohorts;
+	wake_cohorts.clear();
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		TauNode &node = *graph.bodies[i];
 		const uint32_t root = graph.Find(i);
@@ -2089,13 +2112,16 @@ uint32_t AllocateTauSleepIslandId(uint32_t &next_sleep_island_id) {
 }
 
 void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, const std::vector<TauContactConstraint> &contacts,
-	const std::vector<Tau6DofConstraint> &constraints, float dt_sec, uint32_t &next_sleep_island_id, TauContactDiagnostics &diagnostics) {
+	const std::vector<Tau6DofConstraint> &constraints, float dt_sec, uint32_t &next_sleep_island_id, TauContactDiagnostics &diagnostics,
+	TauStepScratch &scratch) {
 	const float linear_speed_sq = k_tau_sleep_linear_speed * k_tau_sleep_linear_speed;
 	const float angular_speed_sq = k_tau_sleep_angular_speed * k_tau_sleep_angular_speed;
 	const float contact_speed_sq = k_tau_sleep_contact_speed * k_tau_sleep_contact_speed;
 	const float force_epsilon_sq = k_tau_sleep_force_epsilon * k_tau_sleep_force_epsilon;
-	std::vector<uint8_t> body_stable(graph.bodies.size(), 1);
-	std::vector<uint8_t> body_hard_unstable(graph.bodies.size(), 0);
+	auto &body_stable = scratch.body_stable;
+	auto &body_hard_unstable = scratch.body_hard_unstable;
+	body_stable.assign(graph.bodies.size(), 1);
+	body_hard_unstable.assign(graph.bodies.size(), 0);
 
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		const TauNode &node = *graph.bodies[i];
@@ -2170,12 +2196,11 @@ void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &
 	// completed their timers during this step. Existing sleeping cohorts retain
 	// their IDs. Explicit API wakes traverse the complete contact graph, while
 	// contact impacts wake only the bounded cohort that must respond.
-	TauIslandGraph ready_graph;
-	ready_graph.bodies = graph.bodies;
-	ready_graph.refs = graph.refs;
+	auto &ready_graph = scratch.ready_islands;
 	ready_graph.parents.resize(graph.bodies.size());
-	ready_graph.ranks.resize(graph.bodies.size(), 0);
-	std::vector<uint8_t> ready(graph.bodies.size(), 0);
+	ready_graph.ranks.assign(graph.bodies.size(), 0);
+	auto &ready = scratch.ready;
+	ready.assign(graph.bodies.size(), 0);
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		const TauNode &node = *graph.bodies[i];
 		ready_graph.parents[i] = i;
@@ -2189,18 +2214,17 @@ void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &
 			ready_graph.Union(index_a, index_b);
 	}
 	for (const auto &constraint : constraints) {
-		TauNode *node_a = nullptr, *node_b = nullptr;
-		for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
-			if (graph.refs[i] == constraint.ref_a)
-				node_a = graph.bodies[i];
-			if (graph.refs[i] == constraint.ref_b)
-				node_b = graph.bodies[i];
-		}
-		if (node_a != nullptr && node_b != nullptr && ready[node_a->island_index] && ready[node_b->island_index])
+		TauNode *node_a = FindTauNode(nodes, constraint.ref_a);
+		TauNode *node_b = FindTauNode(nodes, constraint.ref_b);
+		if (node_a != nullptr && node_b != nullptr && IsDynamicTauNode(*node_a) && IsDynamicTauNode(*node_b) &&
+			ready[node_a->island_index] && ready[node_b->island_index])
 			ready_graph.Union(node_a->island_index, node_b->island_index);
 	}
 
-	std::vector<uint32_t> assigned_island_ids(graph.bodies.size(), 0), assigned_island_sizes(graph.bodies.size(), 0);
+	auto &assigned_island_ids = scratch.assigned_island_ids;
+	auto &assigned_island_sizes = scratch.assigned_island_sizes;
+	assigned_island_ids.assign(graph.bodies.size(), 0);
+	assigned_island_sizes.assign(graph.bodies.size(), 0);
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		if (!ready[i])
 			continue;
@@ -2225,7 +2249,8 @@ void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &
 		node.world_proxy_cache_valid = false;
 	}
 
-	std::unordered_set<uint32_t> sleeping_island_ids;
+	auto &sleeping_island_ids = scratch.sleeping_island_ids;
+	sleeping_island_ids.clear();
 	for (const TauNode *node : graph.bodies) {
 		if (node->activation_state == TauActivationState::Sleeping) {
 			++diagnostics.sleeping_bodies;
@@ -2629,16 +2654,19 @@ void AppendTauPersistentManifoldContacts(const TauBodyProxy &body_a, const TauWo
 	}
 }
 
-std::vector<TauContactConstraint> BuildTauContacts(
+void BuildTauContacts(
 	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
-	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, TauContactDiagnostics &diagnostics) {
+	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, TauContactDiagnostics &diagnostics,
+	TauStepScratch &scratch) {
 	TauProfileSection build_contacts_profile("Tau.BuildContacts");
 	if (manifold_lookup.bucket_count() < k_tau_max_manifolds)
 		manifold_lookup.reserve(k_tau_max_manifolds);
 	PruneTauManifoldCache(manifolds, manifold_lookup, step, diagnostics);
-	std::vector<TauBodyProxy> bodies;
+	auto &bodies = scratch.bodies;
+	auto &body_bounds = scratch.body_bounds;
+	bodies.clear();
+	body_bounds.clear();
 	bodies.reserve(nodes.size());
-	std::vector<MinMax> body_bounds;
 	body_bounds.reserve(nodes.size());
 
 	{
@@ -2681,8 +2709,10 @@ std::vector<TauContactConstraint> BuildTauContacts(
 	}
 	diagnostics.proxy_bodies = bodies.size();
 
-	std::vector<TauContactConstraint> contacts;
-	std::vector<TauBodyPair> body_pairs;
+	auto &contacts = scratch.contacts;
+	auto &body_pairs = scratch.body_pairs;
+	contacts.clear();
+	body_pairs.clear();
 	body_pairs.reserve(bodies.size() * 8);
 	size_t static_body_count = 0;
 	for (const auto &body : bodies) {
@@ -2701,7 +2731,8 @@ std::vector<TauContactConstraint> BuildTauContacts(
 		};
 
 		const size_t moved_proxy_count = broadphase_tree.GetMovedProxyCount();
-		std::vector<DynamicAABBTreeProxy> moved_proxies;
+		auto &moved_proxies = scratch.moved_proxies;
+		moved_proxies.clear();
 		bool tree_ready = broadphase_tree.GetProxyCount() == bodies.size();
 		if (tree_ready) {
 			moved_proxies.reserve(moved_proxy_count);
@@ -2867,7 +2898,6 @@ std::vector<TauContactConstraint> BuildTauContacts(
 		}
 	}
 
-	return contacts;
 }
 
 void StoreTauSolvedManifoldImpulses(const std::vector<TauContactConstraint> &contacts, std::vector<TauContactManifold> &manifolds) {
@@ -2926,7 +2956,8 @@ bool TauContactDiagnosticsEnabled() {
 	return enabled;
 }
 
-void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &diagnostics, size_t cache_size) {
+void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &diagnostics, size_t cache_size,
+	const tau_internal::TauStepReuseStats &reuse_stats) {
 	if (!TauContactDiagnosticsEnabled() || step % 60 != 0)
 		return;
 	std::string message = format("Tau contacts step %1: bodies=%2 dynamic=%3 proxies=%4/%5 update=%6 reuse=%7 alloc=%8 ")
@@ -2982,6 +3013,13 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.sleeping_manifold_points_reused)
 			 .arg(diagnostics.sleeping_manifold_reuse_misses)
 			 .str();
+	message += format("scratch(growths=%1 cap=%2/%3/%4/%5) ")
+			 .arg(reuse_stats.scratch_growths)
+			 .arg(reuse_stats.body_proxy_capacity)
+			 .arg(reuse_stats.candidate_capacity)
+			 .arg(reuse_stats.contact_capacity)
+			 .arg(reuse_stats.island_body_capacity)
+			 .str();
 	message += format("solver(pos=%1 vel=%2 rolling=%3 contact_reallocs=%4) events=%5 motion=%6 stale=%7 ")
 			 .arg(diagnostics.position_constraint_evaluations)
 			 .arg(diagnostics.velocity_constraint_evaluations)
@@ -3030,8 +3068,9 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	const std::vector<Tau6DofConstraint> &constraints, DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs,
 	uint32_t &next_sleep_island_id, uint32_t step, float dt_sec,
 	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts,
-	TauSleepingReuseStats &sleeping_reuse_stats) {
+	TauStepScratch &scratch, tau_internal::TauStepReuseStats &reuse_stats) {
 	TauProfileSection substep_profile("Tau.Substep");
+	const auto initial_scratch_capacity = scratch.GetCapacitySnapshot();
 	TauContactDiagnostics diagnostics;
 	diagnostics.enabled = TauContactDiagnosticsEnabled();
 	diagnostics.total_bodies = nodes.size();
@@ -3061,12 +3100,13 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 		}
 	}
 
-	auto contacts = BuildTauContacts(nodes, manifolds, manifold_lookup, broadphase_tree, broadphase_pairs, step, diagnostics);
-	TauIslandGraph islands;
+	BuildTauContacts(nodes, manifolds, manifold_lookup, broadphase_tree, broadphase_pairs, step, diagnostics, scratch);
+	auto &contacts = scratch.contacts;
+	auto &islands = scratch.islands;
 	{
 		TauProfileSection islands_profile("Tau.Islands");
-		islands = BuildTauIslandGraph(nodes, contacts, constraints);
-		WakeTauMergedIslands(nodes, islands, contacts, diagnostics);
+		BuildTauIslandGraph(nodes, contacts, constraints, islands);
+		WakeTauMergedIslands(nodes, islands, contacts, diagnostics, scratch);
 	}
 	{
 		TauProfileSection position_profile("Tau.PositionSolve");
@@ -3101,16 +3141,25 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	}
 	{
 		TauProfileSection sleeping_profile("Tau.SleepUpdate");
-		UpdateTauIslandSleeping(nodes, islands, contacts, constraints, dt_sec, next_sleep_island_id, diagnostics);
+		UpdateTauIslandSleeping(nodes, islands, contacts, constraints, dt_sec, next_sleep_island_id, diagnostics, scratch);
 	}
 	for (auto &entry : nodes)
 		if (!IsDynamicTauNode(entry.second))
 			entry.second.externally_moved = false;
-	sleeping_reuse_stats.proxy_reuses = diagnostics.sleeping_proxy_reuses;
-	sleeping_reuse_stats.manifold_reuses = diagnostics.sleeping_manifold_reuses;
-	sleeping_reuse_stats.manifold_points_reused = diagnostics.sleeping_manifold_points_reused;
-	sleeping_reuse_stats.manifold_reuse_misses = diagnostics.sleeping_manifold_reuse_misses;
-	ReportTauContactDiagnostics(step, diagnostics, manifolds.size());
+	reuse_stats.proxy_reuses = diagnostics.sleeping_proxy_reuses;
+	reuse_stats.manifold_reuses = diagnostics.sleeping_manifold_reuses;
+	reuse_stats.manifold_points_reused = diagnostics.sleeping_manifold_points_reused;
+	reuse_stats.manifold_reuse_misses = diagnostics.sleeping_manifold_reuse_misses;
+	const auto final_scratch_capacity = scratch.GetCapacitySnapshot();
+	reuse_stats.scratch_growths = 0;
+	for (size_t i = 0; i < initial_scratch_capacity.size(); ++i)
+		if (final_scratch_capacity[i] > initial_scratch_capacity[i])
+			++reuse_stats.scratch_growths;
+	reuse_stats.body_proxy_capacity = scratch.bodies.capacity();
+	reuse_stats.candidate_capacity = scratch.body_pairs.capacity();
+	reuse_stats.contact_capacity = scratch.contacts.capacity();
+	reuse_stats.island_body_capacity = scratch.islands.bodies.capacity();
+	ReportTauContactDiagnostics(step, diagnostics, manifolds.size(), reuse_stats);
 }
 
 } // namespace
@@ -3156,7 +3205,7 @@ bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref)
 	return false;
 }
 
-TauSleepingReuseStats GetLastSleepingReuseStats(const SceneTauPhysics &physics) { return physics.last_sleeping_reuse_stats; }
+TauStepReuseStats GetLastStepReuseStats(const SceneTauPhysics &physics) { return physics.last_step_reuse_stats; }
 
 void TransformNodeSleepCohortForTest(
 	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation) {
@@ -3182,6 +3231,9 @@ void TransformNodeSleepCohortForTest(
 }
 
 } // namespace tau_internal
+
+SceneTauPhysics::SceneTauPhysics(int thread_count) { (void)thread_count; }
+SceneTauPhysics::~SceneTauPhysics() = default;
 
 void SceneTauPhysics::SceneCreatePhysics(const Scene &scene, const Reader &ir, const ReadProvider &ip) {
 	ClearNodes();
@@ -3322,9 +3374,11 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 			contact_step = 1;
 		}
 		TriggerPreTickCallback(substep_time);
+		if (!step_scratch)
+			step_scratch = std::make_unique<TauStepScratch>();
 		StepTauSubstep(nodes, contact_manifolds, contact_manifold_lookup, constraints, broadphase_tree, broadphase_pairs,
 			next_sleep_island_id, contact_step, time_to_sec_f(substep_time), node_collision_event_tracking_modes, latest_contacts,
-			last_sleeping_reuse_stats);
+			*step_scratch, last_step_reuse_stats);
 	}
 
 	for (auto &entry : nodes) {
@@ -3448,7 +3502,8 @@ void SceneTauPhysics::ClearNodes() {
 	fixed_step_accumulator = 0;
 	node_collision_event_tracking_modes.clear();
 	latest_contacts.clear();
-	last_sleeping_reuse_stats = {};
+	step_scratch.reset();
+	last_step_reuse_stats = {};
 }
 
 void SceneTauPhysics::Clear() {

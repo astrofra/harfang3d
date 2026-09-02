@@ -1,13 +1,13 @@
 # Tau Physics Pool Performance Analysis And Optimization Roadmap
 
-Date: 2026-09-01
+Date: 2026-09-02
 
 Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
-contact-island activation, and sleeping proxy/cuboid-manifold reuse are
-implemented and measured. The rendered end-to-end pass and the complete
-body-count matrix remain to close Phase 0. Shape-specific and spread-layout
-spot checks are recorded below.
+contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
+per-world step scratch are implemented and measured. The rendered end-to-end
+pass and the complete body-count matrix remain to close Phase 0. Shape-specific
+and spread-layout spot checks are recorded below.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -378,7 +378,7 @@ milestone. The 2,000-body mixed spread check reaches 2.460 ms settled versus
 previously measured 0.605 ms because transient primitive contacts and full
 node/contact scratch reconstruction are still paid.
 
-The next implementation order is now:
+The next implementation order after this milestone was:
 
 1. retain proxy lists, broad-phase candidates, contact constraints, and island
    scratch across substeps, and remove remaining dead proxy fields/work;
@@ -402,6 +402,52 @@ one-repetition setup, so the stronger invalidation adds no measured regression.
 Active timings were unchanged within run-to-run noise.
 The packaged Release 1,500-body mixed settled scene benchmark reports a
 6.632 ms median and 7.021 ms p95 over 120 samples (one validation repetition).
+
+### Sixth optimization result: persistent step scratch and dead proxy work removal
+
+`SceneTauPhysics` now owns a lazily allocated `TauStepScratch` high-water-mark
+cache. Body proxies and bounds, exact broad-phase candidates, moved-proxy
+lists, contact constraints, both union-find graphs, wake/stability flags,
+activation-cohort sets, and assigned island IDs are cleared and reused rather
+than constructed and destroyed on every substep. `ClearNodes` releases the
+cache together with the world. The implementation also removes unused previous
+world sphere/capsule/OBB fields and their transform work. Ready-island
+constraint lookup now uses the node map instead of scanning every island body,
+with an explicit dynamic-body guard for static constraint endpoints.
+
+`HG_TAU_CONTACT_DIAGNOSTICS=1` now reports scratch growth and the principal
+capacities. During the staggered spawn, capacity grows only when the body or
+contact high-water mark increases. From step 240 through step 780 of the mixed
+1,500-body pool, `scratch(growths=0)` is stable. At step 780 the retained
+capacities are 1,505 body proxies, 12,040 candidate pairs, 8,092 contact points,
+and 1,505 island bodies; the existing per-push candidate and contact
+reallocation counters are also zero. A unit regression warms a two-body stack,
+verifies a zero-growth complete substep, and verifies that `ClearNodes` resets
+the cache.
+
+The three-seed Release comparison against the immediately preceding sleeping
+proxy/manifold milestone is:
+
+| Workload | Previous median / p95 | Persistent scratch median / p95 | Median change |
+|---|---:|---:|---:|
+| mixed 1,500 active | 20.798 / 26.956 ms | 20.254 / 26.452 ms | 2.6% faster |
+| mixed 1,500 settled | 5.055 / 5.378 ms | 4.106 / 4.546 ms | 18.8% faster |
+| mixed 2,000 spread settled | 2.460 / 2.739 ms | 2.125 / 2.269 ms | 13.6% faster |
+
+The settled attribution run falls from 4.70 to 4.23 ms average Tau step time.
+`Tau.BuildContacts` falls from 2.40 to 2.05 ms, narrow phase including contact
+emission from 1.59 to 1.29 ms, island construction from 0.480 to 0.456 ms, and
+sleep update from 0.311 to 0.277 ms. The diagnostic contact/manifold/island
+counts remain identical at the recorded checkpoints, and the solver remains at
+three position and eight velocity iterations.
+
+The next implementation order is now:
+
+1. make primitive contact persistence shape-neutral, starting with
+   sphere/cuboid and sphere/sphere, then capsule combinations;
+2. cache solver world transforms, inverse inertia, and normalized cuboid axes;
+3. complete the rendered and body-count acceptance matrix before considering
+   any iteration-count change.
 
 ## Workload Characterization
 
