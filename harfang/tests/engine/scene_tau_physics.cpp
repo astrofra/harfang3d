@@ -231,6 +231,11 @@ void TestSleepingBodyWakeAndTrackedContacts() {
 	physics.CollectCollisionEvents(scene, contacts);
 	TEST_CHECK(!GetNodeRefPairContacts(body.ref, floor.ref, contacts).empty());
 	TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+	const TauSleepingReuseStats sleeping_stats = tau_internal::GetLastSleepingReuseStats(physics);
+	TEST_CHECK(sleeping_stats.proxy_reuses >= 1);
+	TEST_CHECK(sleeping_stats.manifold_reuses >= 1);
+	TEST_CHECK(sleeping_stats.manifold_points_reused >= 1);
+	TEST_CHECK(sleeping_stats.manifold_reuse_misses == 0);
 
 	physics.NodeWake(body);
 	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
@@ -238,6 +243,7 @@ void TestSleepingBodyWakeAndTrackedContacts() {
 	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
 	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
 	TEST_CHECK(physics.NodeGetLinearVelocity(body).x > 0.5f);
+	TEST_CHECK(tau_internal::GetLastSleepingReuseStats(physics).manifold_reuses == 0);
 }
 
 void TestSleepingIslandWakePropagation() {
@@ -252,12 +258,18 @@ void TestSleepingIslandWakePropagation() {
 	StepTauWorld(physics, 360);
 	TEST_CHECK(tau_internal::IsNodeSleeping(physics, bottom.ref));
 	TEST_CHECK(tau_internal::IsNodeSleeping(physics, top.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	const TauSleepingReuseStats sleeping_stats = tau_internal::GetLastSleepingReuseStats(physics);
+	TEST_CHECK(sleeping_stats.proxy_reuses >= 2);
+	TEST_CHECK(sleeping_stats.manifold_reuses >= 2);
 
 	// The API mutation wakes the complete persisted contact island before the
 	// next fixed step, not only the addressed rigid body.
 	physics.NodeAddImpulse(bottom, Vec3(1.f, 0.f, 0.f));
 	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, bottom.ref));
 	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, top.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(tau_internal::GetLastSleepingReuseStats(physics).manifold_reuses == 0);
 }
 
 void TestSleepingBodyWakesOnImpact() {
@@ -366,11 +378,14 @@ void TestDeactivationAndMovingSupportWake() {
 		physics.SceneCreatePhysicsFromAssets(scene);
 		StepTauWorld(physics, 240);
 		TEST_CHECK(tau_internal::IsNodeSleeping(physics, body.ref));
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+		TEST_CHECK(tau_internal::GetLastSleepingReuseStats(physics).manifold_reuses >= 1);
 
 		support.GetTransform().SetPos(Vec3(0.f, -0.25f, 0.f));
 		physics.SyncTransformsFromScene(scene);
 		TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
 		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+		TEST_CHECK(tau_internal::GetLastSleepingReuseStats(physics).manifold_reuses == 0);
 		TEST_CHECK(physics.NodeGetLinearVelocity(body).y < 0.f);
 	}
 }

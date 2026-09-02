@@ -3,10 +3,11 @@
 Date: 2026-09-01
 
 Status: the deterministic benchmark and fixed-step correction are in place;
-the hashed manifold lookup, Phase 2 dynamic broad phase, and Phase 4 sleeping
-and contact-island activation are implemented and measured. The rendered
-end-to-end pass and the complete body-count matrix remain to close Phase 0.
-Shape-specific and spread-layout spot checks are recorded below.
+the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
+contact-island activation, and sleeping proxy/cuboid-manifold reuse are
+implemented and measured. The rendered end-to-end pass and the complete
+body-count matrix remain to close Phase 0. Shape-specific and spread-layout
+spot checks are recorded below.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -222,7 +223,7 @@ instead of scanning 2,009,010 theoretical pairs, and reports `oracle=0/0`.
 This closes the quadratic broad-phase issue and makes the remaining spread
 gap strong evidence for prioritizing sleep/island deactivation.
 
-The next implementation order is now:
+The next implementation order after sleeping/islands was:
 
 1. avoid rebuilding sleeping body shapes and regenerating unchanged
    sleeping/sleeping narrow-phase contacts while preserving event semantics;
@@ -329,6 +330,63 @@ from `y=3`, waits for sleep at `y=0.5`, invalidates and rebuilds scene world
 matrices, and verifies that the rendered pose remains at the settled height. A
 second regression verifies active-pose continuity on a frame too short to
 execute a fixed substep.
+
+### Fifth optimization result: sleeping proxy and cuboid-manifold reuse
+
+Each Tau node now owns persistent world-shape and body-bounds storage. Awake
+dynamic nodes refresh it every substep, while sleeping dynamics and unchanged
+static/kinematic nodes retain it. The dynamic AABB tree is updated only when
+that cached proxy is refreshed. Entering sleep explicitly invalidates the
+cache once because the position solver can move a body after contact building;
+the following substep captures the final sleep pose and steady-state reuse then
+begins.
+
+For an unchanged pair with at least one sleeping dynamic body, a cuboid/cuboid
+manifold seen on the previous substep is now re-injected from its body-local
+anchors without rerunning SAT and contact clipping. It remains present in the
+contact graph and tracked-event path. Any awake dynamic endpoint or moved
+static/kinematic endpoint forces normal proxy and narrow-phase regeneration.
+Tests cover steady sleeping reuse, explicit/API wake, whole-stack wake, moved
+kinematic support invalidation, and collision-event continuity.
+
+At diagnostic step 780 of the mixed 1,500-body pool, Tau reuses 1,436 of the
+1,500 dynamic proxies and refreshes only 64. It re-injects 1,397 cuboid
+manifolds containing 3,330 contact points, reducing narrow-phase calls from a
+potential 7,072 overlapping shape pairs to 5,675. The remaining 854 eligible
+cuboid cache misses are conservative AABB overlaps without a previous-step
+contact; they correctly fall back to narrow phase. Sphere and capsule contacts
+remain transient and are deliberately left for shape-neutral persistence.
+
+An attribution run over 120 settled steps measures `Tau.BuildContacts` at
+2.40 ms and `Tau.NarrowPhase` at 1.59 ms, down from 4.74 ms and 3.58 ms after
+the sleeping/island milestone. `Tau.ProxyUpdate` is 0.048 ms. Position and
+velocity solver iteration counts remain unchanged at three and eight.
+
+A same-seed, same-source A/B build with reuse compiled off and on isolates the
+feature-level effect:
+
+| Mixed 1,500-body pool | Reuse off | Reuse on | Change |
+|---|---:|---:|---:|
+| active median | 20.638 ms | 20.798 ms | -0.8% (timer noise band) |
+| settled median | 6.634 ms | 4.923 ms | 25.8% faster |
+
+The normal three-seed Release run with reuse enabled has a 5.055 ms median of
+per-run medians and a 5.378 ms median p95. Seed-dependent settling still causes
+visible dispersion, so the paired A/B above is the regression gate for this
+milestone. The 2,000-body mixed spread check reaches 2.460 ms settled versus
+3.677 ms before reuse, a 33.1% improvement, but remains well above Bullet's
+previously measured 0.605 ms because transient primitive contacts and full
+node/contact scratch reconstruction are still paid.
+
+The next implementation order is now:
+
+1. retain proxy lists, broad-phase candidates, contact constraints, and island
+   scratch across substeps, and remove remaining dead proxy fields/work;
+2. make contact persistence shape-neutral, starting with sphere/cuboid and
+   sphere/sphere floor-heavy paths, then capsule combinations;
+3. reduce repeated solver transforms, inverse-inertia work, and cuboid-axis
+   normalization, without changing solver iteration counts until QA proves an
+   equivalent envelope.
 
 A 65-body cohort-boundary regression now verifies dynamic-support wake: the
 lower support occupies the last slot of one 64-body cohort, the upper cuboid
@@ -734,7 +792,7 @@ or keep that pair in the event path.
 - The active-fill benchmark remains physically stable and does not repeatedly
   sleep/wake entire piles due threshold chatter.
 
-Implementation status (2026-09-01): met for the deterministic physics-only
+Implementation status (2026-09-02): met for the deterministic physics-only
 gate. The pool exceeds 90% sleeping by step 600; explicit/API and impact wake
 paths, moving supports, disabled deactivation, dirty transform publication,
 sleep-pose persistence across scene matrix invalidation, and sleeping contact
@@ -742,7 +800,9 @@ events have dedicated tests. Directional dynamic-support wake also crosses a
 bounded-cohort boundary without waking unrelated lateral contacts. Bounded
 activation cohorts prevent local impacts from waking the complete dense pile.
 The full interactive rendered-tutorial gate remains part of Phase 0, and
-sleeping-contact narrow-phase reuse remains the next performance milestone.
+unchanged sleeping cuboid contacts now reuse their cached manifolds while
+preserving the contact graph and event path. Shape-neutral persistence and
+scratch retention remain follow-up work.
 
 ## Phase 5: Optimize The Solver And Scene Synchronization
 

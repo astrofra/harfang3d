@@ -28,10 +28,18 @@ class Scene;
 class SceneTauPhysics;
 struct CollisionGeometry;
 
+struct TauSleepingReuseStats {
+	size_t proxy_reuses{0};
+	size_t manifold_reuses{0};
+	size_t manifold_points_reused{0};
+	size_t manifold_reuse_misses{0};
+};
+
 namespace tau_internal {
 bool IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
 uint32_t GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
 bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
+TauSleepingReuseStats GetLastSleepingReuseStats(const SceneTauPhysics &physics);
 void TransformNodeSleepCohortForTest(
 	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 }
@@ -50,6 +58,19 @@ struct TauCollisionShape {
 	std::shared_ptr<const CollisionGeometry> collision_geometry;
 };
 
+struct TauWorldShape {
+	const TauCollisionShape *shape{nullptr};
+	uint32_t shape_index{0};
+	Vec3 position{Vec3::Zero};
+	Vec3 previous_position{Vec3::Zero};
+	float radius{0.f};
+	TauCapsuleGeometry capsule;
+	TauCapsuleGeometry previous_capsule;
+	OBB obb;
+	OBB previous_obb;
+	MinMax bounds;
+};
+
 enum class TauActivationState : uint8_t { Awake, SleepCandidate, Sleeping };
 
 struct TauSleepSupportSnapshot {
@@ -61,6 +82,8 @@ struct TauSleepSupportSnapshot {
 struct TauNode {
 	tau_compat::NodeMotionAdapter motion{};
 	std::vector<TauCollisionShape> shapes;
+	std::vector<TauWorldShape> world_shapes;
+	MinMax world_bounds;
 	RigidBodyType body_type{RBT_Static};
 	float total_mass{0.f};
 	float inverse_mass{0.f};
@@ -94,6 +117,7 @@ struct TauNode {
 	uint32_t island_index{0xffffffff};
 	TauActivationState activation_state{TauActivationState::Awake};
 	bool deactivation_enabled{true};
+	bool world_proxy_cache_valid{false};
 	bool externally_moved{false};
 	bool transform_dirty{true};
 };
@@ -215,6 +239,7 @@ private:
 	friend bool tau_internal::IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
 	friend uint32_t tau_internal::GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
 	friend bool tau_internal::HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
+	friend TauSleepingReuseStats tau_internal::GetLastSleepingReuseStats(const SceneTauPhysics &physics);
 	friend void tau_internal::TransformNodeSleepCohortForTest(
 		SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 
@@ -233,6 +258,7 @@ private:
 	time_ns fixed_step_accumulator{0};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
+	TauSleepingReuseStats last_sleeping_reuse_stats;
 	std::function<void(SceneTauPhysics &, hg::time_ns t)> pre_tick_callback;
 };
 
