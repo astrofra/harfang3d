@@ -449,6 +449,71 @@ The next implementation order is now:
 3. complete the rendered and body-count acceptance matrix before considering
    any iteration-count change.
 
+### Seventh optimization result: shape-neutral persistent contacts
+
+All solver contact manifolds now store their two surface anchors in the local
+orthonormal frames of the rigid bodies rather than in cuboid-only OBB frames.
+The cuboid SAT generator keeps its focused OBB-local contract and its output is
+converted at the cache boundary. Sphere/sphere, sphere/cuboid,
+capsule/sphere, capsule/cuboid, and capsule/capsule contacts now enter the same
+hashed manifold cache, retain normal and tangent impulses, refresh their world
+anchors during the solve, and use the sleeping-manifold fast path.
+
+Parallel capsule segments previously selected an arbitrary endpoint from an
+infinite set of equally close pairs. The persistent anchor exposed the
+resulting artificial torque and cache churn. Parallel segment pairs and
+capsule/cuboid side contacts now prefer a central closest point. This is both
+more stable and makes the primitive feature identity reusable. The former
+4,096-manifold hard ceiling was also changed into an initial reservation: the
+cache is allowed to grow with the live scene and remains bounded in time by
+the existing three-step stale-manifold pruning. The mixed pool reached 4,150
+live cache entries while settling, which demonstrates that retaining the old
+ceiling would have silently disabled persistence in the target workload.
+
+The three-repetition Release comparison against the persistent-scratch
+milestone is:
+
+| Workload | Persistent scratch median / p95 | Shape-neutral median / p95 | Median change |
+|---|---:|---:|---:|
+| mixed 1,500 active | 20.254 / 26.452 ms | 17.116 / 22.674 ms | 15.5% faster |
+| mixed 1,500 settled | 4.106 / 4.546 ms | 3.497 / 3.631 ms | 14.8% faster |
+| mixed 2,000 spread settled | 2.125 / 2.269 ms | 1.549 / 1.661 ms | 27.1% faster |
+
+Shape-specific absolute checks, also using three repetitions, report:
+
+| Workload | Active median / p95 | Settled median / p95 |
+|---|---:|---:|
+| cube-only pool, 1,500 | 26.888 / 35.307 ms | 4.340 / 4.652 ms |
+| sphere-only pool, 1,500 | 10.203 / 13.517 ms | 2.439 / 2.660 ms |
+
+At step 780 of the diagnostic mixed run, 1,475 of 1,500 dynamic proxies are
+reused. Tau emits 2,630 primitive manifolds, reuses 3,985 sleeping manifolds
+and 5,972 sleeping points, performs 2,874 narrow-phase calls, and records
+6,073 warm-start hits versus eight misses. Scratch growth, cache eviction, and
+cache overflow are all zero. The profiled 120-step settled run averages
+3.68 ms in `Tau.StepSimulation`: 2.07 ms in contact building, 1.34 ms in its
+narrow-phase scope, 0.337 ms in position solving, and 0.400 ms in velocity
+solving.
+
+Focused regressions cover sphere/cuboid in both dispatch orders,
+sphere/sphere, every capsule combination, active warm-start reuse, and sleeping
+sphere/capsule manifold reuse. All 54 unit-test groups pass. The 600-sample
+rings-chain validator passes with 4.39042 m maximum vertical error, 16.8385 m/s
+maximum finite Tau speed, and zero static-ring drift. The impulse-callback QA
+remains within 0.03582168 m maximum position error and its peak-to-peak
+amplitude delta remains -0.00141478 m. The capsule-pair QA reports one contact
+for each of capsule/sphere, capsule/cuboid, and capsule/capsule. Chair,
+friction, restitution, and rolling-friction captures each complete all 600
+samples; the collision-event check retains four published contact points after
+landing. The solver remains at three position and eight velocity iterations.
+
+The next implementation order is now:
+
+1. cache solver world transforms, inverse inertia, and normalized cuboid axes;
+2. complete the rendered and body-count acceptance matrix;
+3. optimize hot contact/island data layout before considering any solver
+   iteration change.
+
 ## Workload Characterization
 
 `physics_pool_of_objects.lua` creates:

@@ -12,7 +12,7 @@
 
 namespace hg {
 
-enum class TauContactFeatureType : uint8_t { FaceA, FaceB, EdgeEdge };
+enum class TauContactFeatureType : uint8_t { FaceA, FaceB, EdgeEdge, Primitive };
 
 struct TauContactFeature {
 	TauContactFeatureType type{TauContactFeatureType::FaceA};
@@ -27,7 +27,7 @@ inline bool operator==(const TauContactFeature &a, const TauContactFeature &b) {
 }
 
 struct TauManifoldPoint {
-	// Surface anchors are expressed in the local orthonormal frames of the two cuboids.
+	// Surface anchors are expressed in the local orthonormal frames of the two rigid bodies.
 	Vec3 local_point_a{Vec3::Zero}, local_point_b{Vec3::Zero};
 	float penetration{0.f};
 	float accumulated_normal_impulse{0.f};

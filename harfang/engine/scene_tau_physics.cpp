@@ -39,7 +39,7 @@ static constexpr float k_tau_manifold_clip_tolerance = 0.001f;
 static constexpr float k_tau_sat_tie_tolerance = 0.0001f;
 static constexpr float k_tau_bullet_convex_margin = 0.04f;
 static constexpr uint32_t k_tau_manifold_lifetime = 3;
-static constexpr size_t k_tau_max_manifolds = 4096;
+static constexpr size_t k_tau_initial_manifold_capacity = 4096;
 static constexpr int k_tau_position_iterations = 3;
 static constexpr int k_tau_velocity_iterations = 8;
 static constexpr float k_tau_sleep_linear_speed = 0.8f;
@@ -146,7 +146,7 @@ struct TauContactDiagnostics {
 	size_t shape_body_bounds_tests{0}, shape_body_bounds_rejects{0};
 	size_t shape_pair_bounds_tests{0}, shape_pair_bounds_rejects{0}, narrowphase_calls{0};
 	size_t shape_pairs{0};
-	size_t face_a_manifolds{0}, face_b_manifolds{0}, edge_edge_manifolds{0};
+	size_t face_a_manifolds{0}, face_b_manifolds{0}, edge_edge_manifolds{0}, primitive_manifolds{0};
 	size_t manifold_points{0};
 	size_t warm_start_hits{0}, warm_start_misses{0};
 	size_t manifold_cache_comparisons{0}, manifold_cache_evictions{0}, manifold_cache_overflows{0};
@@ -1347,9 +1347,15 @@ void ClosestTauSegmentPoints(const Vec3 &p0, const Vec3 &p1, const Vec3 &q0, con
 		} else {
 			const float b = Dot(d1, d2);
 			const float denominator = a * e - b * b;
-			if (Abs(denominator) > k_tau_collision_epsilon)
+			if (Abs(denominator) > k_tau_collision_epsilon) {
 				s = Clamp((b * f - c * e) / denominator, 0.f, 1.f);
-			t = (b * s + f) / e;
+				t = (b * s + f) / e;
+			} else {
+				// Parallel overlapping segments have infinitely many closest pairs.
+				// Select a central one to avoid injecting an arbitrary endpoint torque.
+				s = 0.5f;
+				t = Dot(p0 + d1 * s - q0, d2) / e;
+			}
 			if (t < 0.f) {
 				t = 0.f;
 				s = Clamp(-c / a, 0.f, 1.f);
@@ -1402,14 +1408,19 @@ Vec3 TauCapsuleFallbackNormal(const TauCapsuleGeometry &capsule, const Vec3 &tar
 }
 
 void SetTauRoundedContactPoint(
-	const Vec3 &axis_point_a, float radius_a, const Vec3 &axis_point_b, float radius_b, const Vec3 &normal, Vec3 &point) {
+	const Vec3 &axis_point_a, float radius_a, const Vec3 &axis_point_b, float radius_b, const Vec3 &normal, Vec3 &point,
+	Vec3 *anchor_a = nullptr, Vec3 *anchor_b = nullptr) {
 	const Vec3 surface_a = axis_point_a + normal * radius_a;
 	const Vec3 surface_b = axis_point_b - normal * radius_b;
 	point = (surface_a + surface_b) * 0.5f;
+	if (anchor_a != nullptr)
+		*anchor_a = surface_a;
+	if (anchor_b != nullptr)
+		*anchor_b = surface_b;
 }
 
 bool ComputeTauCapsuleSphereContactImpl(const TauCapsuleGeometry &capsule, const Vec3 &sphere_center, float sphere_radius, Vec3 &normal,
-	float &penetration, Vec3 &point) {
+	float &penetration, Vec3 &point, Vec3 *anchor_a = nullptr, Vec3 *anchor_b = nullptr) {
 	const float capsule_radius = std::max(0.f, capsule.radius);
 	sphere_radius = std::max(0.f, sphere_radius);
 	const Vec3 capsule_point = ClosestTauPointOnSegment(capsule.a, capsule.b, sphere_center);
@@ -1421,12 +1432,13 @@ bool ComputeTauCapsuleSphereContactImpl(const TauCapsuleGeometry &capsule, const
 
 	normal = distance > k_tau_collision_epsilon ? delta / distance : TauCapsuleFallbackNormal(capsule, sphere_center);
 	penetration = radius_sum - distance;
-	SetTauRoundedContactPoint(capsule_point, capsule_radius, sphere_center, sphere_radius, normal, point);
+	SetTauRoundedContactPoint(capsule_point, capsule_radius, sphere_center, sphere_radius, normal, point, anchor_a, anchor_b);
 	return true;
 }
 
 bool ComputeTauCapsuleCapsuleContactImpl(
-	const TauCapsuleGeometry &a, const TauCapsuleGeometry &b, Vec3 &normal, float &penetration, Vec3 &point) {
+	const TauCapsuleGeometry &a, const TauCapsuleGeometry &b, Vec3 &normal, float &penetration, Vec3 &point, Vec3 *anchor_a = nullptr,
+	Vec3 *anchor_b = nullptr) {
 	Vec3 point_a, point_b;
 	ClosestTauSegmentPoints(a.a, a.b, b.a, b.b, point_a, point_b);
 	const Vec3 delta = point_b - point_a;
@@ -1453,7 +1465,7 @@ bool ComputeTauCapsuleCapsuleContactImpl(
 	}
 
 	penetration = radius_sum - distance;
-	SetTauRoundedContactPoint(point_a, radius_a, point_b, radius_b, normal, point);
+	SetTauRoundedContactPoint(point_a, radius_a, point_b, radius_b, normal, point, anchor_a, anchor_b);
 	return true;
 }
 
@@ -1493,7 +1505,8 @@ void ConsiderTauClosestPair(const Vec3 &capsule_point, const Vec3 &obb_point, fl
 }
 
 bool ComputeTauCapsuleObbContactImpl(
-	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
+	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point, Vec3 *anchor_a = nullptr,
+	Vec3 *anchor_b = nullptr) {
 	const float radius = std::max(0.f, capsule.radius);
 	const Vec3 half = Abs(obb.scl) * 0.5f;
 
@@ -1526,11 +1539,17 @@ bool ComputeTauCapsuleObbContactImpl(
 		normal = GetTauObbAxis(obb, best_axis) * (move_positive ? -1.f : 1.f);
 		penetration = std::max(0.f, best_depth);
 		point = TauObbLocalToWorld(obb, local_point);
+		if (anchor_b != nullptr)
+			*anchor_b = point;
+		if (anchor_a != nullptr)
+			*anchor_a = point + normal * penetration;
 		return true;
 	}
 
 	float best_distance_squared = std::numeric_limits<float>::max();
 	Vec3 capsule_point, obb_point;
+	const Vec3 capsule_center = (capsule.a + capsule.b) * 0.5f;
+	ConsiderTauClosestPair(capsule_center, ClosestTauPointOnObb(obb, capsule_center), best_distance_squared, capsule_point, obb_point);
 	ConsiderTauClosestPair(capsule.a, ClosestTauPointOnObb(obb, capsule.a), best_distance_squared, capsule_point, obb_point);
 	ConsiderTauClosestPair(capsule.b, ClosestTauPointOnObb(obb, capsule.b), best_distance_squared, capsule_point, obb_point);
 
@@ -1555,7 +1574,7 @@ bool ComputeTauCapsuleObbContactImpl(
 		return false;
 	normal = distance > k_tau_collision_epsilon ? (obb_point - capsule_point) / distance : TauCapsuleFallbackNormal(capsule, obb.pos);
 	penetration = radius - distance;
-	SetTauRoundedContactPoint(capsule_point, radius, obb_point, 0.f, normal, point);
+	SetTauRoundedContactPoint(capsule_point, radius, obb_point, 0.f, normal, point, anchor_a, anchor_b);
 	return true;
 }
 
@@ -1665,7 +1684,8 @@ bool ComputeTauObbContactManifold(const OBB &a, const OBB &b, TauContactManifold
 	return true;
 }
 
-bool ComputeTauSphereObbContact(const Vec3 &sphere_center, float sphere_radius, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
+bool ComputeTauSphereObbContact(const Vec3 &sphere_center, float sphere_radius, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point,
+	Vec3 *anchor_a = nullptr, Vec3 *anchor_b = nullptr) {
 	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
 	const Vec3 axes[3] = {GetTauObbAxis(obb, 0), GetTauObbAxis(obb, 1), GetTauObbAxis(obb, 2)};
 	const Vec3 offset = sphere_center - obb.pos;
@@ -1684,6 +1704,10 @@ bool ComputeTauSphereObbContact(const Vec3 &sphere_center, float sphere_radius, 
 		normal = -delta / distance; // sphere toward OBB
 		penetration = sphere_radius - distance;
 		point = closest;
+		if (anchor_a != nullptr)
+			*anchor_a = sphere_center + normal * sphere_radius;
+		if (anchor_b != nullptr)
+			*anchor_b = closest;
 		return true;
 	}
 
@@ -1700,10 +1724,15 @@ bool ComputeTauSphereObbContact(const Vec3 &sphere_center, float sphere_radius, 
 	point = sphere_center + axes[nearest_axis] * (nearest_distance * sign);
 	normal = -axes[nearest_axis] * sign;
 	penetration = sphere_radius + nearest_distance;
+	if (anchor_b != nullptr)
+		*anchor_b = point;
+	if (anchor_a != nullptr)
+		*anchor_a = point + normal * penetration;
 	return true;
 }
 
-bool ComputeTauSphereContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point) {
+bool ComputeTauSphereContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point,
+	Vec3 *anchor_a = nullptr, Vec3 *anchor_b = nullptr) {
 	const Vec3 delta = b.position - a.position;
 	const float distance = Len(delta);
 	const float radius_sum = a.radius + b.radius;
@@ -1713,48 +1742,111 @@ bool ComputeTauSphereContact(const TauWorldShape &a, const TauWorldShape &b, Vec
 	normal = distance > k_tau_collision_epsilon ? delta / distance : Vec3::Up;
 	penetration = radius_sum - distance;
 	point = a.position + normal * a.radius;
+	if (anchor_a != nullptr)
+		*anchor_a = point;
+	if (anchor_b != nullptr)
+		*anchor_b = b.position - normal * b.radius;
 	return true;
 }
 
-bool ComputeTauContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point) {
+bool ComputeTauContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &normal, float &penetration, Vec3 &point,
+	Vec3 *anchor_a = nullptr, Vec3 *anchor_b = nullptr) {
 	if (a.shape->type == CT_Cube && b.shape->type == CT_Cube) {
 		TauContactManifold manifold;
 		if (!ComputeTauObbContactManifold(a.obb, b.obb, manifold))
 			return false;
 		normal = manifold.normal;
 		penetration = manifold.points[0].penetration;
-		point = (TauObbLocalToWorld(a.obb, manifold.points[0].local_point_a) + TauObbLocalToWorld(b.obb, manifold.points[0].local_point_b)) * 0.5f;
+		const Vec3 world_anchor_a = TauObbLocalToWorld(a.obb, manifold.points[0].local_point_a);
+		const Vec3 world_anchor_b = TauObbLocalToWorld(b.obb, manifold.points[0].local_point_b);
+		point = (world_anchor_a + world_anchor_b) * 0.5f;
+		if (anchor_a != nullptr)
+			*anchor_a = world_anchor_a;
+		if (anchor_b != nullptr)
+			*anchor_b = world_anchor_b;
 		return true;
 	}
 	if (a.shape->type == CT_Sphere && b.shape->type == CT_Cube)
-		return ComputeTauSphereObbContact(a.position, a.radius, b.obb, normal, penetration, point);
+		return ComputeTauSphereObbContact(a.position, a.radius, b.obb, normal, penetration, point, anchor_a, anchor_b);
 	if (a.shape->type == CT_Cube && b.shape->type == CT_Sphere) {
-		const bool contact = ComputeTauSphereObbContact(b.position, b.radius, a.obb, normal, penetration, point);
-		if (contact)
+		Vec3 sphere_anchor, obb_anchor;
+		const bool contact = ComputeTauSphereObbContact(b.position, b.radius, a.obb, normal, penetration, point,
+			anchor_b != nullptr ? &sphere_anchor : nullptr, anchor_a != nullptr ? &obb_anchor : nullptr);
+		if (contact) {
 			normal = -normal;
+			if (anchor_a != nullptr)
+				*anchor_a = obb_anchor;
+			if (anchor_b != nullptr)
+				*anchor_b = sphere_anchor;
+		}
 		return contact;
 	}
 	if (a.shape->type == CT_Capsule && b.shape->type == CT_Sphere)
-		return ComputeTauCapsuleSphereContactImpl(a.capsule, b.position, b.radius, normal, penetration, point);
+		return ComputeTauCapsuleSphereContactImpl(a.capsule, b.position, b.radius, normal, penetration, point, anchor_a, anchor_b);
 	if (a.shape->type == CT_Sphere && b.shape->type == CT_Capsule) {
-		const bool contact = ComputeTauCapsuleSphereContactImpl(b.capsule, a.position, a.radius, normal, penetration, point);
-		if (contact)
+		Vec3 capsule_anchor, sphere_anchor;
+		const bool contact = ComputeTauCapsuleSphereContactImpl(b.capsule, a.position, a.radius, normal, penetration, point,
+			anchor_b != nullptr ? &capsule_anchor : nullptr, anchor_a != nullptr ? &sphere_anchor : nullptr);
+		if (contact) {
 			normal = -normal;
+			if (anchor_a != nullptr)
+				*anchor_a = sphere_anchor;
+			if (anchor_b != nullptr)
+				*anchor_b = capsule_anchor;
+		}
 		return contact;
 	}
 	if (a.shape->type == CT_Capsule && b.shape->type == CT_Cube)
-		return ComputeTauCapsuleObbContactImpl(a.capsule, b.obb, normal, penetration, point);
+		return ComputeTauCapsuleObbContactImpl(a.capsule, b.obb, normal, penetration, point, anchor_a, anchor_b);
 	if (a.shape->type == CT_Cube && b.shape->type == CT_Capsule) {
-		const bool contact = ComputeTauCapsuleObbContactImpl(b.capsule, a.obb, normal, penetration, point);
-		if (contact)
+		Vec3 capsule_anchor, obb_anchor;
+		const bool contact = ComputeTauCapsuleObbContactImpl(b.capsule, a.obb, normal, penetration, point,
+			anchor_b != nullptr ? &capsule_anchor : nullptr, anchor_a != nullptr ? &obb_anchor : nullptr);
+		if (contact) {
 			normal = -normal;
+			if (anchor_a != nullptr)
+				*anchor_a = obb_anchor;
+			if (anchor_b != nullptr)
+				*anchor_b = capsule_anchor;
+		}
 		return contact;
 	}
 	if (a.shape->type == CT_Capsule && b.shape->type == CT_Capsule)
-		return ComputeTauCapsuleCapsuleContactImpl(a.capsule, b.capsule, normal, penetration, point);
+		return ComputeTauCapsuleCapsuleContactImpl(a.capsule, b.capsule, normal, penetration, point, anchor_a, anchor_b);
 	if (a.shape->type == CT_Sphere && b.shape->type == CT_Sphere)
-		return ComputeTauSphereContact(a, b, normal, penetration, point);
+		return ComputeTauSphereContact(a, b, normal, penetration, point, anchor_a, anchor_b);
 	return false;
+}
+
+Vec3 TauWorldToBodyLocalAnchor(const TauNode &node, const Vec3 &point) {
+	return Transpose(ToMatrix3(node.orientation)) * (point - node.position);
+}
+
+Vec3 TauBodyLocalAnchorToWorld(const TauNode &node, const Vec3 &point) {
+	return node.position + ToMatrix3(node.orientation) * point;
+}
+
+void ConvertTauObbManifoldToBodyLocal(const TauBodyProxy &body_a, const TauWorldShape &shape_a, const TauBodyProxy &body_b,
+	const TauWorldShape &shape_b, TauContactManifold &manifold) {
+	for (uint8_t point_index = 0; point_index < manifold.point_count; ++point_index) {
+		auto &point = manifold.points[point_index];
+		point.local_point_a = TauWorldToBodyLocalAnchor(*body_a.node, TauObbLocalToWorld(shape_a.obb, point.local_point_a));
+		point.local_point_b = TauWorldToBodyLocalAnchor(*body_b.node, TauObbLocalToWorld(shape_b.obb, point.local_point_b));
+	}
+}
+
+bool ComputeTauPrimitiveContactManifold(const TauBodyProxy &body_a, const TauWorldShape &shape_a, const TauBodyProxy &body_b,
+	const TauWorldShape &shape_b, TauContactManifold &manifold) {
+	Vec3 point, anchor_a, anchor_b;
+	manifold = {};
+	if (!ComputeTauContact(shape_a, shape_b, manifold.normal, manifold.points[0].penetration, point, &anchor_a, &anchor_b))
+		return false;
+	manifold.feature.type = TauContactFeatureType::Primitive;
+	manifold.points[0].local_point_a = TauWorldToBodyLocalAnchor(*body_a.node, anchor_a);
+	manifold.points[0].local_point_b = TauWorldToBodyLocalAnchor(*body_b.node, anchor_b);
+	manifold.points[0].feature_id = uint32_t(shape_a.shape->type) | (uint32_t(shape_b.shape->type) << 8);
+	manifold.point_count = 1;
+	return true;
 }
 
 float GetTauInverseMass(const TauNode &node) {
@@ -1803,13 +1895,13 @@ float ComputeTauConstraintMass(const TauContactConstraint &contact, const Vec3 &
 Vec3 GetTauConstraintAnchorA(const TauContactConstraint &contact) {
 	if (!contact.persistent || contact.shape_a >= contact.node_a->shapes.size())
 		return contact.point;
-	return TauObbLocalToWorld(BuildTauWorldOBB(*contact.node_a, contact.node_a->shapes[contact.shape_a]), contact.local_point_a);
+	return TauBodyLocalAnchorToWorld(*contact.node_a, contact.local_point_a);
 }
 
 Vec3 GetTauConstraintAnchorB(const TauContactConstraint &contact) {
 	if (!contact.persistent || contact.shape_b >= contact.node_b->shapes.size())
 		return contact.point;
-	return TauObbLocalToWorld(BuildTauWorldOBB(*contact.node_b, contact.node_b->shapes[contact.shape_b]), contact.local_point_b);
+	return TauBodyLocalAnchorToWorld(*contact.node_b, contact.local_point_b);
 }
 
 void RefreshTauConstraintPoint(TauContactConstraint &contact) {
@@ -2568,34 +2660,12 @@ size_t UpdateTauManifoldCache(
 	}
 
 	diagnostics.warm_start_misses += manifold.point_count;
-	if (manifolds.size() < k_tau_max_manifolds) {
-		manifolds.push_back(manifold);
-		const size_t new_index = manifolds.size() - 1;
-		lookup.emplace(GetTauManifoldCacheHash(manifold), new_index);
-		return new_index;
-	}
-
-	// Do not invalidate a constraint already emitted during this step. Replace only an inactive oldest entry.
-	size_t oldest_index = std::numeric_limits<size_t>::max();
-	uint32_t oldest_step = std::numeric_limits<uint32_t>::max();
-	for (size_t i = 0; i < manifolds.size(); ++i) {
-		if (manifolds[i].last_seen_step != manifold.last_seen_step && manifolds[i].last_seen_step < oldest_step) {
-			oldest_step = manifolds[i].last_seen_step;
-			oldest_index = i;
-		}
-	}
-	if (oldest_index != std::numeric_limits<size_t>::max()) {
-		const auto oldest_lookup = FindTauManifoldLookupIndex(lookup, manifolds, oldest_index);
-		if (oldest_lookup != lookup.end())
-			lookup.erase(oldest_lookup);
-		manifolds[oldest_index] = manifold;
-		lookup.emplace(GetTauManifoldCacheHash(manifold), oldest_index);
-		++diagnostics.stale_discards;
-		++diagnostics.manifold_cache_evictions;
-		return oldest_index;
-	}
-	++diagnostics.manifold_cache_overflows;
-	return std::numeric_limits<size_t>::max();
+	// The number of live contacts is scene-dependent. A hard cache ceiling would
+	// silently drop persistence precisely in dense scenes where it matters most.
+	manifolds.push_back(manifold);
+	const size_t new_index = manifolds.size() - 1;
+	lookup.emplace(GetTauManifoldCacheHash(manifold), new_index);
+	return new_index;
 }
 
 bool IsTauUnchangedContactEndpoint(const TauNode &node) {
@@ -2615,8 +2685,10 @@ void AppendTauPersistentManifoldContacts(const TauBodyProxy &body_a, const TauWo
 		++diagnostics.face_a_manifolds;
 	else if (manifold.feature.type == TauContactFeatureType::FaceB)
 		++diagnostics.face_b_manifolds;
-	else
+	else if (manifold.feature.type == TauContactFeatureType::EdgeEdge)
 		++diagnostics.edge_edge_manifolds;
+	else
+		++diagnostics.primitive_manifolds;
 	for (uint8_t point_index = 0; point_index < manifold.point_count; ++point_index)
 		diagnostics.max_penetration = std::max(diagnostics.max_penetration, manifold.points[point_index].penetration);
 	if (sleeping_reuse) {
@@ -2636,8 +2708,9 @@ void AppendTauPersistentManifoldContacts(const TauBodyProxy &body_a, const TauWo
 		contact.shape_b = shape_b.shape_index;
 		contact.local_point_a = manifold_point.local_point_a;
 		contact.local_point_b = manifold_point.local_point_b;
-		contact.point =
-			(TauObbLocalToWorld(shape_a.obb, manifold_point.local_point_a) + TauObbLocalToWorld(shape_b.obb, manifold_point.local_point_b)) * 0.5f;
+		contact.point = (TauBodyLocalAnchorToWorld(*body_a.node, manifold_point.local_point_a) +
+						 TauBodyLocalAnchorToWorld(*body_b.node, manifold_point.local_point_b)) *
+			0.5f;
 		contact.normal = manifold.normal;
 		contact.penetration = manifold_point.penetration;
 		contact.friction = friction;
@@ -2659,8 +2732,8 @@ void BuildTauContacts(
 	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, TauContactDiagnostics &diagnostics,
 	TauStepScratch &scratch) {
 	TauProfileSection build_contacts_profile("Tau.BuildContacts");
-	if (manifold_lookup.bucket_count() < k_tau_max_manifolds)
-		manifold_lookup.reserve(k_tau_max_manifolds);
+	if (manifold_lookup.bucket_count() < k_tau_initial_manifold_capacity)
+		manifold_lookup.reserve(k_tau_initial_manifold_capacity);
 	PruneTauManifoldCache(manifolds, manifold_lookup, step, diagnostics);
 	auto &bodies = scratch.bodies;
 	auto &body_bounds = scratch.body_bounds;
@@ -2845,54 +2918,37 @@ void BuildTauContacts(
 					}
 					const float friction = CombineTauFriction(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
 					const float restitution = CombineTauRestitution(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
-					if (shape_a.shape->type == CT_Cube && shape_b.shape->type == CT_Cube) {
-						if (CanReuseTauSleepingContact(*body_a.node, *body_b.node)) {
-							const size_t cached_index = FindTauReusableSleepingManifold(manifold_lookup, manifolds, body_a.ref,
-								shape_a.shape_index, body_b.ref, shape_b.shape_index, step - 1, diagnostics);
-							if (cached_index != std::numeric_limits<size_t>::max()) {
-								auto &cached_manifold = manifolds[cached_index];
-								cached_manifold.last_seen_step = step;
-								AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, cached_manifold, cached_index,
-									friction, restitution, contacts, diagnostics, true);
-								continue;
-							}
-							++diagnostics.sleeping_manifold_reuse_misses;
+					if (CanReuseTauSleepingContact(*body_a.node, *body_b.node)) {
+						const size_t cached_index = FindTauReusableSleepingManifold(manifold_lookup, manifolds, body_a.ref,
+							shape_a.shape_index, body_b.ref, shape_b.shape_index, step - 1, diagnostics);
+						if (cached_index != std::numeric_limits<size_t>::max()) {
+							auto &cached_manifold = manifolds[cached_index];
+							cached_manifold.last_seen_step = step;
+							AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, cached_manifold, cached_index,
+								friction, restitution, contacts, diagnostics, true);
+							continue;
 						}
-						++diagnostics.narrowphase_calls;
-						TauContactManifold manifold;
+						++diagnostics.sleeping_manifold_reuse_misses;
+					}
+
+					++diagnostics.narrowphase_calls;
+					TauContactManifold manifold;
+					if (shape_a.shape->type == CT_Cube && shape_b.shape->type == CT_Cube) {
 						if (!ComputeTauObbContactManifold(shape_a.obb, shape_b.obb, manifold))
 							continue;
-
-						manifold.ref_a = body_a.ref;
-						manifold.ref_b = body_b.ref;
-						manifold.shape_a = shape_a.shape_index;
-						manifold.shape_b = shape_b.shape_index;
-						manifold.last_seen_step = step;
-						const size_t manifold_index = UpdateTauManifoldCache(manifolds, manifold_lookup, manifold, diagnostics);
-						const TauContactManifold &active_manifold =
-							manifold_index != std::numeric_limits<size_t>::max() ? manifolds[manifold_index] : manifold;
-						AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, active_manifold, manifold_index,
-							friction, restitution, contacts, diagnostics, false);
-					} else {
-						++diagnostics.narrowphase_calls;
-						TauContactConstraint contact;
-						contact.ref_a = body_a.ref;
-						contact.ref_b = body_b.ref;
-						contact.node_a = body_a.node;
-						contact.node_b = body_b.node;
-						contact.shape_a = shape_a.shape_index;
-						contact.shape_b = shape_b.shape_index;
-						contact.friction = friction;
-						contact.restitution = restitution;
-						if (ComputeTauContact(shape_a, shape_b, contact.normal, contact.penetration, contact.point)) {
-							++diagnostics.shape_pairs;
-							++diagnostics.manifold_points;
-							diagnostics.max_penetration = std::max(diagnostics.max_penetration, contact.penetration);
-							if (diagnostics.enabled && contacts.size() == contacts.capacity())
-								++diagnostics.contact_reallocations;
-							contacts.push_back(contact);
-						}
+						ConvertTauObbManifoldToBodyLocal(body_a, shape_a, body_b, shape_b, manifold);
+					} else if (!ComputeTauPrimitiveContactManifold(body_a, shape_a, body_b, shape_b, manifold)) {
+						continue;
 					}
+
+					manifold.ref_a = body_a.ref;
+					manifold.ref_b = body_b.ref;
+					manifold.shape_a = shape_a.shape_index;
+					manifold.shape_b = shape_b.shape_index;
+					manifold.last_seen_step = step;
+					const size_t manifold_index = UpdateTauManifoldCache(manifolds, manifold_lookup, manifold, diagnostics);
+					AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, manifolds[manifold_index], manifold_index,
+						friction, restitution, contacts, diagnostics, false);
 				}
 			}
 		}
@@ -2996,18 +3052,21 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.narrowphase_calls)
 			 .arg(diagnostics.shape_pairs)
 			 .str();
-	message += format("manifolds(faceA=%1 faceB=%2 edge=%3 points=%4 cache=%5 scan=%6 warm=%7/%8 evict=%9")
+	message += format("manifolds(faceA=%1 faceB=%2 edge=%3 primitive=%4 points=%5 cache=%6 scan=%7 warm=%8/%9 ")
 			 .arg(diagnostics.face_a_manifolds)
 			 .arg(diagnostics.face_b_manifolds)
 			 .arg(diagnostics.edge_edge_manifolds)
+			 .arg(diagnostics.primitive_manifolds)
 			 .arg(diagnostics.manifold_points)
 			 .arg(cache_size)
 			 .arg(diagnostics.manifold_cache_comparisons)
 			 .arg(diagnostics.warm_start_hits)
 			 .arg(diagnostics.warm_start_misses)
-			 .arg(diagnostics.manifold_cache_evictions)
 			 .str();
-	message += format(" overflow=%1) ").arg(diagnostics.manifold_cache_overflows).str();
+	message += format("evict=%1 overflow=%2) ")
+			 .arg(diagnostics.manifold_cache_evictions)
+			 .arg(diagnostics.manifold_cache_overflows)
+			 .str();
 	message += format("sleep_reuse(manifolds=%1 points=%2 misses=%3) ")
 			 .arg(diagnostics.sleeping_manifold_reuses)
 			 .arg(diagnostics.sleeping_manifold_points_reused)
@@ -3150,6 +3209,9 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	reuse_stats.manifold_reuses = diagnostics.sleeping_manifold_reuses;
 	reuse_stats.manifold_points_reused = diagnostics.sleeping_manifold_points_reused;
 	reuse_stats.manifold_reuse_misses = diagnostics.sleeping_manifold_reuse_misses;
+	reuse_stats.primitive_manifolds = diagnostics.primitive_manifolds;
+	reuse_stats.warm_start_hits = diagnostics.warm_start_hits;
+	reuse_stats.warm_start_misses = diagnostics.warm_start_misses;
 	const auto final_scratch_capacity = scratch.GetCapacitySnapshot();
 	reuse_stats.scratch_growths = 0;
 	for (size_t i = 0; i < initial_scratch_capacity.size(); ++i)

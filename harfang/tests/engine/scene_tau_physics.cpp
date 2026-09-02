@@ -463,14 +463,14 @@ void TestRaycastVariousCollisionShapes() {
 void TestCapsuleCollisionPairs() {
 	Scene scene;
 	const Node capsule_sphere = CreateTauContactPrimitive(scene, CT_Capsule, Vec3::Zero, RBT_Dynamic, 1.f);
-	const Node sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(0.8f, 0.f, 0.f), RBT_Static, 0.f);
+	const Node sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(0.99f, 0.f, 0.f), RBT_Static, 0.f);
 
 	// Create the cube first to exercise the reversed cube/capsule dispatch order.
-	const Node cube = CreateTauContactPrimitive(scene, CT_Cube, Vec3(10.8f, 0.f, 0.f), RBT_Static, 0.f);
+	const Node cube = CreateTauContactPrimitive(scene, CT_Cube, Vec3(10.99f, 0.f, 0.f), RBT_Static, 0.f);
 	const Node capsule_cube = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(10.f, 0.f, 0.f), RBT_Dynamic, 1.f);
 
 	const Node capsule_a = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(20.f, 0.f, 0.f), RBT_Dynamic, 1.f);
-	const Node capsule_b = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(20.8f, 0.f, 0.f), RBT_Static, 0.f);
+	const Node capsule_b = CreateTauContactPrimitive(scene, CT_Capsule, Vec3(20.99f, 0.f, 0.f), RBT_Static, 0.f);
 
 	SceneTauPhysics physics;
 	physics.SceneCreatePhysicsFromAssets(scene);
@@ -484,6 +484,8 @@ void TestCapsuleCollisionPairs() {
 	}
 
 	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	const tau_internal::TauStepReuseStats first_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(first_stats.primitive_manifolds == 3);
 	NodePairContacts contacts;
 	physics.CollectCollisionEvents(scene, contacts);
 
@@ -500,6 +502,90 @@ void TestCapsuleCollisionPairs() {
 			TEST_CHECK(pair_contacts[0].d <= 0.f);
 		}
 	}
+
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	const tau_internal::TauStepReuseStats second_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(second_stats.primitive_manifolds == 3);
+	TEST_CHECK(second_stats.warm_start_hits >= 1);
+}
+
+void TestCapsulePrimitiveManifoldPersistence() {
+	struct PairConfiguration {
+		CollisionType type_a;
+		RigidBodyType body_a;
+		CollisionType type_b;
+		RigidBodyType body_b;
+	};
+	const PairConfiguration pairs[] = {
+		{CT_Capsule, RBT_Dynamic, CT_Sphere, RBT_Static},
+		{CT_Cube, RBT_Static, CT_Capsule, RBT_Dynamic},
+		{CT_Capsule, RBT_Dynamic, CT_Capsule, RBT_Static},
+	};
+
+	for (const auto &pair : pairs) {
+		Scene scene;
+		const Node node_a = CreateTauContactPrimitive(scene, pair.type_a, Vec3::Zero, pair.body_a, pair.body_a == RBT_Dynamic ? 1.f : 0.f);
+		const Node node_b =
+			CreateTauContactPrimitive(scene, pair.type_b, Vec3(0.99f, 0.f, 0.f), pair.body_b, pair.body_b == RBT_Dynamic ? 1.f : 0.f);
+		const Node dynamic = pair.body_a == RBT_Dynamic ? node_a : node_b;
+
+		SceneTauPhysics physics;
+		physics.SceneCreatePhysicsFromAssets(scene);
+		physics.NodeSetDeactivation(dynamic, false);
+		physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+		TEST_CHECK(tau_internal::GetLastStepReuseStats(physics).primitive_manifolds == 1);
+		physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+		const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+		TEST_CHECK(stats.primitive_manifolds == 1);
+		TEST_CHECK_(stats.warm_start_hits >= 1, "capsule pair %d/%d did not retain its contact anchor", int(pair.type_a), int(pair.type_b));
+	}
+}
+
+void TestSpherePrimitiveManifoldPersistence() {
+	Scene scene;
+	const Node sphere_cube = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(0.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+	CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, -0.5f, 0.f), RBT_Static, 0.f);
+
+	// Reverse creation order to cover the cube/sphere dispatch path as well.
+	CreateTauContactPrimitive(scene, CT_Cube, Vec3(10.f, -0.5f, 0.f), RBT_Static, 0.f);
+	const Node cube_sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(10.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+
+	CreateTauContactPrimitive(scene, CT_Sphere, Vec3(20.f, 0.f, 0.f), RBT_Static, 0.f);
+	const Node sphere_sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(20.f, 0.99f, 0.f), RBT_Dynamic, 1.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(sphere_cube, false);
+	physics.NodeSetDeactivation(cube_sphere, false);
+	physics.NodeSetDeactivation(sphere_sphere, false);
+
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	const tau_internal::TauStepReuseStats first_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(first_stats.primitive_manifolds == 3);
+	TEST_CHECK(first_stats.warm_start_misses >= 3);
+
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	const tau_internal::TauStepReuseStats second_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(second_stats.primitive_manifolds == 3);
+	TEST_CHECK_(second_stats.warm_start_hits >= 3, "expected three persistent sphere contacts, got %zu", second_stats.warm_start_hits);
+}
+
+void TestSleepingSphereManifoldReuse() {
+	Scene scene;
+	const Node sphere = CreateTauContactPrimitive(scene, CT_Sphere, Vec3(0.f, 2.f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	StepTauWorld(physics, 360);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, sphere.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.primitive_manifolds >= 1);
+	TEST_CHECK(stats.manifold_reuses >= 1);
+	TEST_CHECK(stats.manifold_points_reused >= 1);
+	TEST_CHECK(stats.manifold_reuse_misses == 0);
 }
 
 void TestCapsuleSettlesOnCuboid() {
@@ -525,6 +611,13 @@ void TestCapsuleSettlesOnCuboid() {
 	TEST_CHECK_(settled_y > 0.9f && settled_y < 1.1f, "expected capsule center near y=1, got %.6f", settled_y);
 	TEST_CHECK(Abs(physics.NodeGetLinearVelocity(capsule).y) < 0.1f);
 	TEST_CHECK(contact_steps > 100);
+	TEST_CHECK(tau_internal::IsNodeSleeping(physics, capsule.ref));
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	const tau_internal::TauStepReuseStats sleeping_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(sleeping_stats.primitive_manifolds >= 1);
+	TEST_CHECK(sleeping_stats.manifold_reuses >= 1);
+	TEST_CHECK(sleeping_stats.manifold_points_reused >= 1);
+	TEST_CHECK(sleeping_stats.manifold_reuse_misses == 0);
 }
 
 void TestCuboidManifoldCacheLifecycle() {
@@ -687,7 +780,10 @@ void test_scene_tau_physics() {
 	TestSleepingBodyWakesWithDynamicSupportCohort();
 	TestDeactivationAndMovingSupportWake();
 	TestRaycastVariousCollisionShapes();
+	TestSpherePrimitiveManifoldPersistence();
+	TestSleepingSphereManifoldReuse();
 	TestCapsuleCollisionPairs();
+	TestCapsulePrimitiveManifoldPersistence();
 	TestCapsuleSettlesOnCuboid();
 	TestCuboidManifoldCacheLifecycle();
 	TestRaycastAllHitsAreStableAndBounded();
