@@ -47,6 +47,8 @@ struct TauStepReuseStats {
 	size_t nonzero_friction_constraints{0};
 	size_t rolling_friction_pass_skips{0};
 	size_t rolling_friction_contact_evaluations{0};
+	size_t all_sleeping_substeps_skipped{0};
+	size_t all_sleeping_body_checks{0};
 	size_t scratch_growths{0};
 	size_t body_proxy_capacity{0};
 	size_t candidate_capacity{0};
@@ -274,6 +276,7 @@ private:
 	uint32_t contact_step{0};
 	uint32_t next_sleep_island_id{1};
 	time_ns fixed_step_accumulator{0};
+	bool requires_full_substep{false};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
 	std::unique_ptr<TauStepScratch> step_scratch;

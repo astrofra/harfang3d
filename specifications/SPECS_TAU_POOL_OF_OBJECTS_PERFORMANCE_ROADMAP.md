@@ -10,10 +10,11 @@ pose/inertia/cuboid-axis caches, and prepared active velocity constraints are
 implemented and measured. Active face-feature cuboid manifold coherence is
 also implemented with conservative validation and periodic full refresh.
 Zero-restitution, non-positive-friction, and world-wide zero-rolling-friction
-solver fast paths are implemented and measured. The complete physics-only body-count/shape matrix
+solver fast paths are implemented and measured. A guarded all-sleeping fast
+path for worlds of at most 512 bodies is also implemented and measured. The complete physics-only body-count/shape matrix
 and controlled scene/render passes are also complete. Tau meets the
-representative active, settled, and end-to-end parity gates; the guarded
-all-sleeping small-world shortcut is the next measured target.
+representative active, settled, and end-to-end parity gates; rerunning that
+complete matrix against the accumulated optimizations is the next acceptance step.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -775,9 +776,65 @@ byte-identical and preserve the established 4.64718 m vertical envelope,
 16.4712 m/s maximum speed, and zero static-ring drift. The callback amplitude
 delta remains -0.00141478 m.
 
-The next implementation target is the guarded all-sleeping small-world
+The next implementation target at that milestone was the guarded all-sleeping small-world
 shortcut. A complete matrix rerun remains required after that stage; solver
 iteration tuning stays deferred.
+
+### Thirteenth optimization result: all-sleeping small worlds
+
+Tau now bypasses the complete substep for worlds of at most 512 physics bodies
+when at least one dynamic body exists and every dynamic body is sleeping. The
+guard also requires every body proxy to be valid, the dynamic tree to have no
+moved proxy, no static/kinematic endpoint to be marked as externally moved,
+no accumulated force or torque, no pending support-loss grace step, no
+structural mutation awaiting a full substep, and no collision-event tracking.
+The limit includes static and kinematic bodies, so the 250- and 500-object pool
+cells contain 255 and 505 Tau bodies and both qualify.
+
+The pre-tick callback still runs before the guard. Any callback or public API
+mutation that wakes a body therefore rejects the shortcut in the same
+substep. Full processing is also forced after body creation, destruction,
+garbage collection, reset, teleport, or synchronized support motion. Removing,
+replacing, resetting, or teleporting a static/kinematic support now explicitly
+wakes its dependent sleeping bodies, closing an older API-side support-removal
+gap exposed while testing this guard.
+
+Skipped time does not advance the contact-cache epoch. Persistent manifolds
+therefore remain the immediately previous generation when a later callback,
+impulse, support change, or new body wakes the world, preserving warm-start
+feature compatibility. With no event tracking and forces already verified as
+zero, the skipped call only performs the bounded eligibility scan; it also
+avoids the final force-clear traversal.
+
+A temporary same-binary switch, removed after measurement, alternated the
+legacy and fast paths across five seeds and 120-sample settled windows:
+
+| Cube-only settled workload | Legacy median / p95 | Fast median / p95 | Improvement |
+|---|---:|---:|---:|
+| 250 dynamic + 5 static bodies | 262.7 / 270.5 us | 3.0 / 3.1 us | 98.9% / 98.9% |
+| 500 dynamic + 5 static bodies | 794.6 / 814.7 us | 7.6 / 7.8 us | 99.0% / 99.0% |
+
+One 250-body seed completed its sleep transition during the measured window,
+so that run contains both full and skipped samples; the table reports the
+cross-seed median. On a fully sleeping same-seed comparison Tau measured
+2.8 us against Bullet's 72.2 us. A fresh active-window A/B found no consistent
+directional regression: mean pairwise changes average +0.1% at 250 bodies and
++0.5% at 500 bodies, within the run-to-run noise of those rapidly changing
+active windows. Worlds above 512 bodies reject the guard before scanning nodes.
+
+Focused tests cover the accepted path, callback execution and wake, retained
+warm-start features, tracked-contact rejection, support removal, moving
+supports, and the 512-body boundary. All 54 C++ test groups pass. Legacy/fast
+chain and callback captures are byte-identical. Final repeated chain captures
+remain byte-identical at 4.64718 m maximum vertical error, 16.4712 m/s maximum
+Tau speed, and zero static-ring drift; the callback amplitude delta remains
+-0.00141478 m, and all three capsule pair checks pass. Solver iteration counts
+remain three and eight.
+
+The next step is to rerun the complete body-count, shape, active, settled,
+scene, and rendered matrix. Its updated active-cube attribution should then
+choose between dense body storage and independent-island parallelism; iteration
+tuning remains deferred.
 
 ## Workload Characterization
 
@@ -1235,8 +1292,9 @@ physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
 normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
 effective mass inside velocity iterations. Conservative coherent FaceA/FaceB
 manifold refresh is also implemented and periodically revalidated by the full
-generator. Coefficient fast paths and dense scene-sync lists remain open;
-solver iteration counts remain unchanged.
+generator. Coefficient fast paths and the guarded all-sleeping small-world
+shortcut are also implemented. Dense scene-sync lists and parallel independent
+islands remain open; solver iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1408,7 +1466,9 @@ outperforms Bullet strongly once the pool settles. Prepared active constraints
 reduce the cube velocity solve by about 23%, while coherent cuboid refresh cuts
 the focused active-cube p95 by another 5.5%. Coefficient fast paths then reduce
 the focused active-cube median and p95 by another 1.2% without changing any
-measured QA trajectory. The remaining path to a suite-wide win is narrower and
-measured: a small-world all-sleeping shortcut, followed by parallel independent islands.
+measured QA trajectory. Fully sleeping small worlds now fall to 3.0 us at 250
+dynamic bodies and 7.6 us at 500, eliminating the previous fixed Tau floor.
+The remaining path to a suite-wide win is an updated complete-matrix decision
+between dense storage and parallel independent islands.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.

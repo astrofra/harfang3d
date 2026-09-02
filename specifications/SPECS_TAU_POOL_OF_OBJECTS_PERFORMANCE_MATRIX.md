@@ -193,10 +193,10 @@ counts unchanged:
 2. **Completed:** add measured coefficient fast paths for zero restitution,
    non-positive friction, and world-wide zero rolling friction, without
    changing the general nonzero material paths.
-3. **Next:** add an all-sleeping fast path for small worlds when no proxy moved, no wake
+3. **Completed:** add an all-sleeping fast path for small worlds when no proxy moved, no wake
    request is pending, and no tracked-contact publication requires traversal.
    This targets the 0.287 ms fixed floor revealed by the 250-cube cell.
-4. Re-run the complete matrix and the existing physics QA after every stage.
+4. **Next:** re-run the complete matrix and the existing physics QA after every stage.
    Accept no active cube regression and no contact, wake, callback, chain, or
    raycast regression.
 5. Only after the single-threaded cube path is competitive, evaluate dense
@@ -292,5 +292,42 @@ rolling friction, and the impulse callback are byte-identical. The complete
 C++ suite, capsule pairs, deterministic chain envelope, and callback amplitude
 gate pass with no solver iteration change.
 
-The next matrix candidate is the guarded small-world all-sleeping shortcut.
+The next matrix candidate at that milestone was the guarded small-world all-sleeping shortcut.
 Iteration tuning remains deferred.
+
+## Post-Matrix Follow-Up: All-Sleeping Small Worlds
+
+Worlds containing at most 512 physics bodies now skip a complete Tau substep
+when they contain at least one dynamic body, all dynamics are sleeping, every
+proxy is valid and unmoved, no structural or support change requires service,
+all force/torque accumulators are zero, and collision-event tracking is empty.
+The pre-tick callback still executes before the decision, so callback-driven
+wakes are processed immediately. The contact epoch is frozen while skipping,
+keeping the last persistent manifolds eligible for warm start after wake.
+
+Creation, destruction, garbage collection, reset, teleport, and synchronized
+support motion force a full substep. Static and kinematic support removal or
+replacement also explicitly wakes dependent sleeping bodies. Tracking keeps
+the existing contact-publication path, and worlds above the 512-body limit
+reject before scanning their nodes.
+
+A five-seed, same-binary interleaved A/B with 120-sample settled windows
+produced:
+
+| Cube-only settled workload | Legacy median / p95 | Fast median / p95 | Improvement |
+|---|---:|---:|---:|
+| 250 dynamic + 5 static bodies | 262.7 / 270.5 us | 3.0 / 3.1 us | 98.9% / 98.9% |
+| 500 dynamic + 5 static bodies | 794.6 / 814.7 us | 7.6 / 7.8 us | 99.0% / 99.0% |
+
+One 250-body seed transitioned to the accepted state during measurement; the
+table reports cross-seed medians. A fully sleeping same-seed run measured Tau
+at 2.8 us and Bullet at 72.2 us. Active-window pairwise mean changes average
++0.1% at 250 bodies and +0.5% at 500 bodies, with mixed signs and no consistent
+regression. Focused callback, warm-start, tracking, support-removal, support-
+motion, and body-limit tests pass. The full C++ suite, byte-identical chain and
+callback captures, chain envelope, callback amplitude, and capsule checks also
+pass without an iteration change.
+
+The next action is a fresh complete acceptance matrix. Updated active-cube
+attribution will select dense body storage or independent-island parallelism;
+iteration tuning remains deferred.
