@@ -5,9 +5,10 @@ Date: 2026-09-02
 Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
 contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
-per-world step scratch are implemented and measured. The rendered end-to-end
-pass and the complete body-count matrix remain to close Phase 0. Shape-specific
-and spread-layout spot checks are recorded below.
+per-world step scratch, shape-neutral contact persistence, and solver
+pose/inertia/cuboid-axis caches are implemented and measured. The rendered
+end-to-end pass and the complete body-count matrix remain to close Phase 0.
+Shape-specific and spread-layout spot checks are recorded below.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -507,12 +508,78 @@ friction, restitution, and rolling-friction captures each complete all 600
 samples; the collision-event check retains four published contact points after
 landing. The solver remains at three position and eight velocity iterations.
 
-The next implementation order is now:
+The implementation order after this milestone was:
 
 1. cache solver world transforms, inverse inertia, and normalized cuboid axes;
 2. complete the rendered and body-count acceptance matrix;
 3. optimize hot contact/island data layout before considering any solver
    iteration change.
+
+### Eighth optimization result: solver pose, inertia, and cuboid-axis caches
+
+Each Tau body now retains its quaternion-derived world rotation and its world
+inverse-inertia tensor. Both are refreshed at the complete set of orientation
+mutation points: world reset/teleport/scene synchronization, free integration,
+position-correction rotation, and the focused support-transform test hook. A
+mass-property refresh also rebuilds the world tensor after changing the body
+tensor. World composition, shape proxy construction, body-local persistent
+anchors, constraint effective mass, impulse application, rolling friction,
+and torque integration now consume these cached values instead of repeatedly
+converting the same quaternion and evaluating `R * I^-1 * transpose(R)`.
+
+Updated cuboid proxies normalize their three world axes once. SAT, clipping,
+support-edge construction, local-anchor conversion, sphere/cuboid, and
+capsule/cuboid queries then read those unit columns directly. The focused
+internal OBB helper boundary still normalizes caller-provided OBB rotations,
+so this runtime contract does not make tests or future non-Tau callers depend
+on already-clean input.
+
+The same three-seed Release benchmark used by the preceding milestone reports:
+
+| Workload | Shape-neutral median / p95 | Pose/inertia/axis cache median / p95 | Median change |
+|---|---:|---:|---:|
+| mixed 1,500 active | 17.116 / 22.674 ms | 12.018 / 15.302 ms | 29.8% faster |
+| mixed 1,500 settled | 3.497 / 3.631 ms | 3.175 / 3.547 ms | 9.2% faster |
+| mixed 2,000 spread settled | 1.549 / 1.661 ms | 1.383 / 1.495 ms | 10.7% faster |
+| cube-only 1,500 active | 26.888 / 35.307 ms | 18.860 / 23.840 ms | 29.9% faster |
+| cube-only 1,500 settled | 4.340 / 4.652 ms | 4.026 / 4.533 ms | 7.2% faster |
+| sphere-only 1,500 active | 10.203 / 13.517 ms | 7.109 / 8.842 ms | 30.3% faster |
+| sphere-only 1,500 settled | 2.439 / 2.660 ms | 2.378 / 2.643 ms | 2.5% faster |
+
+The mixed active attribution run averages 12.1 ms in
+`Tau.StepSimulation`, down from 26.3 ms in the preceding capture.
+`Tau.VelocitySolve` falls from 14.3 to 5.37 ms, `Tau.BuildContacts` from
+7.50 to 4.23 ms, `Tau.NarrowPhase` from 3.88 to 1.98 ms, and
+`Tau.PositionSolve` from 3.15 to 1.77 ms. The settled attribution run averages
+3.33 ms, with 1.95 ms in contact building, 1.20 ms in narrow phase, 0.222 ms
+in position solving, and 0.267 ms in velocity solving. This confirms that the
+active gain is not a sleeping shortcut and that cached tensor construction was
+a first-order solver cost.
+
+A focused asymmetric-cuboid regression verifies the analytic world angular
+response before and after a 90-degree API reset and after a 90-degree
+integration-only rotation. Another regression feeds residual scale through the
+internal OBB helper boundary and verifies a manifold identical to normalized
+input. All 54 C++ test groups pass. The 600-sample rings-chain validator stays
+inside its bounded envelope: 4.56054 m maximum vertical error, 16.5758 m/s
+maximum finite Tau speed, and zero static-ring drift. The impulse-callback
+capture remains exactly at 0.03582168 m maximum position error and
+-0.00141478 m peak-to-peak amplitude delta. Capsule-pair, primitive raycast,
+and rotated 651k-triangle terrain raycast checks pass; the latter retains the
+expected 403 hits and 3,348 misses. Position and velocity solver iterations
+remain unchanged at three and eight.
+
+The next implementation order is now:
+
+1. complete the rendered end-to-end and 250/500/1,000/1,500/2,000 body-count
+   acceptance matrix against freshly packaged Bullet and Tau builds;
+2. use that matrix and fresh profiles to choose between compact hot constraint
+   storage/precomputed effective masses and dense body-type/dirty scene-sync
+   lists;
+3. add zero-coefficient solver fast paths where the workload data justifies
+   them;
+4. consider iteration tuning only after those behavior-preserving changes and
+   only behind the existing QA gates.
 
 ## Workload Characterization
 
@@ -607,9 +674,9 @@ There is currently no active-body filtering anywhere in this sequence.
 
 ## Baseline Source-Audit Findings
 
-The fixed-step, broad-phase, and manifold-cache rows below describe the code at
-the start of this work. Their implemented corrections and measurements are
-recorded in the Phase 0 section above; the remaining rows are still current.
+The rows below describe the code at the start of this work. Implemented
+corrections and their measurements are recorded in the milestone results and
+phase status notes; this table is retained as the source-audit baseline.
 
 | Priority | Finding | Evidence in the current implementation | Likely effect |
 |---|---|---|---|
@@ -912,8 +979,9 @@ bounded-cohort boundary without waking unrelated lateral contacts. Bounded
 activation cohorts prevent local impacts from waking the complete dense pile.
 The full interactive rendered-tutorial gate remains part of Phase 0, and
 unchanged sleeping cuboid contacts now reuse their cached manifolds while
-preserving the contact graph and event path. Shape-neutral persistence and
-scratch retention remain follow-up work.
+preserving the contact graph and event path. Shape-neutral persistence,
+scratch retention, and pose/inertia/axis caching are recorded in the sixth,
+seventh, and eighth optimization results above.
 
 ## Phase 5: Optimize The Solver And Scene Synchronization
 
@@ -953,6 +1021,13 @@ weakening Tau physics.
   matrix construction inside the velocity iteration loop.
 - The number of scene transform writes tracks awake/changed bodies in the
   settled benchmark.
+
+Implementation status (2026-09-02): the body-local persistent anchors and
+world rotation/inverse-inertia/cuboid-axis caches are implemented and satisfy
+their focused tests and physics QA envelopes. The profiler no longer rebuilds
+inverse-inertia matrices or normalizes cuboid axes inside velocity iterations.
+Compact hot constraint storage, coefficient fast paths, and dense scene-sync
+lists remain open; solver iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 

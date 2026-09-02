@@ -98,6 +98,8 @@ struct TauNode {
 	Vec3 previous_position{Vec3::Zero};
 	Quaternion orientation{Quaternion::Identity};
 	Quaternion previous_orientation{Quaternion::Identity};
+	Mat3 world_rotation{Mat3::Identity};
+	Mat3 inverse_inertia_world{Mat3::Zero};
 	Vec3 scale{Vec3::One};
 	float linear_damping{0.f};
 	float angular_damping{0.f};

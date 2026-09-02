@@ -328,8 +328,13 @@ Mat3 ParallelAxisTensor(float mass, const Vec3 &offset) {
 	return (Mat3::Identity * rr - OuterProductMat3(offset, offset)) * mass;
 }
 
+void RefreshTauWorldPoseCache(TauNode &node) {
+	node.world_rotation = ToMatrix3(node.orientation);
+	node.inverse_inertia_world = node.world_rotation * node.inverse_inertia_body * Transpose(node.world_rotation);
+}
+
 Mat4 ComposeTauWorld(const TauNode &node) {
-	return TransformationMat4(node.position, ToMatrix3(node.orientation), node.scale);
+	return TransformationMat4(node.position, node.world_rotation, node.scale);
 }
 
 bool HasTauWorldTransformChanged(const TauNode &node, const Mat4 &world) {
@@ -348,6 +353,7 @@ void SetTauNodeWorld(TauNode &node, const Mat4 &world, TauWorldWriteMode mode) {
 	Mat3 rotation;
 	Decompose(world, &node.position, &rotation, &node.scale);
 	node.orientation = Normalize(QuaternionFromMatrix3(rotation));
+	RefreshTauWorldPoseCache(node);
 
 	if (mode == TauWorldWriteMode::Reset) {
 		node.previous_position = node.position;
@@ -374,19 +380,19 @@ void IntegrateTauOrientation(TauNode &node, const Vec3 &angular_step) {
 		return;
 
 	node.orientation = Normalize(QuaternionFromAxisAngle(angle, angular_step / angle) * node.orientation);
+	RefreshTauWorldPoseCache(node);
 }
 
-Mat3 ComputeTauInverseInertiaWorld(const TauNode &node) {
-	const Mat3 rotation = ToMatrix3(node.orientation);
-	return rotation * node.inverse_inertia_body * Transpose(rotation);
-}
+const Mat3 &GetTauInverseInertiaWorld(const TauNode &node) { return node.inverse_inertia_world; }
 
 void RefreshTauMassProperties(TauNode &node) {
 	node.inverse_mass = IsDynamicTauNode(node) || (node.body_type == RBT_Dynamic && node.total_mass > 0.f) ? 1.f / node.total_mass : 0.f;
 	node.inverse_inertia_body = Mat3::Zero;
 
-	if (node.body_type != RBT_Dynamic || node.total_mass <= 0.f)
+	if (node.body_type != RBT_Dynamic || node.total_mass <= 0.f) {
+		RefreshTauWorldPoseCache(node);
 		return;
+	}
 
 	const Vec3 abs_scale = Abs(node.scale);
 	Mat3 inertia = Mat3::Zero;
@@ -424,6 +430,7 @@ void RefreshTauMassProperties(TauNode &node) {
 	Mat3 inverse_inertia;
 	if (Inverse(inertia, inverse_inertia))
 		node.inverse_inertia_body = inverse_inertia;
+	RefreshTauWorldPoseCache(node);
 }
 
 float GetTauBodyFriction(const TauNode &node, const TauCollisionShape &shape) {
@@ -450,15 +457,16 @@ float CombineTauRollingFriction(const TauNode &a, const TauNode &b) {
 
 OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const Vec3 &scale, const TauCollisionShape &shape) {
 	const Mat3 node_rotation = ToMatrix3(orientation);
-	return {position + node_rotation * (scale * shape.local_position), Abs(scale) * shape.size, node_rotation * shape.local_rotation};
+	return {position + node_rotation * (scale * shape.local_position), Abs(scale) * shape.size, Normalize(node_rotation * shape.local_rotation)};
 }
 
 OBB BuildTauWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
-	return BuildTauWorldOBB(node.position, node.orientation, node.scale, shape);
+	return {node.position + node.world_rotation * (node.scale * shape.local_position), Abs(node.scale) * shape.size,
+		Normalize(node.world_rotation * shape.local_rotation)};
 }
 
 Vec3 BuildTauWorldSphereCenter(const TauNode &node, const TauCollisionShape &shape) {
-	return node.position + ToMatrix3(node.orientation) * (node.scale * shape.local_position);
+	return node.position + node.world_rotation * (node.scale * shape.local_position);
 }
 
 float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &shape) {
@@ -467,7 +475,7 @@ float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &sh
 }
 
 Mat3 BuildTauWorldSphereRotation(const TauNode &node, const TauCollisionShape &shape) {
-	return ToMatrix3(node.orientation) * shape.local_rotation;
+	return node.world_rotation * shape.local_rotation;
 }
 
 struct TauPrimitiveFrame {
@@ -481,12 +489,12 @@ struct TauRayShapeHit {
 };
 
 TauPrimitiveFrame BuildTauPrimitiveFrame(const TauNode &node, const TauCollisionShape &shape) {
-	const Mat3 rotation = ToMatrix3(node.orientation) * shape.local_rotation;
+	const Mat3 rotation = node.world_rotation * shape.local_rotation;
 	return {BuildTauWorldSphereCenter(node, shape), Normalize(GetX(rotation)), Normalize(GetY(rotation)), Normalize(GetZ(rotation))};
 }
 
 TauCapsuleGeometry BuildTauWorldCapsule(const TauNode &node, const TauCollisionShape &shape) {
-	const Mat3 rotation = ToMatrix3(node.orientation) * shape.local_rotation;
+	const Mat3 rotation = node.world_rotation * shape.local_rotation;
 	const Vec3 center = BuildTauWorldSphereCenter(node, shape);
 	const Vec3 scale = Abs(node.scale);
 	const float half_height = Abs(shape.size.y) * scale.y * 0.5f;
@@ -1013,11 +1021,13 @@ void AppendTauManifoldPoint(Vertices &vtx, size_t &vtx_count, const Vec3 &point,
 
 Vec3 GetTauObbAxis(const OBB &obb, int axis) {
 	if (axis == 0)
-		return Normalize(GetX(obb.rot));
+		return GetX(obb.rot);
 	if (axis == 1)
-		return Normalize(GetY(obb.rot));
-	return Normalize(GetZ(obb.rot));
+		return GetY(obb.rot);
+	return GetZ(obb.rot);
 }
+
+OBB NormalizeTauObb(const OBB &obb) { return {obb.pos, obb.scl, Normalize(obb.rot)}; }
 
 Vec3 GetTauFaceCenter(const OBB &obb, const Vec3 &direction) {
 	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
@@ -1819,11 +1829,11 @@ bool ComputeTauContact(const TauWorldShape &a, const TauWorldShape &b, Vec3 &nor
 }
 
 Vec3 TauWorldToBodyLocalAnchor(const TauNode &node, const Vec3 &point) {
-	return Transpose(ToMatrix3(node.orientation)) * (point - node.position);
+	return Transpose(node.world_rotation) * (point - node.position);
 }
 
 Vec3 TauBodyLocalAnchorToWorld(const TauNode &node, const Vec3 &point) {
-	return node.position + ToMatrix3(node.orientation) * point;
+	return node.position + node.world_rotation * point;
 }
 
 void ConvertTauObbManifoldToBodyLocal(const TauBodyProxy &body_a, const TauWorldShape &shape_a, const TauBodyProxy &body_b,
@@ -1862,14 +1872,14 @@ void ApplyTauImpulse(TauNode &node, const Vec3 &impulse, const Vec3 &arm) {
 		return;
 
 	node.linear_velocity += (impulse * node.inverse_mass) * node.linear_factor;
-	node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * Cross(arm, impulse)) * node.angular_factor;
+	node.angular_velocity += (GetTauInverseInertiaWorld(node) * Cross(arm, impulse)) * node.angular_factor;
 }
 
 void ApplyTauPositionImpulse(TauNode &node, const Vec3 &impulse, const Vec3 &arm) {
 	if (!IsDynamicTauNode(node) || IsTauSleeping(node))
 		return;
 	node.position += (impulse * node.inverse_mass) * node.linear_factor;
-	Vec3 angular_step = (ComputeTauInverseInertiaWorld(node) * Cross(arm, impulse)) * node.angular_factor;
+	Vec3 angular_step = (GetTauInverseInertiaWorld(node) * Cross(arm, impulse)) * node.angular_factor;
 	const float angular_length = Len(angular_step);
 	if (angular_length > 0.2f)
 		angular_step *= 0.2f / angular_length;
@@ -1878,13 +1888,13 @@ void ApplyTauPositionImpulse(TauNode &node, const Vec3 &impulse, const Vec3 &arm
 
 void ApplyTauAngularImpulse(TauNode &node, const Vec3 &impulse) {
 	if (IsDynamicTauNode(node) && !IsTauSleeping(node))
-		node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * impulse) * node.angular_factor;
+		node.angular_velocity += (GetTauInverseInertiaWorld(node) * impulse) * node.angular_factor;
 }
 
 float ComputeTauAngularMassTerm(const TauNode &node, const Vec3 &arm, const Vec3 &axis) {
 	if (!IsDynamicTauNode(node) || IsTauSleeping(node))
 		return 0.f;
-	return Dot(axis, Cross(ComputeTauInverseInertiaWorld(node) * Cross(arm, axis), arm));
+	return Dot(axis, Cross(GetTauInverseInertiaWorld(node) * Cross(arm, axis), arm));
 }
 
 float ComputeTauConstraintMass(const TauContactConstraint &contact, const Vec3 &arm_a, const Vec3 &arm_b, const Vec3 &axis) {
@@ -2501,10 +2511,10 @@ void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, 
 		const Vec3 rolling_axis = rolling_velocity / rolling_speed;
 		const float rolling_mass =
 			(IsDynamicTauNode(*contact.node_a) && !IsTauSleeping(*contact.node_a)
-					? Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_a) * rolling_axis)
+					? Dot(rolling_axis, GetTauInverseInertiaWorld(*contact.node_a) * rolling_axis)
 					: 0.f) +
 			(IsDynamicTauNode(*contact.node_b) && !IsTauSleeping(*contact.node_b)
-					? Dot(rolling_axis, ComputeTauInverseInertiaWorld(*contact.node_b) * rolling_axis)
+					? Dot(rolling_axis, GetTauInverseInertiaWorld(*contact.node_b) * rolling_axis)
 					: 0.f);
 		const float inverse_mass_sum = GetTauInverseMass(*contact.node_a) + GetTauInverseMass(*contact.node_b);
 		if (rolling_mass <= k_tau_collision_epsilon || inverse_mass_sum <= k_tau_collision_epsilon)
@@ -3149,7 +3159,7 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 			node.linear_velocity *= std::max(0.f, 1.f - node.linear_damping * dt_sec);
 			node.linear_velocity = node.linear_velocity * node.linear_factor;
 
-			node.angular_velocity += (ComputeTauInverseInertiaWorld(node) * node.accumulated_torque) * dt_sec;
+			node.angular_velocity += (GetTauInverseInertiaWorld(node) * node.accumulated_torque) * dt_sec;
 			node.angular_velocity *= std::max(0.f, 1.f - node.angular_damping * dt_sec);
 			node.angular_velocity = node.angular_velocity * node.angular_factor;
 
@@ -3229,10 +3239,10 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 namespace tau_internal {
 
 bool ComputeObbContactManifold(const OBB &a, const OBB &b, TauContactManifold &manifold) {
-	return ComputeTauObbContactManifold(a, b, manifold);
+	return ComputeTauObbContactManifold(NormalizeTauObb(a), NormalizeTauObb(b), manifold);
 }
 
-Vec3 ObbLocalPointToWorld(const OBB &obb, const Vec3 &point) { return TauObbLocalToWorld(obb, point); }
+Vec3 ObbLocalPointToWorld(const OBB &obb, const Vec3 &point) { return TauObbLocalToWorld(NormalizeTauObb(obb), point); }
 
 bool ComputeCapsuleSphereContact(const TauCapsuleGeometry &capsule, const Vec3 &sphere_center, float sphere_radius, Vec3 &normal,
 	float &penetration, Vec3 &point) {
@@ -3241,7 +3251,7 @@ bool ComputeCapsuleSphereContact(const TauCapsuleGeometry &capsule, const Vec3 &
 
 bool ComputeCapsuleObbContact(
 	const TauCapsuleGeometry &capsule, const OBB &obb, Vec3 &normal, float &penetration, Vec3 &point) {
-	return ComputeTauCapsuleObbContactImpl(capsule, obb, normal, penetration, point);
+	return ComputeTauCapsuleObbContactImpl(capsule, NormalizeTauObb(obb), normal, penetration, point);
 }
 
 bool ComputeCapsuleCapsuleContact(
@@ -3288,6 +3298,7 @@ void TransformNodeSleepCohortForTest(
 	node->linear_velocity = Vec3::Zero;
 	node->previous_orientation = node->orientation;
 	node->orientation = Normalize(rotation * node->orientation);
+	RefreshTauWorldPoseCache(*node);
 	node->angular_velocity = Vec3::Zero;
 	node->transform_dirty = true;
 }
@@ -3654,7 +3665,7 @@ void SceneTauPhysics::NodeAddImpulse(NodeRef ref, const Vec3 &impulse, const Vec
 			return;
 		const Vec3 arm = world_pos - node->position;
 		node->linear_velocity += (impulse * node->inverse_mass) * node->linear_factor;
-		node->angular_velocity += (ComputeTauInverseInertiaWorld(*node) * Cross(arm, impulse)) * node->angular_factor;
+		node->angular_velocity += (GetTauInverseInertiaWorld(*node) * Cross(arm, impulse)) * node->angular_factor;
 	}
 }
 
@@ -3672,7 +3683,7 @@ void SceneTauPhysics::NodeAddTorqueImpulse(NodeRef ref, const Vec3 &T) {
 	if (auto *node = FindTauNode(nodes, ref)) {
 		if (!IsDynamicTauNode(*node))
 			return;
-		node->angular_velocity += (ComputeTauInverseInertiaWorld(*node) * T) * node->angular_factor;
+		node->angular_velocity += (GetTauInverseInertiaWorld(*node) * T) * node->angular_factor;
 	}
 }
 

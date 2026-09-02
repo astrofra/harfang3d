@@ -132,6 +132,45 @@ void TestFixedStepAccumulation() {
 	TEST_CHECK(cleared_callback_count == 1);
 }
 
+void TestWorldInverseInertiaCacheTracksOrientation() {
+	Scene scene;
+	const Node body = CreatePhysicCube(
+		scene, Vec3(1.f, 2.f, 3.f), Mat4::Identity, InvalidModelRef, {}, 1.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	const float inverse_inertia_body_x = 12.f / 13.f;
+	const float inverse_inertia_body_y = 12.f / 10.f;
+
+	physics.NodeAddTorqueImpulse(body, Vec3::Right);
+	Vec3 angular_velocity = physics.NodeGetAngularVelocity(body);
+	TEST_CHECK_(Abs(angular_velocity.x - inverse_inertia_body_x) < 0.0001f,
+		"identity inverse inertia: expected %.6f, got %.6f", inverse_inertia_body_x, angular_velocity.x);
+	TEST_CHECK(Abs(angular_velocity.y) < 0.0001f && Abs(angular_velocity.z) < 0.0001f);
+
+	// Resetting the world pose must rotate the cached body inertia into world
+	// space before an impulse can observe it.
+	physics.NodeResetWorld(body, RotationMat4(Vec3(0.f, 0.f, Deg(90.f))));
+	physics.NodeAddTorqueImpulse(body, Vec3::Right);
+	angular_velocity = physics.NodeGetAngularVelocity(body);
+	TEST_CHECK_(Abs(angular_velocity.x - inverse_inertia_body_y) < 0.0001f,
+		"reset inverse inertia: expected %.6f, got %.6f", inverse_inertia_body_y, angular_velocity.x);
+	TEST_CHECK(Abs(angular_velocity.y) < 0.0001f && Abs(angular_velocity.z) < 0.0001f);
+
+	// The integration path mutates orientation without an API pose write and
+	// must refresh the same cache as well.
+	physics.NodeResetWorld(body, Mat4::Identity);
+	physics.NodeSetAngularVelocity(body, Vec3(0.f, 0.f, Deg(90.f)));
+	physics.StepSimulation(time_from_sec(1), time_from_sec(1), 0);
+	physics.NodeSetAngularVelocity(body, Vec3::Zero);
+	physics.NodeAddTorqueImpulse(body, Vec3::Right);
+	angular_velocity = physics.NodeGetAngularVelocity(body);
+	TEST_CHECK_(Abs(angular_velocity.x - inverse_inertia_body_y) < 0.0001f,
+		"integrated inverse inertia: expected %.6f, got %.6f", inverse_inertia_body_y, angular_velocity.x);
+	TEST_CHECK(Abs(angular_velocity.y) < 0.0001f && Abs(angular_velocity.z) < 0.0001f);
+}
+
 void TestScenePhysicsPreTickAdapter() {
 	ScenePhysics physics;
 	int callback_count = 0;
@@ -770,6 +809,7 @@ void TestMeshColliderRaycast() {
 void test_scene_tau_physics() {
 	TestPreTickCallback();
 	TestFixedStepAccumulation();
+	TestWorldInverseInertiaCacheTracksOrientation();
 	TestScenePhysicsPreTickAdapter();
 	TestTauStepScratchReuse();
 	TestActiveBodyKeepsPublishedTransformWithoutSubstep();

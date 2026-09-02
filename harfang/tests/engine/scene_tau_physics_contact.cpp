@@ -84,6 +84,26 @@ void test_scene_tau_physics_contact() {
 		}
 	}
 	{
+		// Runtime world OBBs cache unit axes. Keep the focused helper boundary
+		// tolerant of callers supplying rotation columns with residual scale.
+		const OBB a(Vec3::Zero, Vec3(2.f));
+		const Mat3 rotation = RotationMatZ(0.35f);
+		const OBB normalized_b(Vec3(1.45f, 0.1f, 0.f), Vec3(2.f), rotation);
+		const OBB scaled_b(normalized_b.pos, normalized_b.scl,
+			Mat3(GetX(rotation) * 2.f, GetY(rotation) * 3.f, GetZ(rotation) * 4.f));
+		TauContactManifold normalized_manifold, scaled_manifold;
+		TEST_ASSERT(tau_internal::ComputeObbContactManifold(a, normalized_b, normalized_manifold));
+		TEST_ASSERT(tau_internal::ComputeObbContactManifold(a, scaled_b, scaled_manifold));
+		TEST_CHECK(scaled_manifold.feature.type == normalized_manifold.feature.type);
+		TEST_CHECK(scaled_manifold.feature.axis_a == normalized_manifold.feature.axis_a);
+		TEST_CHECK(scaled_manifold.feature.axis_b == normalized_manifold.feature.axis_b);
+		TEST_CHECK(scaled_manifold.point_count == normalized_manifold.point_count);
+		TEST_CHECK(AlmostEqual(scaled_manifold.normal, normalized_manifold.normal, 0.0001f));
+		for (uint8_t i = 0; i < scaled_manifold.point_count; ++i)
+			TEST_CHECK(Abs(scaled_manifold.points[i].penetration - normalized_manifold.points[i].penetration) < 0.0001f);
+		CheckManifoldOrientation(a, scaled_b, scaled_manifold);
+	}
+	{
 		const TauCapsuleGeometry capsule{Vec3(0.f, -1.f, 0.f), Vec3(0.f, 1.f, 0.f), 0.5f};
 		Vec3 normal, point;
 		float penetration = 0.f;
