@@ -76,7 +76,12 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.compl
     keyboard:Update()
 
 	dt = hg.TickClock()
-    time_switch = time_switch + dt
+	-- Matrix captures advance physics with a fixed frame step, so their force
+	-- schedule must use the same simulated clock. Wall-clock TickClock jitter
+	-- otherwise changes the force direction around sample 300 and makes two
+	-- otherwise deterministic Tau captures diverge.
+	local force_dt = dump.enabled and dt_frame_step or dt
+	time_switch = time_switch + force_dt
 
     if hg.time_to_sec_f(time_switch) > 5 then
         if force == hg.Vec3(50,-30,0) then

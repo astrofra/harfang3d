@@ -3,7 +3,8 @@
 Date: 2026-09-02
 
 Status: complete for the deterministic physics-only matrix and the controlled
-scene/render acceptance passes described below.
+scene/render acceptance passes described below. The first post-matrix solver
+optimization is recorded in the follow-up section.
 
 Related roadmap:
 `specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_ROADMAP.md`.
@@ -22,11 +23,11 @@ without reducing the solver's three position or eight velocity iterations:
 - rendered settled p95: 16.699 ms for Tau versus 27.019 ms for Bullet, or
   **0.618x**.
 
-The complete matrix also exposes the next optimization target. Tau is faster
-than Bullet for every measured sphere-only cell and for the settled mixed
-pool, but active cube-only physics remains 1.18x to 1.84x slower by median.
-The global stretch goal is therefore not met even though Tau wins the total
-time of the complete suite.
+The complete matrix exposed active cube-only physics as the next optimization
+target: it was 1.18x to 1.84x slower than Bullet by median. Prepared active
+velocity constraints now reduce that hotspot, as documented below, but the
+global stretch goal still requires a fresh complete-matrix rerun after the
+remaining cuboid contact work.
 
 ## Protocol
 
@@ -185,24 +186,19 @@ manifolds still require comparatively expensive SAT/clipping refresh.
 The next work should remain behavior-preserving and keep solver iteration
 counts unchanged:
 
-1. Add a compact active velocity-constraint representation prepared after
-   the position solve. Cache contact arms, normal angular Jacobians, inverse
-   effective mass, restitution/bias inputs, and friction limits that are
-   invariant across the eight velocity iterations. Separate manifold
-   identity, node references, and diagnostics from the hot loop.
-2. Exploit active cuboid manifold coherence. Refresh cached local anchors and
+1. Exploit active cuboid manifold coherence. Refresh cached local anchors and
    validate the previous separating/contact features before falling back to a
    complete SAT and clipping pass. Preserve deterministic contact ordering and
    use the current generator whenever the cached feature is invalid.
-3. Add measured coefficient fast paths, especially zero restitution and zero
+2. Add measured coefficient fast paths, especially zero restitution and zero
    rolling friction, without changing the general material path.
-4. Add an all-sleeping fast path for small worlds when no proxy moved, no wake
+3. Add an all-sleeping fast path for small worlds when no proxy moved, no wake
    request is pending, and no tracked-contact publication requires traversal.
    This targets the 0.287 ms fixed floor revealed by the 250-cube cell.
-5. Re-run the complete matrix and the existing physics QA after every stage.
+4. Re-run the complete matrix and the existing physics QA after every stage.
    Accept no active cube regression and no contact, wake, callback, chain, or
    raycast regression.
-6. Only after the single-threaded cube path is competitive, evaluate dense
+5. Only after the single-threaded cube path is competitive, evaluate dense
    body storage and independent-island parallelism. Scene-sync work is lower
    priority because the controlled scene pass is already near physics-only
    parity.
@@ -210,3 +206,38 @@ counts unchanged:
 This trajectory targets the measured 8.2 ms velocity-solver and 6.0 ms
 contact-construction costs directly. It does not rely on weaker physical
 settings or fewer solver iterations.
+
+## Post-Matrix Follow-Up: Prepared Velocity Constraints
+
+The first corrective item is implemented without changing the three position
+or eight velocity iterations. After position solving, Tau builds a compact
+solver-active stream in persistent step scratch from the freshly refreshed
+anchors and precomputes contact arms, normal effective mass, and penetration
+bias. The eight-iteration loop no longer rescans sleeping contacts, refreshes anchors, or repeats normal-mass
+work. Restitution and tangent/friction terms remain sequential and dynamic;
+precomputing them would change either the algorithm or its floating-point
+ordering.
+
+A five-seed interleaved A/B used a temporary legacy oracle inside the same
+Release binary, alternating old and new order by seed. The oracle was removed
+after measurement:
+
+| Workload | Legacy median / p95 | Prepared median / p95 | Improvement |
+|---|---:|---:|---:|
+| cube-only 1,500 active | 18.747 / 23.517 ms | 16.646 / 20.856 ms | 11.2% / 11.3% |
+| sphere-only 1,500 settled | 2.363 / 2.657 ms | 2.224 / 2.516 ms | 5.9% / 5.3% |
+
+The interleaving matters: independent long Windows runs showed upward p95
+drift in every settled shape, while paired same-seed comparisons consistently
+favored the prepared path. A final attribution run places the cube-active
+velocity solve at 6.28-6.31 ms instead of 8.20 ms, approximately 23% lower,
+and the complete Tau step at about 16.4-16.6 ms. Contact construction is now
+the other leading target at 6.19-6.33 ms, with 3.78-3.87 ms in narrow phase.
+
+The full C++ suite passes. Fresh QA passes include a byte-identical repeated
+600-sample cuboid chain, the impulse callback with an unchanged -0.00141478 m
+amplitude delta, and all capsule contact combinations. A tangent-mass matrix
+experiment was explicitly rejected because reordered floating-point work
+changed settled friction/sleep behavior. The next matrix candidate is thus
+coherent cuboid feature reuse in the contact generator, not solver iteration
+tuning.

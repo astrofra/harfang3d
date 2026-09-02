@@ -5,11 +5,12 @@ Date: 2026-09-02
 Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
 contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
-per-world step scratch, shape-neutral contact persistence, and solver
-pose/inertia/cuboid-axis caches are implemented and measured. The complete
-physics-only body-count/shape matrix and controlled scene/render passes are
-also complete. Tau meets the representative active, settled, and end-to-end
-parity gates; active cube-only constraints are the next measured hotspot.
+per-world step scratch, shape-neutral contact persistence, solver
+pose/inertia/cuboid-axis caches, and prepared active velocity constraints are
+implemented and measured. The complete physics-only body-count/shape matrix
+and controlled scene/render passes are also complete. Tau meets the
+representative active, settled, and end-to-end parity gates; coherent active
+cuboid manifold refresh is the next measured hotspot.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -627,6 +628,64 @@ implementation order is therefore:
 5. defer dense scene-sync work, parallelism, and any iteration tuning until
    these behavior-preserving stages have passed the complete matrix and QA.
 
+### Tenth optimization result: prepared active velocity constraints
+
+Tau now compacts solver-active contacts into persistent per-world scratch once
+after the position solve. This prepared stream consumes the freshly refreshed
+post-position anchors, retains the two contact arms, and precomputes the normal
+effective mass and penetration bias that remain invariant across all eight velocity
+iterations. Point velocities consume those retained arms, and the repeated
+loop no longer scans sleeping contacts, refreshes anchors, or recomputes normal
+angular mass.
+
+The source contact remains authoritative for accumulated impulses, diagnostics,
+and manifold publication. Restitution is deliberately evaluated in sequential
+warm-start order because prior warm-start impulses change the velocity seen by
+later contacts. Tangent direction, tangent effective mass, and the Coulomb
+limit are also still evaluated in the iteration loop because they depend on
+the current velocity and accumulated normal impulse. Position and velocity
+iteration counts remain three and eight.
+
+An interleaved same-binary A/B oracle alternated the legacy and prepared paths
+for the same five seeds. It avoids the thermal and scheduler drift observed
+when two complete Windows benchmark series were run far apart:
+
+| Workload | Legacy median / p95 | Prepared median / p95 | Change |
+|---|---:|---:|---:|
+| cube-only 1,500 active | 18.747 / 23.517 ms | 16.646 / 20.856 ms | 11.2% / 11.3% faster |
+| sphere-only 1,500 settled | 2.363 / 2.657 ms | 2.224 / 2.516 ms | 5.9% / 5.3% faster |
+
+The final three-run cube-active attribution averages 16.4-16.6 ms per Tau
+step. `Tau.VelocitySolve` falls from the matrix baseline's 8.20 ms to
+6.28-6.31 ms, a reduction of about 23%. Position solving remains 2.96-2.99 ms
+and contact construction remains the other leading cost at 6.19-6.33 ms,
+including 3.78-3.87 ms of narrow phase. A separate five-seed run also improves the
+1,500-cube active median/p95 from 18.248/23.432 ms to 17.590/21.736 ms despite
+whole-run machine drift.
+
+A more aggressive experiment precomputed a quadratic tangent angular-mass
+form. Although it removed additional work, its changed floating-point
+evaluation order altered friction trajectories and delayed sleep in settled
+cube scenes. That experiment was rejected and removed. The accepted path
+preserves the solver's arithmetic and sequential impulse ordering.
+
+All 54 C++ unit-test groups pass. The focused scratch regression verifies that
+prepared capacity reaches a high-water mark, is reused without growth, and is
+released by `ClearNodes`. Two fresh 600-sample chain captures are
+byte-identical and pass the bounded envelope at 4.64699 m maximum vertical
+error, 16.7043 m/s maximum Tau speed, and zero static-ring drift. The impulse
+callback remains at 0.03582168 m maximum position error and -0.00141478 m
+peak-to-peak amplitude delta. Capsule/sphere, capsule/cuboid, and
+capsule/capsule contact checks also pass.
+
+The next implementation order is now:
+
+1. exploit active cuboid manifold feature coherence before full SAT/clipping;
+2. add profile-justified zero-restitution and zero-rolling-friction paths;
+3. add the guarded all-sleeping small-world shortcut;
+4. rerun the complete matrix before considering dense scene storage,
+   independent-island parallelism, or any iteration change.
+
 ## Workload Characterization
 
 `physics_pool_of_objects.lua` creates:
@@ -1076,12 +1135,14 @@ weakening Tau physics.
 - The number of scene transform writes tracks awake/changed bodies in the
   settled benchmark.
 
-Implementation status (2026-09-02): the body-local persistent anchors and
-world rotation/inverse-inertia/cuboid-axis caches are implemented and satisfy
-their focused tests and physics QA envelopes. The profiler no longer rebuilds
-inverse-inertia matrices or normalizes cuboid axes inside velocity iterations.
-Compact hot constraint storage, coefficient fast paths, and dense scene-sync
-lists remain open; solver iteration counts remain unchanged.
+Implementation status (2026-09-02): the body-local persistent anchors,
+world rotation/inverse-inertia/cuboid-axis caches, and compact prepared active
+velocity constraints are implemented and satisfy their focused tests and
+physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
+normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
+effective mass inside velocity iterations. Coherent manifold refresh,
+coefficient fast paths, and dense scene-sync lists remain open; solver
+iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1249,9 +1310,10 @@ fixed benchmark and timestep
 ```
 
 Tau now reaches measured parity for the representative mixed workload and
-outperforms Bullet strongly once the pool settles. The remaining path to a
-suite-wide win is narrower and measured: compact/precomputed active cuboid
-constraints, coherent cuboid manifold refresh, coefficient fast paths, and a
-small-world all-sleeping shortcut, followed by parallel independent islands.
+outperforms Bullet strongly once the pool settles. Prepared active constraints
+reduce the cube velocity solve by about 23%. The remaining path to a
+suite-wide win is narrower and measured: coherent cuboid manifold refresh,
+coefficient fast paths, and a small-world all-sleeping shortcut, followed by
+parallel independent islands.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.

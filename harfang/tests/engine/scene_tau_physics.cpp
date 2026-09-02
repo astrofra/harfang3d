@@ -217,6 +217,7 @@ void TestTauStepScratchReuse() {
 	TEST_CHECK(initial_stats.body_proxy_capacity >= 3);
 	TEST_CHECK(initial_stats.candidate_capacity > 0);
 	TEST_CHECK(initial_stats.contact_capacity > 0);
+	TEST_CHECK(initial_stats.velocity_constraint_capacity > 0);
 	TEST_CHECK(initial_stats.island_body_capacity >= 2);
 
 	// Let contact counts reach their high-water marks, then verify that the
@@ -227,12 +228,14 @@ void TestTauStepScratchReuse() {
 	TEST_CHECK(reused_stats.scratch_growths == 0);
 	TEST_CHECK(reused_stats.body_proxy_capacity == initial_stats.body_proxy_capacity);
 	TEST_CHECK(reused_stats.candidate_capacity == initial_stats.candidate_capacity);
+	TEST_CHECK(reused_stats.velocity_constraint_capacity == initial_stats.velocity_constraint_capacity);
 	TEST_CHECK(reused_stats.island_body_capacity == initial_stats.island_body_capacity);
 
 	physics.ClearNodes();
 	const tau_internal::TauStepReuseStats cleared_stats = tau_internal::GetLastStepReuseStats(physics);
 	TEST_CHECK(cleared_stats.body_proxy_capacity == 0);
 	TEST_CHECK(cleared_stats.contact_capacity == 0);
+	TEST_CHECK(cleared_stats.velocity_constraint_capacity == 0);
 }
 
 void TestActiveBodyKeepsPublishedTransformWithoutSubstep() {
