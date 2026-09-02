@@ -4,7 +4,7 @@ Date: 2026-09-02
 
 Status: complete for the deterministic physics-only matrix and the controlled
 scene/render acceptance passes described below. The first post-matrix solver
-optimization is recorded in the follow-up section.
+optimizations are recorded in the follow-up sections.
 
 Related roadmap:
 `specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_ROADMAP.md`.
@@ -25,9 +25,9 @@ without reducing the solver's three position or eight velocity iterations:
 
 The complete matrix exposed active cube-only physics as the next optimization
 target: it was 1.18x to 1.84x slower than Bullet by median. Prepared active
-velocity constraints now reduce that hotspot, as documented below, but the
-global stretch goal still requires a fresh complete-matrix rerun after the
-remaining cuboid contact work.
+velocity constraints and coherent cuboid manifold refresh now reduce that
+hotspot, as documented below, but the global stretch goal still requires a
+fresh complete-matrix rerun after the remaining coefficient fast paths.
 
 ## Protocol
 
@@ -183,14 +183,14 @@ manifolds still require comparatively expensive SAT/clipping refresh.
 
 ## Corrective Trajectory
 
-The next work should remain behavior-preserving and keep solver iteration
+The corrective sequence remains behavior-preserving and keeps solver iteration
 counts unchanged:
 
-1. Exploit active cuboid manifold coherence. Refresh cached local anchors and
+1. **Completed:** exploit active cuboid manifold coherence. Refresh cached local anchors and
    validate the previous separating/contact features before falling back to a
    complete SAT and clipping pass. Preserve deterministic contact ordering and
    use the current generator whenever the cached feature is invalid.
-2. Add measured coefficient fast paths, especially zero restitution and zero
+2. **Next:** add measured coefficient fast paths, especially zero restitution and zero
    rolling friction, without changing the general material path.
 3. Add an all-sleeping fast path for small worlds when no proxy moved, no wake
    request is pending, and no tracked-contact publication requires traversal.
@@ -238,6 +238,32 @@ The full C++ suite passes. Fresh QA passes include a byte-identical repeated
 600-sample cuboid chain, the impulse callback with an unchanged -0.00141478 m
 amplitude delta, and all capsule contact combinations. A tangent-mass matrix
 experiment was explicitly rejected because reordered floating-point work
-changed settled friction/sleep behavior. The next matrix candidate is thus
-coherent cuboid feature reuse in the contact generator, not solver iteration
-tuning.
+changed settled friction/sleep behavior.
+
+## Post-Matrix Follow-Up: Coherent Cuboid Manifold Refresh
+
+The next cube-specific stage reuses a previous FaceA/FaceB feature and its
+ordered body-local anchors when relative motion, normal alignment, incident
+face selection, cached-axis overlap, and per-point anchor separation all remain
+compatible. It falls back to the complete 15-axis SAT and clipping generator
+on any failed check, for every edge/edge feature, and unconditionally after
+four consecutive coherent refreshes. Warm-start feature IDs and constraint
+order are retained; solver iteration counts remain three and eight.
+
+A five-seed, same-binary interleaved A/B on the 1,500-cube active cell produced:
+
+| Path | Median | p95 | Improvement |
+|---|---:|---:|---:|
+| prepared solver, full cuboid generation | 16.515 ms | 21.120 ms | baseline |
+| prepared solver, coherent cuboid refresh | 16.076 ms | 19.955 ms | 2.7% / 5.5% |
+
+Three attribution runs reduce narrow phase from 3.78-3.87 ms to 3.20-3.23 ms
+and complete contact construction from 6.19-6.33 ms to 5.55-5.66 ms. A
+diagnostic active step reused 1,163 cuboid manifolds and 2,887 points without
+full SAT/clipping, approximately 38% of the emitted cuboid manifolds. The full
+C++ suite and the deterministic chain envelope pass; the impulse callback
+amplitude delta remains -0.00141478 m.
+
+The next matrix candidate is profile-justified zero-restitution and
+zero-rolling-friction work, followed by the small-world all-sleeping shortcut.
+Iteration tuning remains deferred.

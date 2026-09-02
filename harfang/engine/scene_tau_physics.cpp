@@ -37,6 +37,10 @@ static constexpr float k_tau_manifold_point_tolerance = 0.05f;
 static constexpr float k_tau_manifold_normal_tolerance = 0.94f;
 static constexpr float k_tau_manifold_clip_tolerance = 0.001f;
 static constexpr float k_tau_sat_tie_tolerance = 0.0001f;
+static constexpr float k_tau_cuboid_coherence_translation = 0.02f;
+static constexpr float k_tau_cuboid_coherence_orientation_dot = 0.999847695f;
+static constexpr float k_tau_cuboid_coherence_normal_dot = 0.999f;
+static constexpr uint8_t k_tau_cuboid_coherence_max_age = 4;
 static constexpr float k_tau_bullet_convex_margin = 0.04f;
 static constexpr uint32_t k_tau_manifold_lifetime = 3;
 static constexpr size_t k_tau_initial_manifold_capacity = 4096;
@@ -163,6 +167,7 @@ struct TauContactDiagnostics {
 	size_t warm_start_hits{0}, warm_start_misses{0};
 	size_t manifold_cache_comparisons{0}, manifold_cache_evictions{0}, manifold_cache_overflows{0};
 	size_t sleeping_manifold_reuses{0}, sleeping_manifold_points_reused{0}, sleeping_manifold_reuse_misses{0};
+	size_t cuboid_coherent_reuses{0}, cuboid_coherent_points_reused{0}, cuboid_coherent_fallbacks{0};
 	size_t stale_discards{0}, candidate_reallocations{0}, contact_reallocations{0};
 	size_t position_constraint_evaluations{0}, velocity_constraint_evaluations{0}, rolling_contact_evaluations{0};
 	size_t tracked_contact_evaluations{0}, motion_updates{0};
@@ -1857,6 +1862,81 @@ void ConvertTauObbManifoldToBodyLocal(const TauBodyProxy &body_a, const TauWorld
 	}
 }
 
+float GetTauObbProjectedRadius(const OBB &obb, const Vec3 &axis) {
+	const Vec3 half = Abs(obb.scl) * 0.5f;
+	return half.x * Abs(Dot(axis, GetTauObbAxis(obb, 0))) + half.y * Abs(Dot(axis, GetTauObbAxis(obb, 1))) +
+		half.z * Abs(Dot(axis, GetTauObbAxis(obb, 2)));
+}
+
+bool TryRefreshTauCoherentCuboidManifold(const TauBodyProxy &body_a, const TauWorldShape &shape_a, const TauBodyProxy &body_b,
+	const TauWorldShape &shape_b, const TauContactManifold &cached, TauContactManifold &refreshed) {
+	if ((cached.feature.type != TauContactFeatureType::FaceA && cached.feature.type != TauContactFeatureType::FaceB) ||
+		cached.point_count == 0 || cached.point_count > cached.points.size() || cached.coherence_age >= k_tau_cuboid_coherence_max_age ||
+		body_a.node->externally_moved || body_b.node->externally_moved)
+		return false;
+
+	const Vec3 displacement_a = body_a.node->position - body_a.node->previous_position;
+	const Vec3 displacement_b = body_b.node->position - body_b.node->previous_position;
+	if (Len2(displacement_a - displacement_b) > k_tau_cuboid_coherence_translation * k_tau_cuboid_coherence_translation ||
+		Abs(Dot(body_a.node->orientation, body_a.node->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot ||
+		Abs(Dot(body_b.node->orientation, body_b.node->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot)
+		return false;
+
+	const bool reference_is_a = cached.feature.type == TauContactFeatureType::FaceA;
+	const OBB &reference = reference_is_a ? shape_a.obb : shape_b.obb;
+	const OBB &incident = reference_is_a ? shape_b.obb : shape_a.obb;
+	const uint8_t reference_axis = reference_is_a ? cached.feature.axis_a : cached.feature.axis_b;
+	const int8_t reference_sign = reference_is_a ? cached.feature.sign_a : cached.feature.sign_b;
+	const uint8_t cached_incident_axis = reference_is_a ? cached.feature.axis_b : cached.feature.axis_a;
+	const int8_t cached_incident_sign = reference_is_a ? cached.feature.sign_b : cached.feature.sign_a;
+	if (reference_axis >= 3 || cached_incident_axis >= 3 || (reference_sign != -1 && reference_sign != 1) ||
+		(cached_incident_sign != -1 && cached_incident_sign != 1))
+		return false;
+
+	const Vec3 reference_normal = GetTauObbAxis(reference, reference_axis) * float(reference_sign);
+	const Vec3 normal = reference_is_a ? reference_normal : -reference_normal;
+	const float normal_alignment = Dot(cached.normal, normal);
+	if (normal_alignment < k_tau_cuboid_coherence_normal_dot || Dot(shape_b.obb.pos - shape_a.obb.pos, normal) < -k_tau_collision_epsilon)
+		return false;
+
+	uint8_t incident_axis = 0;
+	int8_t incident_sign = 0;
+	SelectTauIncidentFace(incident, reference_normal, incident_axis, incident_sign);
+	if (incident_axis != cached_incident_axis || incident_sign != cached_incident_sign)
+		return false;
+
+	// Validate the cached contact axis without repeating the complete 15-axis
+	// SAT. The retained anchors below provide the local contact-patch test.
+	const float center_separation = Dot(shape_b.obb.pos - shape_a.obb.pos, normal);
+	const float projected_overlap = GetTauObbProjectedRadius(shape_a.obb, normal) + GetTauObbProjectedRadius(shape_b.obb, normal) - center_separation;
+	if (projected_overlap < -k_tau_manifold_clip_tolerance)
+		return false;
+
+	refreshed = cached;
+	refreshed.normal = normal;
+	refreshed.coherence_age = uint8_t(cached.coherence_age + 1);
+	const float tangent_tolerance_sq = k_tau_manifold_point_tolerance * k_tau_manifold_point_tolerance;
+	for (uint8_t point_index = 0; point_index < cached.point_count; ++point_index) {
+		const TauManifoldPoint &cached_point = cached.points[point_index];
+		if (cached_point.feature_id == 0xffffffffu)
+			return false;
+		const Vec3 world_anchor_a = TauBodyLocalAnchorToWorld(*body_a.node, cached_point.local_point_a);
+		const Vec3 world_anchor_b = TauBodyLocalAnchorToWorld(*body_b.node, cached_point.local_point_b);
+		const Vec3 anchor_delta = world_anchor_b - world_anchor_a;
+		const float separation = Dot(anchor_delta, normal);
+		const Vec3 tangent_delta = anchor_delta - normal * separation;
+		if (separation > k_tau_manifold_clip_tolerance || Len2(tangent_delta) > tangent_tolerance_sq)
+			return false;
+
+		TauManifoldPoint &point = refreshed.points[point_index];
+		point.penetration = std::max(-separation, 0.f);
+		point.accumulated_normal_impulse = cached_point.accumulated_normal_impulse * Clamp(normal_alignment, 0.f, 1.f);
+		point.accumulated_tangent_impulse =
+			cached_point.accumulated_tangent_impulse - normal * Dot(cached_point.accumulated_tangent_impulse, normal);
+	}
+	return true;
+}
+
 bool ComputeTauPrimitiveContactManifold(const TauBodyProxy &body_a, const TauWorldShape &shape_a, const TauBodyProxy &body_b,
 	const TauWorldShape &shape_b, TauContactManifold &manifold) {
 	Vec3 point, anchor_a, anchor_b;
@@ -2587,7 +2667,7 @@ bool TauManifoldShapePairMatches(
 	return manifold.ref_a == ref_a && manifold.ref_b == ref_b && manifold.shape_a == shape_a && manifold.shape_b == shape_b;
 }
 
-size_t FindTauReusableSleepingManifold(TauManifoldLookup &lookup, const std::vector<TauContactManifold> &manifolds, NodeRef ref_a,
+size_t FindTauPreviousManifold(TauManifoldLookup &lookup, const std::vector<TauContactManifold> &manifolds, NodeRef ref_a,
 	uint32_t shape_a, NodeRef ref_b, uint32_t shape_b, uint32_t previous_step, TauContactDiagnostics &diagnostics) {
 	TauContactManifold key;
 	key.ref_a = ref_a;
@@ -2959,17 +3039,41 @@ void BuildTauContacts(
 					}
 					const float friction = CombineTauFriction(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
 					const float restitution = CombineTauRestitution(*body_a.node, *shape_a.shape, *body_b.node, *shape_b.shape);
+					size_t previous_manifold_index = std::numeric_limits<size_t>::max();
+					bool previous_manifold_lookup_done = false;
 					if (CanReuseTauSleepingContact(*body_a.node, *body_b.node)) {
-						const size_t cached_index = FindTauReusableSleepingManifold(manifold_lookup, manifolds, body_a.ref,
+						previous_manifold_index = FindTauPreviousManifold(manifold_lookup, manifolds, body_a.ref,
 							shape_a.shape_index, body_b.ref, shape_b.shape_index, step - 1, diagnostics);
-						if (cached_index != std::numeric_limits<size_t>::max()) {
-							auto &cached_manifold = manifolds[cached_index];
+						previous_manifold_lookup_done = true;
+						if (previous_manifold_index != std::numeric_limits<size_t>::max()) {
+							auto &cached_manifold = manifolds[previous_manifold_index];
 							cached_manifold.last_seen_step = step;
-							AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, cached_manifold, cached_index,
+							AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, cached_manifold, previous_manifold_index,
 								friction, restitution, contacts, diagnostics, true);
 							continue;
 						}
 						++diagnostics.sleeping_manifold_reuse_misses;
+					}
+
+					if (shape_a.shape->type == CT_Cube && shape_b.shape->type == CT_Cube) {
+						if (!previous_manifold_lookup_done)
+							previous_manifold_index = FindTauPreviousManifold(manifold_lookup, manifolds, body_a.ref,
+								shape_a.shape_index, body_b.ref, shape_b.shape_index, step - 1, diagnostics);
+						if (previous_manifold_index != std::numeric_limits<size_t>::max()) {
+							TauContactManifold refreshed;
+							if (TryRefreshTauCoherentCuboidManifold(
+									body_a, shape_a, body_b, shape_b, manifolds[previous_manifold_index], refreshed)) {
+								refreshed.last_seen_step = step;
+								manifolds[previous_manifold_index] = refreshed;
+								++diagnostics.cuboid_coherent_reuses;
+								diagnostics.cuboid_coherent_points_reused += refreshed.point_count;
+								diagnostics.warm_start_hits += refreshed.point_count;
+								AppendTauPersistentManifoldContacts(body_a, shape_a, body_b, shape_b, refreshed,
+									previous_manifold_index, friction, restitution, contacts, diagnostics, false);
+								continue;
+							}
+							++diagnostics.cuboid_coherent_fallbacks;
+						}
 					}
 
 					++diagnostics.narrowphase_calls;
@@ -3113,6 +3217,11 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.sleeping_manifold_points_reused)
 			 .arg(diagnostics.sleeping_manifold_reuse_misses)
 			 .str();
+	message += format("cuboid_coherence(manifolds=%1 points=%2 fallbacks=%3) ")
+			 .arg(diagnostics.cuboid_coherent_reuses)
+			 .arg(diagnostics.cuboid_coherent_points_reused)
+			 .arg(diagnostics.cuboid_coherent_fallbacks)
+			 .str();
 	message += format("scratch(growths=%1 cap=%2/%3/%4/%5/%6) ")
 			 .arg(reuse_stats.scratch_growths)
 			 .arg(reuse_stats.body_proxy_capacity)
@@ -3251,6 +3360,9 @@ void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactMan
 	reuse_stats.manifold_reuses = diagnostics.sleeping_manifold_reuses;
 	reuse_stats.manifold_points_reused = diagnostics.sleeping_manifold_points_reused;
 	reuse_stats.manifold_reuse_misses = diagnostics.sleeping_manifold_reuse_misses;
+	reuse_stats.cuboid_coherent_reuses = diagnostics.cuboid_coherent_reuses;
+	reuse_stats.cuboid_coherent_points_reused = diagnostics.cuboid_coherent_points_reused;
+	reuse_stats.cuboid_coherent_fallbacks = diagnostics.cuboid_coherent_fallbacks;
 	reuse_stats.primitive_manifolds = diagnostics.primitive_manifolds;
 	reuse_stats.warm_start_hits = diagnostics.warm_start_hits;
 	reuse_stats.warm_start_misses = diagnostics.warm_start_misses;

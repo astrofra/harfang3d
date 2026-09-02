@@ -7,10 +7,11 @@ the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
 contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
 per-world step scratch, shape-neutral contact persistence, solver
 pose/inertia/cuboid-axis caches, and prepared active velocity constraints are
-implemented and measured. The complete physics-only body-count/shape matrix
+implemented and measured. Active face-feature cuboid manifold coherence is
+also implemented with conservative validation and periodic full refresh. The complete physics-only body-count/shape matrix
 and controlled scene/render passes are also complete. Tau meets the
-representative active, settled, and end-to-end parity gates; coherent active
-cuboid manifold refresh is the next measured hotspot.
+representative active, settled, and end-to-end parity gates; coefficient fast
+paths are the next measured solver target.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -680,11 +681,55 @@ capsule/capsule contact checks also pass.
 
 The next implementation order is now:
 
-1. exploit active cuboid manifold feature coherence before full SAT/clipping;
-2. add profile-justified zero-restitution and zero-rolling-friction paths;
-3. add the guarded all-sleeping small-world shortcut;
-4. rerun the complete matrix before considering dense scene storage,
+1. add profile-justified zero-restitution and zero-rolling-friction paths;
+2. add the guarded all-sleeping small-world shortcut;
+3. rerun the complete matrix before considering dense scene storage,
    independent-island parallelism, or any iteration change.
+
+### Eleventh optimization result: coherent active cuboid manifolds
+
+Active cube/cube pairs now look up the manifold seen during the immediately
+preceding substep before invoking the complete cuboid generator. FaceA and
+FaceB manifolds can retain their feature and ordered body-local anchors when
+all conservative coherence checks pass: relative translation is below 2 cm,
+each endpoint rotated by less than 2 degrees, the reference normal remains
+aligned, the same incident face is selected, the cached contact axis still
+overlaps, and every retained anchor remains within the normal and tangential
+contact tolerances. Warm-start impulses remain attached to the same feature
+IDs; normal impulses are alignment-scaled and tangent impulses are reprojected
+onto the refreshed contact plane.
+
+The fast path is deliberately bounded to four consecutive coherent refreshes.
+The fifth persistent substep regenerates the manifold with all 15 SAT axes and
+face clipping. Any failed check immediately uses that same complete fallback.
+Edge/edge features, fallback face-center points, externally moved endpoints,
+and large transform changes also remain on the complete generator. This keeps
+the optimization local to stable contact patches and prevents a cached feature
+from becoming authoritative indefinitely.
+
+A temporary same-binary switch was used only for measurement and then removed.
+Five seeds alternated legacy/coherent execution order for the 1,500-cube active
+workload, with 120 samples per seed:
+
+| Path | Median | p95 | Change from legacy |
+|---|---:|---:|---:|
+| complete SAT/clipping every substep | 16.515 ms | 21.120 ms | baseline |
+| coherent feature reuse | 16.076 ms | 19.955 ms | 2.7% / 5.5% faster |
+
+Three attribution runs place `Tau.NarrowPhase` at 3.20-3.23 ms instead of
+3.78-3.87 ms and `Tau.BuildContacts` at 5.55-5.66 ms instead of 6.19-6.33 ms.
+At active step 300, diagnostics reported 1,163 coherent manifold refreshes and
+2,887 retained points, roughly 38% of emitted cuboid manifolds, while 1,854
+previous features conservatively fell back. No position or velocity iteration
+count changed.
+
+Two focused tests cover four coherent generations followed by the mandatory
+full refresh, and rejection after excessive relative motion. All 54 C++ test
+groups pass. Repeated 600-sample chain captures remain byte-identical and pass
+the established envelope with 4.64718 m maximum vertical error, 16.4712 m/s
+maximum Tau speed, and zero static-ring drift. The callback amplitude remains
+unchanged at a -0.00141478 m Tau/Bullet delta; fresh chair, friction,
+restitution, and rolling-friction captures also complete successfully.
 
 ## Workload Characterization
 
@@ -1140,9 +1185,10 @@ world rotation/inverse-inertia/cuboid-axis caches, and compact prepared active
 velocity constraints are implemented and satisfy their focused tests and
 physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
 normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
-effective mass inside velocity iterations. Coherent manifold refresh,
-coefficient fast paths, and dense scene-sync lists remain open; solver
-iteration counts remain unchanged.
+effective mass inside velocity iterations. Conservative coherent FaceA/FaceB
+manifold refresh is also implemented and periodically revalidated by the full
+generator. Coefficient fast paths and dense scene-sync lists remain open;
+solver iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1311,9 +1357,9 @@ fixed benchmark and timestep
 
 Tau now reaches measured parity for the representative mixed workload and
 outperforms Bullet strongly once the pool settles. Prepared active constraints
-reduce the cube velocity solve by about 23%. The remaining path to a
-suite-wide win is narrower and measured: coherent cuboid manifold refresh,
-coefficient fast paths, and a small-world all-sleeping shortcut, followed by
-parallel independent islands.
+reduce the cube velocity solve by about 23%, while coherent cuboid refresh cuts
+the focused active-cube p95 by another 5.5%. The remaining path to a suite-wide
+win is narrower and measured: coefficient fast paths and a small-world
+all-sleeping shortcut, followed by parallel independent islands.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.

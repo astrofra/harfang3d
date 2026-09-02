@@ -42,6 +42,9 @@ struct TauContactManifold {
 	TauContactFeature feature{};
 	std::array<TauManifoldPoint, 4> points{};
 	uint8_t point_count{0};
+	// Number of consecutive active steps refreshed from the cached cuboid
+	// feature. A bounded age forces a periodic complete SAT/clipping pass.
+	uint8_t coherence_age{0};
 	uint32_t last_seen_step{0};
 };
 

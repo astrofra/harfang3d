@@ -35,6 +35,9 @@ struct TauStepReuseStats {
 	size_t manifold_reuses{0};
 	size_t manifold_points_reused{0};
 	size_t manifold_reuse_misses{0};
+	size_t cuboid_coherent_reuses{0};
+	size_t cuboid_coherent_points_reused{0};
+	size_t cuboid_coherent_fallbacks{0};
 	size_t primitive_manifolds{0};
 	size_t warm_start_hits{0};
 	size_t warm_start_misses{0};

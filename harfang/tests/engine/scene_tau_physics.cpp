@@ -701,6 +701,59 @@ void TestCuboidManifoldCacheLifecycle() {
 	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
 }
 
+void TestActiveCuboidCoherentManifoldReuse() {
+	Scene scene;
+	const Node dynamic = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+	const Node fixed = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, -0.5f, 0.f), RBT_Static, 0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(dynamic, false);
+	physics.NodeStartTrackingCollisionEvents(dynamic, CETM_EventAndContacts);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	TEST_CHECK(tau_internal::GetLastStepReuseStats(physics).cuboid_coherent_reuses == 0);
+
+	for (uint8_t age = 1; age <= 4; ++age) {
+		physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+		const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+		TEST_CHECK_(stats.cuboid_coherent_reuses == 1, "expected coherent cuboid reuse at age %u, got %zu", age,
+			stats.cuboid_coherent_reuses);
+		TEST_CHECK(stats.cuboid_coherent_points_reused >= 1);
+		TEST_CHECK(stats.cuboid_coherent_fallbacks == 0);
+	}
+
+	// Reuse is deliberately bounded: the fifth persistent step refreshes the
+	// feature with the complete SAT/clipping generator.
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	const tau_internal::TauStepReuseStats refresh_stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(refresh_stats.cuboid_coherent_reuses == 0);
+	TEST_CHECK(refresh_stats.cuboid_coherent_fallbacks == 1);
+	NodePairContacts contacts;
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+}
+
+void TestActiveCuboidCoherenceRejectsLargeMotion() {
+	Scene scene;
+	const Node dynamic = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.49f, 0.f), RBT_Dynamic, 1.f);
+	const Node fixed = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, -0.5f, 0.f), RBT_Static, 0.f);
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(dynamic, false);
+	physics.NodeStartTrackingCollisionEvents(dynamic, CETM_EventAndContacts);
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+	physics.NodeSetLinearVelocity(dynamic, Vec3(25.f, 0.f, 0.f));
+	physics.StepSimulation(time_from_ms(1), time_from_ms(1), 1);
+
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.cuboid_coherent_reuses == 0);
+	TEST_CHECK(stats.cuboid_coherent_fallbacks == 1);
+	NodePairContacts contacts;
+	physics.CollectCollisionEvents(scene, contacts);
+	TEST_CHECK(!GetNodeRefPairContacts(dynamic.ref, fixed.ref, contacts).empty());
+}
+
 void TestRaycastAllHitsAreStableAndBounded() {
 	Scene scene;
 	const Node near_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, -2.f)), InvalidModelRef, {}, 0.f);
@@ -829,6 +882,8 @@ void test_scene_tau_physics() {
 	TestCapsulePrimitiveManifoldPersistence();
 	TestCapsuleSettlesOnCuboid();
 	TestCuboidManifoldCacheLifecycle();
+	TestActiveCuboidCoherentManifoldReuse();
+	TestActiveCuboidCoherenceRejectsLargeMotion();
 	TestRaycastAllHitsAreStableAndBounded();
 	TestMeshColliderRaycast();
 }
