@@ -142,6 +142,51 @@ struct TauNode {
 	bool transform_dirty{true};
 };
 
+namespace tau_internal {
+
+// Tau traverses every body several times per substep. Keep the body payloads
+// contiguous while retaining deterministic NodeRef ordering and O(1) lookup
+// for the public node-oriented API.
+struct TauNodeSlot {
+	NodeRef first{};
+	TauNode second;
+};
+
+class TauNodeStore {
+public:
+	using Storage = std::vector<TauNodeSlot>;
+	using iterator = Storage::iterator;
+	using const_iterator = Storage::const_iterator;
+
+	iterator begin() { return slots.begin(); }
+	const_iterator begin() const { return slots.begin(); }
+	iterator end() { return slots.end(); }
+	const_iterator end() const { return slots.end(); }
+
+	bool empty() const { return slots.empty(); }
+	size_t size() const { return slots.size(); }
+	size_t capacity() const { return slots.capacity(); }
+	void reserve(size_t count);
+	void clear();
+
+	iterator find(NodeRef ref);
+	const_iterator find(NodeRef ref) const;
+	bool contains(NodeRef ref) const;
+	TauNode &operator[](NodeRef ref);
+	iterator erase(iterator it);
+
+	// Exposed only for focused storage invariant tests.
+	bool IsOrderedAndIndexed() const;
+
+private:
+	void ReindexFrom(size_t first);
+
+	Storage slots;
+	std::unordered_map<NodeRef, size_t> indices;
+};
+
+} // namespace tau_internal
+
 // Generic 6-DoF constraints are unconstrained until limits or motors are set.
 // Keep their frames so Tau can preserve Bullet's current creation semantics and
 // grow the implementation without changing the public physics API again.
@@ -175,7 +220,7 @@ public:
 
 	void NodeDestroyPhysics(const Node &node);
 
-	bool NodeHasBody(NodeRef ref) const { return nodes.find(ref) != std::end(nodes); }
+	bool NodeHasBody(NodeRef ref) const { return nodes.contains(ref); }
 	bool NodeHasBody(const Node &node) const { return NodeHasBody(node.ref); }
 
 	void StepSimulation(time_ns dt, time_ns step = time_from_ms(16), int max_step = 8);
@@ -266,7 +311,7 @@ private:
 	std::shared_ptr<const CollisionGeometry> LoadCollisionGeometryResource(
 		const Reader &ir, const ReadProvider &ip, const std::string &resource);
 
-	std::map<NodeRef, TauNode> nodes;
+	tau_internal::TauNodeStore nodes;
 	std::map<std::string, std::shared_ptr<const CollisionGeometry>> collision_geometries;
 	std::vector<Tau6DofConstraint> constraints;
 	std::vector<TauContactManifold> contact_manifolds;

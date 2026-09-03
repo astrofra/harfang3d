@@ -24,7 +24,74 @@
 
 namespace hg {
 
+namespace tau_internal {
+
+void TauNodeStore::reserve(size_t count) {
+	slots.reserve(count);
+	indices.reserve(count);
+}
+
+void TauNodeStore::clear() {
+	Storage().swap(slots);
+	decltype(indices)().swap(indices);
+}
+
+TauNodeStore::iterator TauNodeStore::find(NodeRef ref) {
+	const auto found = indices.find(ref);
+	return found != std::end(indices) ? std::begin(slots) + found->second : std::end(slots);
+}
+
+TauNodeStore::const_iterator TauNodeStore::find(NodeRef ref) const {
+	const auto found = indices.find(ref);
+	return found != std::end(indices) ? std::begin(slots) + found->second : std::end(slots);
+}
+
+bool TauNodeStore::contains(NodeRef ref) const { return indices.find(ref) != std::end(indices); }
+
+void TauNodeStore::ReindexFrom(size_t first) {
+	for (size_t i = first; i < slots.size(); ++i)
+		indices[slots[i].first] = i;
+}
+
+TauNode &TauNodeStore::operator[](NodeRef ref) {
+	const auto found = indices.find(ref);
+	if (found != std::end(indices))
+		return slots[found->second].second;
+
+	const auto position = std::lower_bound(std::begin(slots), std::end(slots), ref,
+		[](const TauNodeSlot &slot, NodeRef candidate) { return slot.first < candidate; });
+	const size_t index = size_t(std::distance(std::begin(slots), position));
+	slots.insert(position, TauNodeSlot{ref, {}});
+	ReindexFrom(index);
+	return slots[index].second;
+}
+
+TauNodeStore::iterator TauNodeStore::erase(iterator it) {
+	const size_t index = size_t(std::distance(std::begin(slots), it));
+	indices.erase(it->first);
+	const auto next = slots.erase(it);
+	ReindexFrom(index);
+	return next;
+}
+
+bool TauNodeStore::IsOrderedAndIndexed() const {
+	if (indices.size() != slots.size())
+		return false;
+	for (size_t i = 0; i < slots.size(); ++i) {
+		if (i > 0 && !(slots[i - 1].first < slots[i].first))
+			return false;
+		const auto found = indices.find(slots[i].first);
+		if (found == std::end(indices) || found->second != i)
+			return false;
+	}
+	return true;
+}
+
+} // namespace tau_internal
+
 namespace {
+
+using TauNodeStore = tau_internal::TauNodeStore;
 
 static const Vec3 k_tau_gravity(0.f, -9.81f, 0.f);
 static constexpr float k_tau_collision_epsilon = 1e-5f;
@@ -241,12 +308,12 @@ Mat4 GetNodeWorld(const Node &node) {
 	return node.ComputeWorld();
 }
 
-TauNode *FindTauNode(std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
+TauNode *FindTauNode(TauNodeStore &nodes, NodeRef ref) {
 	const auto it = nodes.find(ref);
 	return it != std::end(nodes) ? &it->second : nullptr;
 }
 
-const TauNode *FindTauNode(const std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
+const TauNode *FindTauNode(const TauNodeStore &nodes, NodeRef ref) {
 	const auto it = nodes.find(ref);
 	return it != std::end(nodes) ? &it->second : nullptr;
 }
@@ -263,7 +330,7 @@ void WakeTauNodeState(TauNode &node) {
 	node.unsupported_sleep_steps = 0;
 }
 
-void WakeTauIsland(std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
+void WakeTauIsland(TauNodeStore &nodes, NodeRef ref) {
 	TauNode *node = FindTauNode(nodes, ref);
 	if (node == nullptr || !IsDynamicTauNode(*node))
 		return;
@@ -301,7 +368,7 @@ void WakeTauIsland(std::map<NodeRef, TauNode> &nodes, NodeRef ref) {
 	}
 }
 
-void WakeTauSupportedIslands(std::map<NodeRef, TauNode> &nodes, NodeRef support_ref) {
+void WakeTauSupportedIslands(TauNodeStore &nodes, NodeRef support_ref) {
 	std::vector<NodeRef> supported_bodies;
 	for (auto &entry : nodes) {
 		auto &node = entry.second;
@@ -2090,7 +2157,7 @@ void StoreTauScratchCapacityStats(const TauStepScratch &scratch, tau_internal::T
 	reuse_stats.island_body_capacity = scratch.islands.bodies.capacity();
 }
 
-bool CanSkipTauAllSleepingSubstep(const std::map<NodeRef, TauNode> &nodes, const DynamicAABBTree &broadphase_tree,
+bool CanSkipTauAllSleepingSubstep(const TauNodeStore &nodes, const DynamicAABBTree &broadphase_tree,
 	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, bool requires_full_substep, size_t &body_checks) {
 	body_checks = 0;
 	if (nodes.empty() || nodes.size() > k_tau_all_sleeping_fast_path_body_limit || requires_full_substep || !tracking_modes.empty() ||
@@ -2142,7 +2209,7 @@ bool HasTauDynamicSleepSupport(const TauNode &node, NodeRef support) {
 	return false;
 }
 
-void CaptureTauSleepingSupportSnapshots(TauNode &node, const std::map<NodeRef, TauNode> &nodes) {
+void CaptureTauSleepingSupportSnapshots(TauNode &node, const TauNodeStore &nodes) {
 	node.sleeping_support_snapshot_count = 0;
 	node.unsupported_sleep_steps = 0;
 	for (uint8_t i = 0; i < node.sleep_dynamic_support_count; ++i) {
@@ -2157,7 +2224,7 @@ void CaptureTauSleepingSupportSnapshots(TauNode &node, const std::map<NodeRef, T
 	}
 }
 
-void BuildTauIslandGraph(std::map<NodeRef, TauNode> &nodes, const std::vector<TauContactConstraint> &contacts,
+void BuildTauIslandGraph(TauNodeStore &nodes, const std::vector<TauContactConstraint> &contacts,
 	const std::vector<Tau6DofConstraint> &constraints, TauIslandGraph &graph) {
 	graph.bodies.clear();
 	graph.refs.clear();
@@ -2211,7 +2278,7 @@ void BuildTauIslandGraph(std::map<NodeRef, TauNode> &nodes, const std::vector<Ta
 }
 
 void WakeTauMergedIslands(
-	std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics,
+	TauNodeStore &nodes, TauIslandGraph &graph, std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics,
 	TauStepScratch &scratch) {
 	auto &wake_root = scratch.wake_roots;
 	wake_root.assign(graph.bodies.size(), 0);
@@ -2346,7 +2413,7 @@ uint32_t AllocateTauSleepIslandId(uint32_t &next_sleep_island_id) {
 	return id;
 }
 
-void UpdateTauIslandSleeping(std::map<NodeRef, TauNode> &nodes, TauIslandGraph &graph, const std::vector<TauContactConstraint> &contacts,
+void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const std::vector<TauContactConstraint> &contacts,
 	const std::vector<Tau6DofConstraint> &constraints, float dt_sec, uint32_t &next_sleep_island_id, TauContactDiagnostics &diagnostics,
 	TauStepScratch &scratch) {
 	const float linear_speed_sq = k_tau_sleep_linear_speed * k_tau_sleep_linear_speed;
@@ -2911,7 +2978,7 @@ void AppendTauPersistentManifoldContacts(const TauBodyProxy &body_a, const TauWo
 }
 
 void BuildTauContacts(
-	std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
+	TauNodeStore &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
 	DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs, uint32_t step, TauContactDiagnostics &diagnostics,
 	TauStepScratch &scratch) {
 	TauProfileSection build_contacts_profile("Tau.BuildContacts");
@@ -3345,7 +3412,7 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 	log(message.c_str());
 }
 
-void StepTauSubstep(std::map<NodeRef, TauNode> &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
+void StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifolds, TauManifoldLookup &manifold_lookup,
 	const std::vector<Tau6DofConstraint> &constraints, DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs,
 	uint32_t &next_sleep_island_id, uint32_t step, float dt_sec,
 	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts,
@@ -3534,7 +3601,9 @@ SceneTauPhysics::~SceneTauPhysics() = default;
 void SceneTauPhysics::SceneCreatePhysics(const Scene &scene, const Reader &ir, const ReadProvider &ip) {
 	ClearNodes();
 
-	for (const auto &node : scene.GetAllNodes())
+	const auto scene_nodes = scene.GetAllNodes();
+	nodes.reserve(scene_nodes.size());
+	for (const auto &node : scene_nodes)
 		NodeCreatePhysics(node, ir, ip);
 }
 
@@ -3841,7 +3910,7 @@ void SceneTauPhysics::Clear() {
 void SceneTauPhysics::NodeWake(NodeRef ref) const {
 	// The cross-backend API is historically const even though activation is
 	// mutable runtime state (matching SceneBullet3Physics::NodeWake).
-	WakeTauIsland(const_cast<std::map<NodeRef, TauNode> &>(nodes), ref);
+	WakeTauIsland(const_cast<TauNodeStore &>(nodes), ref);
 }
 
 void SceneTauPhysics::NodeSetDeactivation(NodeRef ref, bool enable) {

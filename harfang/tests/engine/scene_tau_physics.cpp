@@ -19,6 +19,46 @@ using namespace hg;
 
 namespace {
 
+void TestTauNodeStoreOrderingAndLookup() {
+	tau_internal::TauNodeStore store;
+	store.reserve(4);
+	const NodeRef high{9, 2};
+	const NodeRef low{2, 0};
+	const NodeRef middle{7, 1};
+
+	store[high].friction = 0.9f;
+	store[low].friction = 0.2f;
+	store[middle].friction = 0.7f;
+	TEST_CHECK(store.size() == 3);
+	TEST_CHECK(store.IsOrderedAndIndexed());
+	TEST_CHECK(store.contains(low));
+	TEST_CHECK(store.find(low) != store.end());
+	TEST_CHECK(store.find(low)->second.friction == 0.2f);
+
+	// Replacing a body must preserve its slot and must not create a duplicate.
+	TauNode replacement;
+	replacement.friction = 0.5f;
+	store[middle] = std::move(replacement);
+	TEST_CHECK(store.size() == 3);
+	TEST_CHECK(store.find(middle)->second.friction == 0.5f);
+	TEST_CHECK(store.IsOrderedAndIndexed());
+
+	// Erasing the middle slot shifts dense payloads; every following lookup must
+	// be reindexed and deterministic iteration order must remain intact.
+	store.erase(store.find(middle));
+	TEST_CHECK(store.size() == 2);
+	TEST_CHECK(!store.contains(middle));
+	TEST_CHECK(store.find(high) != store.end());
+	TEST_CHECK(store.find(high)->second.friction == 0.9f);
+	TEST_CHECK(store.IsOrderedAndIndexed());
+
+	store.clear();
+	TEST_CHECK(store.empty());
+	TEST_CHECK(store.capacity() == 0);
+	TEST_CHECK(!store.contains(low));
+	TEST_CHECK(store.IsOrderedAndIndexed());
+}
+
 Node CreateTauRaycastPrimitive(Scene &scene, CollisionType type, const Vec3 &position, float radius = 0.5f, float height = 1.f) {
 	Node node = scene.CreateNode();
 	node.SetTransform(scene.CreateTransform(TranslationMat4(position)));
@@ -982,6 +1022,7 @@ void TestMeshColliderRaycast() {
 } // namespace
 
 void test_scene_tau_physics() {
+	TestTauNodeStoreOrderingAndLookup();
 	TestPreTickCallback();
 	TestFixedStepAccumulation();
 	TestWorldInverseInertiaCacheTracksOrientation();

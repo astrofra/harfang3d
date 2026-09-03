@@ -14,8 +14,10 @@ solver fast paths are implemented and measured. A guarded all-sleeping fast
 path for worlds of at most 512 bodies is also implemented and measured. The
 complete physics-only body-count/shape matrix and controlled scene/render
 passes have been rerun against all accumulated optimizations. Tau beats Bullet
-on the representative mixed active, settled, and end-to-end gates. Dense body
-storage is the next target; solver iteration tuning remains deferred.
+on the representative mixed active, settled, and end-to-end gates. A first,
+behavior-preserving dense body-storage slice is implemented and measured; its
+median gain is small but positive, so hot/cold body-data separation remains the
+next locality target. Solver iteration tuning remains deferred.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -896,9 +898,9 @@ construction at 0.232 ms. A diagnostic sample reported 1,303 awake bodies,
 contact points.
 
 Dense body storage is therefore selected before independent-island
-parallelism. `TauNode` ownership remains in `std::map<NodeRef, TauNode>`, while
+parallelism. `TauNode` ownership remained in `std::map<NodeRef, TauNode>`, while
 the hot proxy, contact, island, and solver vectors repeatedly dereference
-scattered node pointers. Stable dense slots plus a `NodeRef`-to-slot lookup can
+scattered node pointers. Ordered dense slots plus a `NodeRef`-to-slot lookup can
 improve locality across the dominant single-threaded loops without depending
 on the active pile partitioning into balanced islands. Parallelism remains a
 subsequent option once the data layout is competitive and deterministic island
@@ -911,6 +913,68 @@ is 0.03582168 m with a -0.00141478 m amplitude delta; capsule pairs and all
 analytic, mesh, and rotating-terrain raycast checks pass. Solver iteration
 counts remain three and eight. Complete tables and render controls are archived
 in `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`.
+
+### Fifteenth optimization result: ordered dense body storage, limited slice
+
+`TauNode` ownership has moved from one allocation per body in
+`std::map<NodeRef, TauNode>` to an ordered `std::vector<TauNodeSlot>`. A hashed
+`NodeRef`-to-slot index retains expected O(1) public API lookup. Insertions use
+the same strict `NodeRef` order as the former map, and every existing hot loop
+continues to traverse bodies in that canonical order. This preserves body,
+candidate, contact, island, and sequential-solver ordering rather than hiding a
+trajectory change behind a storage optimization.
+
+The implementation deliberately limits this slice to ownership and lookup.
+Contact algorithms, manifold feature selection, sleeping decisions, solver
+equations, and the three position/eight velocity iterations are unchanged.
+Structural mutations happen outside the substep solver; appending newly created
+scene nodes is constant amortized time, while an uncommon out-of-order insertion
+or middle erase shifts the dense tail and rebuilds the affected lookup suffix.
+`ClearNodes` releases the dense allocation, preserving the old clear-world
+memory behavior. Scene-wide creation reserves once from the scene node count.
+
+A focused Release run used the complete-matrix protocol for the remaining
+hotspot: 1,500 active cube bodies, five deterministic seeds, 120 samples after
+10 warm-up steps, with diagnostics and profiling disabled. The archived matrix
+row is shown only as the pre-slice reference; the focused row comes from fresh
+Bullet and Tau processes on the implementation working tree based on
+`b3d271312cd82ba377385436795f6c073dec7cbc`.
+
+| 1,500 active cubes | Bullet median / p95 | Tau median / p95 | Tau/Bullet median / p95 |
+|---|---:|---:|---:|
+| Complete-matrix reference | 11.405 / 13.251 ms | 16.170 / 19.557 ms | 1.418x / 1.476x |
+| Dense-storage focused run | 11.312 / 13.107 ms | 15.947 / 19.756 ms | 1.410x / 1.507x |
+
+Tau's focused median is 1.4% below the archived value and the normalized median
+ratio improves by 0.6%. The p95 sample is 1.0% higher and does not establish a
+tail-latency win. This is therefore a useful low-risk foundation, not a claim
+that dense ownership alone closes the active-cuboid stretch gate. A later
+alternating run was affected by substantial system-wide slowdown in both
+backends and is excluded from the milestone numbers.
+
+Additional fresh five-seed active spot checks, run after that slowdown and
+therefore interpreted only as paired backend ratios, retained substantial Tau
+headroom outside the cube-only hotspot: mixed bodies measured 0.824x/0.805x
+Bullet by median/p95, and sphere-only bodies measured 0.578x/0.552x. No
+cross-backend performance inversion was observed in the two non-cuboid shape
+populations. A complete matrix rerun is still required before accepting a
+suite-wide p95 claim.
+
+The storage invariant test covers out-of-order insertion, replacement without
+duplication, middle erase with lookup reindexing, canonical order, and clear.
+All 54 C++ test groups pass. Two new 600-sample chain captures are byte-identical
+and also identical to the pre-slice Tau capture; the 4.64718 m vertical envelope,
+16.4712 m/s peak speed, and zero static drift are unchanged. The impulse-callback
+capture is likewise byte-identical to its pre-slice result, retaining the
+0.03582168 m maximum Bullet/Tau position error and -0.00141478 m amplitude
+delta.
+
+The next bounded locality slice should split solver-hot body state (pose,
+velocities, inverse mass/inertia, activation and factors) from cold ownership,
+shape, resource, sleep-history, and debug state. Profiles should then verify
+whether velocity and position solving benefit before independent-island
+parallelism is reconsidered. The complete matrix remains required after that
+stage; no solver-iteration change is authorized.
 
 ## Workload Characterization
 
@@ -1361,7 +1425,7 @@ weakening Tau physics.
 - The number of scene transform writes tracks awake/changed bodies in the
   settled benchmark.
 
-Implementation status (2026-09-02): the body-local persistent anchors,
+Implementation status (2026-09-03): the body-local persistent anchors,
 world rotation/inverse-inertia/cuboid-axis caches, and compact prepared active
 velocity constraints are implemented and satisfy their focused tests and
 physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
@@ -1369,10 +1433,11 @@ normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
 effective mass inside velocity iterations. Conservative coherent FaceA/FaceB
 manifold refresh is also implemented and periodically revalidated by the full
 generator. Coefficient fast paths and the guarded all-sleeping small-world
-shortcut are also implemented. The complete acceptance rerun selects stable
-dense body slots and hot-loop locality as the next stage. Dense scene-sync
-lists and parallel independent islands remain open; solver iteration counts
-remain unchanged.
+shortcut are also implemented. The first ordered dense body-ownership and
+hashed lookup slice is implemented without changing traversal order. Its small
+median gain selects a hot/cold `TauNode` split as the next locality experiment.
+Dense scene-sync lists and parallel independent islands remain open; solver
+iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1547,6 +1612,8 @@ the focused active-cube median and p95 by another 1.2% without changing any
 measured QA trajectory. Fully sleeping small worlds now fall to 3.0 us at 250
 dynamic bodies and 7.6 us at 500, eliminating the previous fixed Tau floor.
 The updated complete matrix reaches 0.974x/0.996x active sum-time median/p95
-and selects dense body storage before parallel independent islands.
+and selects dense body storage before parallel independent islands. The first
+ordered dense-ownership slice improves the focused 1,500-cube median by 1.4%
+but does not yet improve p95, so hot/cold body-state separation remains open.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.
