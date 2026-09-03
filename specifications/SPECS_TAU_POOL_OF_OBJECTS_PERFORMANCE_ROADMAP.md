@@ -1,6 +1,6 @@
 # Tau Physics Pool Performance Analysis And Optimization Roadmap
 
-Date: 2026-09-02
+Date: 2026-09-03
 
 Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
@@ -11,10 +11,11 @@ implemented and measured. Active face-feature cuboid manifold coherence is
 also implemented with conservative validation and periodic full refresh.
 Zero-restitution, non-positive-friction, and world-wide zero-rolling-friction
 solver fast paths are implemented and measured. A guarded all-sleeping fast
-path for worlds of at most 512 bodies is also implemented and measured. The complete physics-only body-count/shape matrix
-and controlled scene/render passes are also complete. Tau meets the
-representative active, settled, and end-to-end parity gates; rerunning that
-complete matrix against the accumulated optimizations is the next acceptance step.
+path for worlds of at most 512 bodies is also implemented and measured. The
+complete physics-only body-count/shape matrix and controlled scene/render
+passes have been rerun against all accumulated optimizations. Tau beats Bullet
+on the representative mixed active, settled, and end-to-end gates. Dense body
+storage is the next target; solver iteration tuning remains deferred.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -831,10 +832,85 @@ Tau speed, and zero static-ring drift; the callback amplitude delta remains
 -0.00141478 m, and all three capsule pair checks pass. Solver iteration counts
 remain three and eight.
 
-The next step is to rerun the complete body-count, shape, active, settled,
-scene, and rendered matrix. Its updated active-cube attribution should then
-choose between dense body storage and independent-island parallelism; iteration
-tuning remains deferred.
+The next step at that milestone was to rerun the complete body-count, shape,
+active, settled, scene, and rendered matrix. Its updated active-cube
+attribution would choose between dense body storage and independent-island
+parallelism; iteration tuning remained deferred.
+
+### Fourteenth optimization result: complete acceptance rerun
+
+The complete five-seed matrix was rerun from Release Bullet and Tau packages
+using revision `b492e916ec6a69d25ce8ed61f8287aa71cc0fe2c`. The original protocol was
+preserved: 250, 500, 1,000, 1,500, and 2,000 dynamic bodies; mixed, cube-only,
+and sphere-only populations; 120 samples after 10 warm-up steps; a 600-step
+settling transition; and alternating backend order by cell.
+
+Tau now reaches active sum-time parity across all 15 active cells:
+
+| Aggregate scope | Median Tau/Bullet | p95 Tau/Bullet |
+|---|---:|---:|
+| complete 30-cell suite, equal-cell | 0.634x | 0.676x |
+| complete 30-cell suite, sum-time | 0.563x | 0.607x |
+| active 15-cell suite, equal-cell | 1.042x | 1.120x |
+| active 15-cell suite, sum-time | 0.974x | 0.996x |
+| settled 15-cell suite, sum-time | 0.223x | 0.235x |
+
+This improves the active equal-cell median ratio from 1.177x to 1.042x, the
+active sum-time median ratio from 1.150x to 0.974x, and the complete sum-time
+median ratio from 0.658x to 0.563x. The small-world floor is gone: the settled
+median is 3 us versus 73 us for 250 cubes and 8 us versus 2.529 ms for 500
+cubes. Seeds that remained partially active after 600 steps correctly used the
+full path and were retained in the five-seed populations.
+
+The representative 1,500-body mixed cell now measures 10.820 ms versus
+12.465 ms active by median and 13.091 ms versus 14.715 ms by p95. Settled Tau
+is 3.048/3.440 ms median/p95 versus Bullet's 14.880/15.671 ms. The same result
+survives scene and rendering overhead: rendered active is 22.380/24.616 ms for
+Tau versus 24.225/26.840 ms for Bullet, and rendered settled is
+16.698/16.829 ms versus 26.735/27.661 ms. Bare scene and rendered no-physics
+controls remain backend-neutral.
+
+The suite-wide stretch gate is not complete because six median cells and seven
+p95 cells remain above 1.10x. Five of the six median failures are active
+cube-only workloads:
+
+| Active cube bodies | Median Tau/Bullet | p95 Tau/Bullet |
+|---:|---:|---:|
+| 250 | 1.134x | 1.936x |
+| 500 | 1.554x | 1.872x |
+| 1,000 | 1.542x | 1.597x |
+| 1,500 | 1.418x | 1.476x |
+| 2,000 | 1.320x | 1.377x |
+
+The remaining median failure is the 500-body mixed active cell at 1.225x.
+Sphere-only active cells range from 0.591x to 0.891x, confirming that the
+remaining issue is cuboid-heavy contact and solver locality rather than broad
+backend scaling.
+
+Three attribution runs on 1,500 active cubes put the complete Tau step at
+15.87 ms, velocity solving at 6.31 ms, contact construction at 5.63 ms,
+narrow phase at 3.22 ms inside contact construction, position solving at
+3.04 ms, broad phase at 1.78 ms, proxy update at 0.524 ms, and island
+construction at 0.232 ms. A diagnostic sample reported 1,303 awake bodies,
+196 candidates, one sleeper, 146 contact islands, 3,085 manifolds, and 5,897
+contact points.
+
+Dense body storage is therefore selected before independent-island
+parallelism. `TauNode` ownership remains in `std::map<NodeRef, TauNode>`, while
+the hot proxy, contact, island, and solver vectors repeatedly dereference
+scattered node pointers. Stable dense slots plus a `NodeRef`-to-slot lookup can
+improve locality across the dominant single-threaded loops without depending
+on the active pile partitioning into balanced islands. Parallelism remains a
+subsequent option once the data layout is competitive and deterministic island
+work scheduling can be measured.
+
+The correctness gates remain green: all 54 C++ test groups pass; two fresh
+600-sample chain captures are byte-identical and preserve the 4.64718 m,
+16.4712 m/s, and zero-static-drift envelope; callback maximum position error
+is 0.03582168 m with a -0.00141478 m amplitude delta; capsule pairs and all
+analytic, mesh, and rotating-terrain raycast checks pass. Solver iteration
+counts remain three and eight. Complete tables and render controls are archived
+in `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`.
 
 ## Workload Characterization
 
@@ -1293,8 +1369,10 @@ normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
 effective mass inside velocity iterations. Conservative coherent FaceA/FaceB
 manifold refresh is also implemented and periodically revalidated by the full
 generator. Coefficient fast paths and the guarded all-sleeping small-world
-shortcut are also implemented. Dense scene-sync lists and parallel independent
-islands remain open; solver iteration counts remain unchanged.
+shortcut are also implemented. The complete acceptance rerun selects stable
+dense body slots and hot-loop locality as the next stage. Dense scene-sync
+lists and parallel independent islands remain open; solver iteration counts
+remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1468,7 +1546,7 @@ the focused active-cube p95 by another 5.5%. Coefficient fast paths then reduce
 the focused active-cube median and p95 by another 1.2% without changing any
 measured QA trajectory. Fully sleeping small worlds now fall to 3.0 us at 250
 dynamic bodies and 7.6 us at 500, eliminating the previous fixed Tau floor.
-The remaining path to a suite-wide win is an updated complete-matrix decision
-between dense storage and parallel independent islands.
+The updated complete matrix reaches 0.974x/0.996x active sum-time median/p95
+and selects dense body storage before parallel independent islands.
 The active cube-only and per-cell stretch gates must pass before claiming that
 Tau beats Bullet without qualification.

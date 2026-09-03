@@ -1,35 +1,38 @@
 # Tau Physics Pool Complete Performance Matrix
 
-Date: 2026-09-02
+Date: 2026-09-03
 
-Status: complete for the deterministic physics-only matrix and the controlled
-scene/render acceptance passes described below. The first post-matrix solver
-optimizations are recorded in the follow-up sections.
+Status: complete for the fresh deterministic physics-only and controlled
+scene/render acceptance rerun after the manifold, solver-coefficient, and
+all-sleeping optimizations. The 2026-09-02 matrix is retained below as the
+historical baseline; the current results are in the final section.
 
 Related roadmap:
 `specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_ROADMAP.md`.
 
 ## Outcome
 
-Tau now meets the roadmap's representative 1,500-body mixed-workload gates
+Tau now beats Bullet on the roadmap's representative 1,500-body
+mixed-workload gates
 without reducing the solver's three position or eight velocity iterations:
 
-- active physics p95: 15.179 ms for Tau versus 14.261 ms for Bullet, or
-  **1.064x**;
-- settled physics p95: 3.612 ms for Tau versus 15.249 ms for Bullet, or
-  **0.237x**;
-- rendered active p95: 26.541 ms for Tau versus 26.420 ms for Bullet, or
-  **1.005x**;
-- rendered settled p95: 16.699 ms for Tau versus 27.019 ms for Bullet, or
-  **0.618x**.
+- active physics p95: 13.091 ms for Tau versus 14.715 ms for Bullet, or
+  **0.890x**;
+- settled physics p95: 3.440 ms for Tau versus 15.671 ms for Bullet, or
+  **0.220x**;
+- rendered active p95: 24.616 ms for Tau versus 26.840 ms for Bullet, or
+  **0.917x**;
+- rendered settled p95: 16.829 ms for Tau versus 27.661 ms for Bullet, or
+  **0.608x**.
 
-The complete matrix exposed active cube-only physics as the next optimization
-target: it was 1.18x to 1.84x slower than Bullet by median. Prepared active
-velocity constraints and coherent cuboid manifold refresh now reduce that
-hotspot, as documented below, but the global stretch goal still requires a
-fresh complete-matrix rerun after the remaining coefficient fast paths.
+Across all 30 physics cells, Tau's sum-time median ratio is **0.563x** and its
+equal-cell median ratio is **0.634x**. Active sum-time parity is reached at
+0.974x by median and 0.996x by p95. The remaining exception is active
+cube-only physics, which is 1.13x to 1.55x slower by median. The stretch goal
+therefore remains open because six median cells and seven p95 cells exceed
+1.10x.
 
-## Protocol
+## 2026-09-02 Baseline Protocol
 
 Both Lua packages were rebuilt and installed from source revision
 `63769827234e3b15e81995ac3f24ce278e15b28d` before the run. The benchmark ran
@@ -54,7 +57,7 @@ Each table entry is the median of the five per-repetition medians. The p95
 entry is the median of the five per-repetition p95 values. Lower is better.
 Diagnostics and `HG_TAU_PROFILE` were disabled for backend comparisons.
 
-## Physics-only Matrix
+## 2026-09-02 Baseline Physics-only Matrix
 
 ### Active window
 
@@ -101,7 +104,7 @@ sleeping failure. Bullet reached a roughly 0.073 ms fully sleeping path in
 four of five seeds, while Tau retained about 0.287 ms of fixed step overhead.
 At 500 bodies and above Tau is faster in every settled shape population.
 
-## Aggregate Views
+## 2026-09-02 Baseline Aggregate Views
 
 Two aggregate views are reported to avoid hiding either workload fairness or
 absolute CPU consumption. The equal-cell view gives every matrix cell equal
@@ -121,7 +124,7 @@ Eight of 30 cells exceed 1.10x by median and nine exceed 1.10x by p95. Seven
 of the eight median failures are active workloads. The remaining one is the
 250-cube settled fixed-overhead outlier.
 
-## Scene And Render Controls
+## 2026-09-02 Baseline Scene And Render Controls
 
 The controlled end-to-end pass uses the same 1,500-body mixed scene, seeds,
 fixed-step protocol, repetitions, and settling window. Render modes add a
@@ -151,7 +154,7 @@ remain valid preliminary evidence for the former implementation and its
 interactive spawn/substep history, but are not a numeric baseline for the
 current code.
 
-## Acceptance Gates
+## 2026-09-02 Baseline Acceptance Gates
 
 | Roadmap gate | Result | Evidence |
 |---|---|---|
@@ -162,7 +165,7 @@ current code.
 | rendered end-to-end no more than 1.10x | PASS | 1.005x active and 0.618x settled by p95 |
 | stretch: at least 15% faster with no cell over 1.10x | FAIL | Equal-cell median is 14.4% faster, but cube-active cells and the 250-cube settled cell exceed 1.10x |
 
-## Remaining Hotspot Attribution
+## 2026-09-02 Baseline Hotspot Attribution
 
 A three-repetition attribution-only profile of the 1,500-cube active cell
 reports an approximately 18.1 ms Tau step. Representative nested scopes are:
@@ -196,13 +199,14 @@ counts unchanged:
 3. **Completed:** add an all-sleeping fast path for small worlds when no proxy moved, no wake
    request is pending, and no tracked-contact publication requires traversal.
    This targets the 0.287 ms fixed floor revealed by the 250-cube cell.
-4. **Next:** re-run the complete matrix and the existing physics QA after every stage.
+4. **Completed:** re-run the complete matrix and the existing physics QA after every stage.
    Accept no active cube regression and no contact, wake, callback, chain, or
    raycast regression.
-5. Only after the single-threaded cube path is competitive, evaluate dense
-   body storage and independent-island parallelism. Scene-sync work is lower
-   priority because the controlled scene pass is already near physics-only
-   parity.
+5. **Next:** replace hot `std::map` body traversal and scattered node access
+   with stable dense body slots plus a `NodeRef` lookup. Re-profile the active
+   cube cell before considering independent-island parallelism. Scene-sync
+   work is lower priority because the controlled scene pass already follows
+   physics-only performance.
 
 This trajectory targets the measured 8.2 ms velocity-solver and 6.0 ms
 contact-construction costs directly. It does not rely on weaker physical
@@ -328,6 +332,133 @@ motion, and body-limit tests pass. The full C++ suite, byte-identical chain and
 callback captures, chain envelope, callback amplitude, and capsule checks also
 pass without an iteration change.
 
-The next action is a fresh complete acceptance matrix. Updated active-cube
-attribution will select dense body storage or independent-island parallelism;
-iteration tuning remains deferred.
+The fresh complete acceptance matrix below selects dense body storage before
+independent-island parallelism. Iteration tuning remains deferred.
+
+## 2026-09-03 Complete Acceptance Rerun
+
+Both Release packages were rebuilt and installed from revision
+`b492e916ec6a69d25ce8ed61f8287aa71cc0fe2c` from a clean source tree. The
+rerun used the original protocol unchanged: five seeds from 5,521,749, 120
+samples, 10 warm-up steps, a 600-step settling transition, and alternating
+backend order per body-count/shape cell. Profiling and contact diagnostics were
+disabled for all comparative samples.
+
+### Current Physics-Only Matrix
+
+#### Active window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.373 ms | 0.366 ms | 0.980x | 0.931 ms | 1.226 ms | 1.317x |
+| 250 | cube | 0.383 ms | 0.435 ms | 1.134x | 0.903 ms | 1.748 ms | 1.936x |
+| 250 | sphere | 0.326 ms | 0.290 ms | 0.891x | 0.813 ms | 0.634 ms | 0.780x |
+| 500 | mixed | 1.268 ms | 1.552 ms | 1.225x | 2.555 ms | 3.027 ms | 1.185x |
+| 500 | cube | 1.332 ms | 2.070 ms | 1.554x | 2.452 ms | 4.589 ms | 1.872x |
+| 500 | sphere | 1.074 ms | 0.949 ms | 0.884x | 2.173 ms | 1.683 ms | 0.774x |
+| 1,000 | mixed | 5.341 ms | 5.571 ms | 1.043x | 7.842 ms | 7.523 ms | 0.959x |
+| 1,000 | cube | 5.193 ms | 8.005 ms | 1.542x | 7.246 ms | 11.571 ms | 1.597x |
+| 1,000 | sphere | 4.474 ms | 3.285 ms | 0.734x | 7.065 ms | 4.306 ms | 0.609x |
+| 1,500 | mixed | 12.465 ms | 10.820 ms | 0.868x | 14.715 ms | 13.091 ms | 0.890x |
+| 1,500 | cube | 11.405 ms | 16.170 ms | 1.418x | 13.251 ms | 19.557 ms | 1.476x |
+| 1,500 | sphere | 11.140 ms | 6.696 ms | 0.601x | 13.908 ms | 8.115 ms | 0.584x |
+| 2,000 | mixed | 20.168 ms | 16.947 ms | 0.840x | 22.612 ms | 19.608 ms | 0.867x |
+| 2,000 | cube | 18.796 ms | 24.816 ms | 1.320x | 20.504 ms | 28.241 ms | 1.377x |
+| 2,000 | sphere | 17.541 ms | 10.360 ms | 0.591x | 20.103 ms | 11.644 ms | 0.579x |
+
+#### Settled window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.785 ms | 0.253 ms | 0.322x | 0.809 ms | 0.262 ms | 0.324x |
+| 250 | cube | 0.073 ms | 0.003 ms | 0.041x | 0.075 ms | 0.003 ms | 0.041x |
+| 250 | sphere | 0.639 ms | 0.257 ms | 0.401x | 0.666 ms | 0.277 ms | 0.416x |
+| 500 | mixed | 2.260 ms | 0.643 ms | 0.285x | 2.485 ms | 0.676 ms | 0.272x |
+| 500 | cube | 2.529 ms | 0.008 ms | 0.003x | 2.826 ms | 0.008 ms | 0.003x |
+| 500 | sphere | 1.521 ms | 0.489 ms | 0.321x | 1.669 ms | 0.536 ms | 0.321x |
+| 1,000 | mixed | 7.502 ms | 1.689 ms | 0.225x | 8.288 ms | 1.791 ms | 0.216x |
+| 1,000 | cube | 7.759 ms | 2.097 ms | 0.270x | 8.459 ms | 2.224 ms | 0.263x |
+| 1,000 | sphere | 5.386 ms | 1.146 ms | 0.213x | 6.288 ms | 1.203 ms | 0.191x |
+| 1,500 | mixed | 14.880 ms | 3.048 ms | 0.205x | 15.671 ms | 3.440 ms | 0.220x |
+| 1,500 | cube | 15.017 ms | 3.864 ms | 0.257x | 15.997 ms | 4.375 ms | 0.273x |
+| 1,500 | sphere | 12.104 ms | 2.301 ms | 0.190x | 12.975 ms | 3.084 ms | 0.238x |
+| 2,000 | mixed | 22.593 ms | 4.805 ms | 0.213x | 23.820 ms | 5.368 ms | 0.225x |
+| 2,000 | cube | 22.008 ms | 6.001 ms | 0.273x | 23.382 ms | 6.588 ms | 0.282x |
+| 2,000 | sphere | 19.197 ms | 3.321 ms | 0.173x | 20.452 ms | 4.013 ms | 0.196x |
+
+The all-sleeping fast path removes the former 250-cube fixed-cost outlier.
+Four of five 250-cube seeds and three of five 500-cube seeds were fully asleep
+during the settled window; using the median-of-five rule correctly selects the
+3 us and 8 us fast-path populations. Seeds that had not yet fully converged
+continued through the complete solver path and were not discarded.
+
+### Current Aggregate Views
+
+| Scope | Cells | Equal-cell median ratio | Equal-cell p95 ratio | Sum-time median ratio | Sum-time p95 ratio |
+|---|---:|---:|---:|---:|---:|
+| complete suite | 30 | 0.634x | 0.676x | 0.563x | 0.607x |
+| active | 15 | 1.042x | 1.120x | 0.974x | 0.996x |
+| settled | 15 | 0.226x | 0.232x | 0.223x | 0.235x |
+| mixed, both phases | 10 | 0.621x | 0.647x | 0.521x | 0.562x |
+| cube, both phases | 10 | 0.781x | 0.912x | 0.751x | 0.830x |
+| sphere, both phases | 10 | 0.500x | 0.469x | 0.396x | 0.412x |
+
+Compared with the 2026-09-02 matrix, the active equal-cell median ratio falls
+from 1.177x to 1.042x and the active sum-time median ratio falls from 1.150x
+to 0.974x. The complete sum-time median ratio improves from 0.658x to 0.563x.
+Six median cells and seven p95 cells remain above 1.10x; every median failure
+is active, five of six are cube-only, and the remaining one is the 500-body
+mixed cell.
+
+### Current Scene And Render Controls
+
+The valid render pass was launched from `tutorials` so that
+`resources_compiled` resolved and the default forward shaders loaded. An
+initial asset-less launch was discarded before aggregation.
+
+| Mode | Window | Bullet median | Tau median | Ratio | Bullet p95 | Tau p95 | p95 ratio |
+|---|---|---:|---:|---:|---:|---:|---:|
+| scene + physics | active | 12.876 ms | 10.959 ms | 0.851x | 15.306 ms | 13.240 ms | 0.865x |
+| scene + physics | settled | 15.181 ms | 3.174 ms | 0.209x | 15.949 ms | 3.605 ms | 0.226x |
+| bare scene, no physics | active | 0.064 ms | 0.064 ms | 1.002x | 0.068 ms | 0.069 ms | 1.016x |
+| bare scene, no physics | settled | 0.064 ms | 0.064 ms | 1.002x | 0.069 ms | 0.069 ms | 1.013x |
+| rendered + physics | active | 24.225 ms | 22.380 ms | 0.924x | 26.840 ms | 24.616 ms | 0.917x |
+| rendered + physics | settled | 26.735 ms | 16.698 ms | 0.625x | 27.661 ms | 16.829 ms | 0.608x |
+| rendered, no physics | active | 16.697 ms | 16.700 ms | 1.000x | 16.941 ms | 16.984 ms | 1.003x |
+| rendered, no physics | settled | 16.697 ms | 16.698 ms | 1.000x | 16.926 ms | 16.944 ms | 1.001x |
+
+### Current Acceptance And Attribution
+
+The representative mixed-workload physics, scene, and rendered parity gates
+all pass. The stretch gate remains open because active cube cells exceed
+1.10x even though the complete weighted suite is substantially faster.
+
+Three attribution-only runs of the 1,500-cube active cell report:
+
+| Tau scope | Average per step |
+|---|---:|
+| velocity solve | 6.31 ms |
+| contact construction | 5.63 ms |
+| narrow phase, included in contact construction | 3.22 ms |
+| position solve | 3.04 ms |
+| broad phase | 1.78 ms |
+| proxy update | 0.524 ms |
+| island construction | 0.232 ms |
+| complete Tau step | 15.87 ms |
+
+A diagnostic sample at contact step 300 contained 1,303 awake bodies, 196
+sleep candidates, one sleeper, 146 contact islands, 3,085 manifolds, and 5,897
+contact points. The dense pile still drives the solver and contact cost, while
+island construction itself is only 0.232 ms. The next stage is therefore
+stable dense body slots and hot-loop data locality before island parallelism.
+
+All 54 C++ test groups pass. Two fresh 600-sample Tau chain captures are
+byte-identical and pass the established envelope at 4.64718 m maximum vertical
+error, 16.4712 m/s maximum Tau speed, and zero static drift. The callback gate
+remains at 0.03582168 m maximum position error and -0.00141478 m amplitude
+delta. Capsule/sphere, capsule/cuboid, capsule/capsule, all analytic raycast
+primitives, the 361/80 mesh raycast, and the rotating-terrain 403/3,348
+raycast checks pass. Chair, friction, restitution, and rolling-friction
+captures also completed for both backends; their generic strict trajectory
+comparison continues to report backend-specific differences and is retained
+as an inspection report rather than a parity gate.
