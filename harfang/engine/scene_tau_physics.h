@@ -97,60 +97,69 @@ struct TauSleepSupportSnapshot {
 	Quaternion orientation{Quaternion::Identity};
 };
 
-struct TauNode {
+struct TauNodeCold {
 	tau_compat::NodeMotionAdapter motion{};
 	std::vector<TauCollisionShape> shapes;
 	std::vector<TauWorldShape> world_shapes;
 	MinMax world_bounds;
-	RigidBodyType body_type{RBT_Static};
-	float total_mass{0.f};
-	float inverse_mass{0.f};
-	Mat3 inverse_inertia_body{Mat3::Zero};
-	Vec3 position{Vec3::Zero};
-	Vec3 previous_position{Vec3::Zero};
-	Quaternion orientation{Quaternion::Identity};
-	Quaternion previous_orientation{Quaternion::Identity};
-	Mat3 world_rotation{Mat3::Identity};
-	Mat3 inverse_inertia_world{Mat3::Zero};
-	Vec3 scale{Vec3::One};
-	float linear_damping{0.f};
-	float angular_damping{0.f};
-	float friction{0.f};
-	float restitution{0.f};
-	float rolling_friction{0.f};
-	Vec3 linear_velocity{Vec3::Zero};
-	Vec3 angular_velocity{Vec3::Zero};
-	Vec3 linear_factor{Vec3::One};
-	Vec3 angular_factor{Vec3::One};
-	Vec3 accumulated_force{Vec3::Zero};
-	Vec3 accumulated_torque{Vec3::Zero};
 	DynamicAABBTreeProxy broadphase_proxy{InvalidDynamicAABBTreeProxy};
 	std::vector<NodeRef> sleep_supports;
 	std::vector<NodeRef> sleep_neighbors;
 	std::array<NodeRef, 8> sleep_dynamic_supports{};
 	std::array<TauSleepSupportSnapshot, 8> sleeping_support_snapshots{};
-	uint8_t sleep_dynamic_support_count{0};
-	uint8_t sleeping_support_snapshot_count{0};
-	uint8_t unsupported_sleep_steps{0};
+	Mat3 inverse_inertia_body{Mat3::Zero};
+	Vec3 previous_position{Vec3::Zero};
+	Quaternion previous_orientation{Quaternion::Identity};
+	Vec3 scale{Vec3::One};
+	Vec3 accumulated_force{Vec3::Zero};
+	Vec3 accumulated_torque{Vec3::Zero};
+	float linear_damping{0.f};
+	float angular_damping{0.f};
+	float friction{0.f};
+	float restitution{0.f};
+	float rolling_friction{0.f};
 	float sleep_timer{0.f};
 	uint32_t sleep_island_id{0};
 	uint32_t island_index{0xffffffff};
-	TauActivationState activation_state{TauActivationState::Awake};
-	bool deactivation_enabled{true};
+	uint8_t sleep_dynamic_support_count{0};
+	uint8_t sleeping_support_snapshot_count{0};
+	uint8_t unsupported_sleep_steps{0};
 	bool world_proxy_cache_valid{false};
 	bool externally_moved{false};
 	bool transform_dirty{true};
+	bool deactivation_enabled{true};
+};
+
+// Solver-hot body state. TauNodeStore keeps these entries contiguous and keeps
+// ownership, shapes, broad-phase caches, and sleep history in a parallel cold
+// array reached only by phases that need it.
+struct TauNode {
+	TauNodeCold *cold{nullptr};
+	RigidBodyType body_type{RBT_Static};
+	float total_mass{0.f};
+	float inverse_mass{0.f};
+	Vec3 position{Vec3::Zero};
+	Quaternion orientation{Quaternion::Identity};
+	Mat3 world_rotation{Mat3::Identity};
+	Mat3 inverse_inertia_world{Mat3::Zero};
+	Vec3 linear_velocity{Vec3::Zero};
+	Vec3 angular_velocity{Vec3::Zero};
+	Vec3 linear_factor{Vec3::One};
+	Vec3 angular_factor{Vec3::One};
+	TauActivationState activation_state{TauActivationState::Awake};
 };
 
 namespace tau_internal {
 
-// Tau traverses every body several times per substep. Keep the body payloads
+// Tau traverses every hot body several times per substep. Keep those payloads
 // contiguous while retaining deterministic NodeRef ordering and O(1) lookup
 // for the public node-oriented API.
 struct TauNodeSlot {
 	NodeRef first{};
 	TauNode second;
 };
+
+static_assert(sizeof(TauNodeSlot) < sizeof(TauNodeCold), "Tau hot body storage must remain smaller than its cold payload");
 
 class TauNodeStore {
 public:
@@ -172,7 +181,7 @@ public:
 	iterator find(NodeRef ref);
 	const_iterator find(NodeRef ref) const;
 	bool contains(NodeRef ref) const;
-	TauNode &operator[](NodeRef ref);
+	TauNode &InsertOrAssign(NodeRef ref, TauNode &&node, TauNodeCold &&cold);
 	iterator erase(iterator it);
 
 	// Exposed only for focused storage invariant tests.
@@ -180,8 +189,10 @@ public:
 
 private:
 	void ReindexFrom(size_t first);
+	void RebindColdStorage(size_t first = 0);
 
 	Storage slots;
+	std::vector<TauNodeCold> cold_slots;
 	std::unordered_map<NodeRef, size_t> indices;
 };
 

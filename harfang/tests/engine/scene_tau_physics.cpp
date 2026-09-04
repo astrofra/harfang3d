@@ -26,21 +26,39 @@ void TestTauNodeStoreOrderingAndLookup() {
 	const NodeRef low{2, 0};
 	const NodeRef middle{7, 1};
 
-	store[high].friction = 0.9f;
-	store[low].friction = 0.2f;
-	store[middle].friction = 0.7f;
+	auto insert = [&store](NodeRef ref, float value) -> TauNode & {
+		TauNode node;
+		node.inverse_mass = value;
+		TauNodeCold cold;
+		cold.friction = value;
+		cold.shapes.push_back({});
+		return store.InsertOrAssign(ref, std::move(node), std::move(cold));
+	};
+	insert(high, 0.9f);
+	insert(low, 0.2f);
+	insert(middle, 0.7f);
 	TEST_CHECK(store.size() == 3);
 	TEST_CHECK(store.IsOrderedAndIndexed());
 	TEST_CHECK(store.contains(low));
 	TEST_CHECK(store.find(low) != store.end());
-	TEST_CHECK(store.find(low)->second.friction == 0.2f);
+	TEST_CHECK(store.find(low)->second.inverse_mass == 0.2f);
+	TEST_CHECK(store.find(low)->second.cold != nullptr);
+	TEST_CHECK(store.find(low)->second.cold->shapes.size() == 1);
+	store.reserve(16);
+	TEST_CHECK(store.IsOrderedAndIndexed());
+	TEST_CHECK(store.find(low)->second.cold->shapes.size() == 1);
 
-	// Replacing a body must preserve its slot and must not create a duplicate.
+	// Replacing a body must preserve its slot, rebind its cold payload, and must
+	// not create a duplicate.
 	TauNode replacement;
-	replacement.friction = 0.5f;
-	store[middle] = std::move(replacement);
+	replacement.inverse_mass = 0.5f;
+	TauNodeCold replacement_cold;
+	replacement_cold.friction = 0.5f;
+	replacement_cold.shapes.resize(2);
+	store.InsertOrAssign(middle, std::move(replacement), std::move(replacement_cold));
 	TEST_CHECK(store.size() == 3);
-	TEST_CHECK(store.find(middle)->second.friction == 0.5f);
+	TEST_CHECK(store.find(middle)->second.inverse_mass == 0.5f);
+	TEST_CHECK(store.find(middle)->second.cold->shapes.size() == 2);
 	TEST_CHECK(store.IsOrderedAndIndexed());
 
 	// Erasing the middle slot shifts dense payloads; every following lookup must
@@ -49,7 +67,8 @@ void TestTauNodeStoreOrderingAndLookup() {
 	TEST_CHECK(store.size() == 2);
 	TEST_CHECK(!store.contains(middle));
 	TEST_CHECK(store.find(high) != store.end());
-	TEST_CHECK(store.find(high)->second.friction == 0.9f);
+	TEST_CHECK(store.find(high)->second.inverse_mass == 0.9f);
+	TEST_CHECK(store.find(high)->second.cold->friction == 0.9f);
 	TEST_CHECK(store.IsOrderedAndIndexed());
 
 	store.clear();

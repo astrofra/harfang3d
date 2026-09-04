@@ -27,12 +27,17 @@ namespace hg {
 namespace tau_internal {
 
 void TauNodeStore::reserve(size_t count) {
+	const bool cold_storage_will_move = count > cold_slots.capacity();
 	slots.reserve(count);
+	cold_slots.reserve(count);
 	indices.reserve(count);
+	if (cold_storage_will_move)
+		RebindColdStorage();
 }
 
 void TauNodeStore::clear() {
 	Storage().swap(slots);
+	decltype(cold_slots)().swap(cold_slots);
 	decltype(indices)().swap(indices);
 }
 
@@ -53,16 +58,29 @@ void TauNodeStore::ReindexFrom(size_t first) {
 		indices[slots[i].first] = i;
 }
 
-TauNode &TauNodeStore::operator[](NodeRef ref) {
+void TauNodeStore::RebindColdStorage(size_t first) {
+	for (size_t i = first; i < slots.size(); ++i)
+		slots[i].second.cold = &cold_slots[i];
+}
+
+TauNode &TauNodeStore::InsertOrAssign(NodeRef ref, TauNode &&node, TauNodeCold &&cold) {
 	const auto found = indices.find(ref);
-	if (found != std::end(indices))
+	if (found != std::end(indices)) {
+		const size_t index = found->second;
+		slots[index].second = std::move(node);
+		cold_slots[index] = std::move(cold);
+		slots[index].second.cold = &cold_slots[index];
 		return slots[found->second].second;
+	}
 
 	const auto position = std::lower_bound(std::begin(slots), std::end(slots), ref,
 		[](const TauNodeSlot &slot, NodeRef candidate) { return slot.first < candidate; });
 	const size_t index = size_t(std::distance(std::begin(slots), position));
-	slots.insert(position, TauNodeSlot{ref, {}});
+	const bool cold_storage_will_move = cold_slots.size() == cold_slots.capacity();
+	slots.insert(position, TauNodeSlot{ref, std::move(node)});
+	cold_slots.insert(std::begin(cold_slots) + index, std::move(cold));
 	ReindexFrom(index);
+	RebindColdStorage(cold_storage_will_move ? 0 : index);
 	return slots[index].second;
 }
 
@@ -70,18 +88,22 @@ TauNodeStore::iterator TauNodeStore::erase(iterator it) {
 	const size_t index = size_t(std::distance(std::begin(slots), it));
 	indices.erase(it->first);
 	const auto next = slots.erase(it);
+	cold_slots.erase(std::begin(cold_slots) + index);
 	ReindexFrom(index);
+	RebindColdStorage(index);
 	return next;
 }
 
 bool TauNodeStore::IsOrderedAndIndexed() const {
-	if (indices.size() != slots.size())
+	if (indices.size() != slots.size() || cold_slots.size() != slots.size())
 		return false;
 	for (size_t i = 0; i < slots.size(); ++i) {
 		if (i > 0 && !(slots[i - 1].first < slots[i].first))
 			return false;
 		const auto found = indices.find(slots[i].first);
 		if (found == std::end(indices) || found->second != i)
+			return false;
+		if (slots[i].second.cold != &cold_slots[i])
 			return false;
 	}
 	return true;
@@ -324,17 +346,17 @@ void WakeTauNodeState(TauNode &node) {
 	if (!IsDynamicTauNode(node))
 		return;
 	node.activation_state = TauActivationState::Awake;
-	node.sleep_timer = 0.f;
-	node.sleep_island_id = 0;
-	node.sleeping_support_snapshot_count = 0;
-	node.unsupported_sleep_steps = 0;
+	node.cold->sleep_timer = 0.f;
+	node.cold->sleep_island_id = 0;
+	node.cold->sleeping_support_snapshot_count = 0;
+	node.cold->unsupported_sleep_steps = 0;
 }
 
 void WakeTauIsland(TauNodeStore &nodes, NodeRef ref) {
 	TauNode *node = FindTauNode(nodes, ref);
 	if (node == nullptr || !IsDynamicTauNode(*node))
 		return;
-	const uint32_t island_id = node->sleep_island_id;
+	const uint32_t island_id = node->cold->sleep_island_id;
 	if (!IsTauSleeping(*node)) {
 		WakeTauNodeState(*node);
 		return;
@@ -348,7 +370,7 @@ void WakeTauIsland(TauNodeStore &nodes, NodeRef ref) {
 	std::unordered_set<NodeRef> visited;
 	if (island_id != 0)
 		for (const auto &entry : nodes)
-			if (entry.second.sleep_island_id == island_id && entry.first != ref)
+			if (entry.second.cold->sleep_island_id == island_id && entry.first != ref)
 				pending.push_back(entry.first);
 	while (!pending.empty()) {
 		const NodeRef current_ref = pending.back();
@@ -358,13 +380,13 @@ void WakeTauIsland(TauNodeStore &nodes, NodeRef ref) {
 		TauNode *current = FindTauNode(nodes, current_ref);
 		if (current == nullptr || !IsTauSleeping(*current))
 			continue;
-		for (const NodeRef neighbor_ref : current->sleep_neighbors) {
+		for (const NodeRef neighbor_ref : current->cold->sleep_neighbors) {
 			const TauNode *neighbor = FindTauNode(nodes, neighbor_ref);
 			if (neighbor != nullptr && IsTauSleeping(*neighbor))
 				pending.push_back(neighbor_ref);
 		}
 		WakeTauNodeState(*current);
-		current->transform_dirty = true;
+		current->cold->transform_dirty = true;
 	}
 }
 
@@ -373,7 +395,8 @@ void WakeTauSupportedIslands(TauNodeStore &nodes, NodeRef support_ref) {
 	for (auto &entry : nodes) {
 		auto &node = entry.second;
 		if (!IsDynamicTauNode(node) ||
-			std::find(std::begin(node.sleep_supports), std::end(node.sleep_supports), support_ref) == std::end(node.sleep_supports))
+			std::find(std::begin(node.cold->sleep_supports), std::end(node.cold->sleep_supports), support_ref) ==
+				std::end(node.cold->sleep_supports))
 			continue;
 		supported_bodies.push_back(entry.first);
 	}
@@ -384,8 +407,8 @@ void WakeTauSupportedIslands(TauNodeStore &nodes, NodeRef support_ref) {
 void ResetDynamicState(TauNode &node) {
 	node.linear_velocity = Vec3::Zero;
 	node.angular_velocity = Vec3::Zero;
-	node.accumulated_force = Vec3::Zero;
-	node.accumulated_torque = Vec3::Zero;
+	node.cold->accumulated_force = Vec3::Zero;
+	node.cold->accumulated_torque = Vec3::Zero;
 	WakeTauNodeState(node);
 }
 
@@ -418,11 +441,11 @@ Mat3 ParallelAxisTensor(float mass, const Vec3 &offset) {
 
 void RefreshTauWorldPoseCache(TauNode &node) {
 	node.world_rotation = ToMatrix3(node.orientation);
-	node.inverse_inertia_world = node.world_rotation * node.inverse_inertia_body * Transpose(node.world_rotation);
+	node.inverse_inertia_world = node.world_rotation * node.cold->inverse_inertia_body * Transpose(node.world_rotation);
 }
 
 Mat4 ComposeTauWorld(const TauNode &node) {
-	return TransformationMat4(node.position, node.world_rotation, node.scale);
+	return TransformationMat4(node.position, node.world_rotation, node.cold->scale);
 }
 
 bool HasTauWorldTransformChanged(const TauNode &node, const Mat4 &world) {
@@ -430,7 +453,7 @@ bool HasTauWorldTransformChanged(const TauNode &node, const Mat4 &world) {
 	Mat3 rotation;
 	Decompose(world, &position, &rotation, &scale);
 	const Quaternion orientation = Normalize(QuaternionFromMatrix3(rotation));
-	return !AlmostEqual(position, node.position, 1e-5f) || !AlmostEqual(scale, node.scale, 1e-5f) ||
+	return !AlmostEqual(position, node.position, 1e-5f) || !AlmostEqual(scale, node.cold->scale, 1e-5f) ||
 		Abs(Dot(orientation, node.orientation)) < 1.f - 1e-5f;
 }
 
@@ -439,27 +462,27 @@ void SetTauNodeWorld(TauNode &node, const Mat4 &world, TauWorldWriteMode mode) {
 	const Quaternion previous_orientation = node.orientation;
 
 	Mat3 rotation;
-	Decompose(world, &node.position, &rotation, &node.scale);
+	Decompose(world, &node.position, &rotation, &node.cold->scale);
 	node.orientation = Normalize(QuaternionFromMatrix3(rotation));
 	RefreshTauWorldPoseCache(node);
 
 	if (mode == TauWorldWriteMode::Reset) {
-		node.previous_position = node.position;
-		node.previous_orientation = node.orientation;
-		node.motion.Reset(world);
+		node.cold->previous_position = node.position;
+		node.cold->previous_orientation = node.orientation;
+		node.cold->motion.Reset(world);
 	} else if (mode == TauWorldWriteMode::CaptureSource) {
-		node.previous_position = previous_position;
-		node.previous_orientation = previous_orientation;
-		node.motion.CaptureSourceWorld(world);
+		node.cold->previous_position = previous_position;
+		node.cold->previous_orientation = previous_orientation;
+		node.cold->motion.CaptureSourceWorld(world);
 	} else {
-		node.previous_position = previous_position;
-		node.previous_orientation = previous_orientation;
-		node.motion.WriteSolvedWorld(world);
+		node.cold->previous_position = previous_position;
+		node.cold->previous_orientation = previous_orientation;
+		node.cold->motion.WriteSolvedWorld(world);
 	}
 }
 
 void UpdateTauMotionFromState(TauNode &node) {
-	node.motion.WriteSolvedWorld(ComposeTauWorld(node));
+	node.cold->motion.WriteSolvedWorld(ComposeTauWorld(node));
 }
 
 void IntegrateTauOrientation(TauNode &node, const Vec3 &angular_step) {
@@ -475,17 +498,17 @@ const Mat3 &GetTauInverseInertiaWorld(const TauNode &node) { return node.inverse
 
 void RefreshTauMassProperties(TauNode &node) {
 	node.inverse_mass = IsDynamicTauNode(node) || (node.body_type == RBT_Dynamic && node.total_mass > 0.f) ? 1.f / node.total_mass : 0.f;
-	node.inverse_inertia_body = Mat3::Zero;
+	node.cold->inverse_inertia_body = Mat3::Zero;
 
 	if (node.body_type != RBT_Dynamic || node.total_mass <= 0.f) {
 		RefreshTauWorldPoseCache(node);
 		return;
 	}
 
-	const Vec3 abs_scale = Abs(node.scale);
+	const Vec3 abs_scale = Abs(node.cold->scale);
 	Mat3 inertia = Mat3::Zero;
 
-	for (const auto &shape : node.shapes) {
+	for (const auto &shape : node.cold->shapes) {
 		if (!IsTauSolverShape(shape.type) || shape.mass <= 0.f)
 			continue;
 
@@ -510,23 +533,23 @@ void RefreshTauMassProperties(TauNode &node) {
 				shape.mass * (size_sq.x + size_sq.y) / 12.f);
 			centered_inertia = shape.local_rotation * DiagonalMat3(diagonal) * Transpose(shape.local_rotation);
 		}
-		const Vec3 local_offset = node.scale * shape.local_position;
+		const Vec3 local_offset = node.cold->scale * shape.local_position;
 
 		inertia += centered_inertia + ParallelAxisTensor(shape.mass, local_offset);
 	}
 
 	Mat3 inverse_inertia;
 	if (Inverse(inertia, inverse_inertia))
-		node.inverse_inertia_body = inverse_inertia;
+		node.cold->inverse_inertia_body = inverse_inertia;
 	RefreshTauWorldPoseCache(node);
 }
 
 float GetTauBodyFriction(const TauNode &node, const TauCollisionShape &shape) {
-	return std::max(node.friction, shape.friction);
+	return std::max(node.cold->friction, shape.friction);
 }
 
 float GetTauBodyRestitution(const TauNode &node, const TauCollisionShape &shape) {
-	return std::max(node.restitution, shape.restitution);
+	return std::max(node.cold->restitution, shape.restitution);
 }
 
 float CombineTauFriction(const TauNode &a, const TauCollisionShape &shape_a, const TauNode &b, const TauCollisionShape &shape_b) {
@@ -540,7 +563,7 @@ float CombineTauRestitution(const TauNode &a, const TauCollisionShape &shape_a, 
 float CombineTauRollingFriction(const TauNode &a, const TauNode &b) {
 	// A static ground commonly uses zero rolling friction. Keep the dynamic body's
 	// coefficient effective so a QA sweep from 0 to 1 remains observable.
-	return Clamp(std::max(a.rolling_friction, b.rolling_friction), 0.f, 1.f);
+	return Clamp(std::max(a.cold->rolling_friction, b.cold->rolling_friction), 0.f, 1.f);
 }
 
 OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const Vec3 &scale, const TauCollisionShape &shape) {
@@ -549,16 +572,16 @@ OBB BuildTauWorldOBB(const Vec3 &position, const Quaternion &orientation, const 
 }
 
 OBB BuildTauWorldOBB(const TauNode &node, const TauCollisionShape &shape) {
-	return {node.position + node.world_rotation * (node.scale * shape.local_position), Abs(node.scale) * shape.size,
+	return {node.position + node.world_rotation * (node.cold->scale * shape.local_position), Abs(node.cold->scale) * shape.size,
 		Normalize(node.world_rotation * shape.local_rotation)};
 }
 
 Vec3 BuildTauWorldSphereCenter(const TauNode &node, const TauCollisionShape &shape) {
-	return node.position + node.world_rotation * (node.scale * shape.local_position);
+	return node.position + node.world_rotation * (node.cold->scale * shape.local_position);
 }
 
 float BuildTauWorldSphereRadius(const TauNode &node, const TauCollisionShape &shape) {
-	const Vec3 scale = Abs(node.scale);
+	const Vec3 scale = Abs(node.cold->scale);
 	return shape.radius * std::max({scale.x, scale.y, scale.z});
 }
 
@@ -584,7 +607,7 @@ TauPrimitiveFrame BuildTauPrimitiveFrame(const TauNode &node, const TauCollision
 TauCapsuleGeometry BuildTauWorldCapsule(const TauNode &node, const TauCollisionShape &shape) {
 	const Mat3 rotation = node.world_rotation * shape.local_rotation;
 	const Vec3 center = BuildTauWorldSphereCenter(node, shape);
-	const Vec3 scale = Abs(node.scale);
+	const Vec3 scale = Abs(node.cold->scale);
 	const float half_height = Abs(shape.size.y) * scale.y * 0.5f;
 	const Vec3 half_axis = Normalize(GetY(rotation)) * half_height;
 	return {center - half_axis, center + half_axis, shape.radius * std::max(scale.x, scale.z)};
@@ -866,7 +889,7 @@ bool IntersectTauRayShape(const TauNode &node, const TauCollisionShape &shape, c
 	const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
 	const Vec3 origin = TauFrameWorldToLocal(frame, world_origin);
 	const Vec3 direction = TauFrameVectorToLocal(frame, world_direction);
-	const Vec3 scale = Abs(node.scale);
+	const Vec3 scale = Abs(node.cold->scale);
 	TauRayShapeHit local_hit;
 	bool intersected = false;
 
@@ -894,13 +917,13 @@ bool IntersectTauRayShape(const TauNode &node, const TauCollisionShape &shape, c
 }
 
 void UpdateTauBodyProxyCache(TauNode &node) {
-	node.world_shapes.clear();
-	if (node.world_shapes.capacity() < node.shapes.size())
-		node.world_shapes.reserve(node.shapes.size());
+	node.cold->world_shapes.clear();
+	if (node.cold->world_shapes.capacity() < node.cold->shapes.size())
+		node.cold->world_shapes.reserve(node.cold->shapes.size());
 	bool has_bounds = false;
 
-	for (uint32_t shape_index = 0; shape_index < node.shapes.size(); ++shape_index) {
-		const auto &shape = node.shapes[shape_index];
+	for (uint32_t shape_index = 0; shape_index < node.cold->shapes.size(); ++shape_index) {
+		const auto &shape = node.cold->shapes[shape_index];
 		if (!IsTauSolverShape(shape.type))
 			continue;
 		TauWorldShape world_shape;
@@ -922,11 +945,11 @@ void UpdateTauBodyProxyCache(TauNode &node) {
 			world_shape.bounds = MinMaxFromOBB(world_shape.obb);
 		}
 
-		node.world_shapes.push_back(world_shape);
-		node.world_bounds = has_bounds ? Union(node.world_bounds, world_shape.bounds) : world_shape.bounds;
+		node.cold->world_shapes.push_back(world_shape);
+		node.cold->world_bounds = has_bounds ? Union(node.cold->world_bounds, world_shape.bounds) : world_shape.bounds;
 		has_bounds = true;
 	}
-	node.world_proxy_cache_valid = true;
+	node.cold->world_proxy_cache_valid = true;
 }
 
 using TauBroadphasePairCache = std::unordered_map<DynamicAABBTreeProxy, std::unordered_set<DynamicAABBTreeProxy>>;
@@ -944,26 +967,26 @@ void ClearTauBroadphasePairsForProxy(TauBroadphasePairCache &pairs, DynamicAABBT
 }
 
 void RemoveTauBroadphaseProxy(DynamicAABBTree &tree, TauBroadphasePairCache &pairs, TauNode &node) {
-	ClearTauBroadphasePairsForProxy(pairs, node.broadphase_proxy);
-	tree.Remove(node.broadphase_proxy);
-	node.broadphase_proxy = InvalidDynamicAABBTreeProxy;
+	ClearTauBroadphasePairsForProxy(pairs, node.cold->broadphase_proxy);
+	tree.Remove(node.cold->broadphase_proxy);
+	node.cold->broadphase_proxy = InvalidDynamicAABBTreeProxy;
 }
 
 void RefreshTauBroadphaseProxy(
 	DynamicAABBTree &tree, TauBroadphasePairCache &pairs, TauNode &node, const Vec3 &displacement = Vec3::Zero) {
 	UpdateTauBodyProxyCache(node);
-	if (node.world_shapes.empty()) {
+	if (node.cold->world_shapes.empty()) {
 		RemoveTauBroadphaseProxy(tree, pairs, node);
 		return;
 	}
 
 	uint32_t user_data = 0;
-	if (!tree.IsValidProxy(node.broadphase_proxy)) {
-		ClearTauBroadphasePairsForProxy(pairs, node.broadphase_proxy);
-		node.broadphase_proxy = tree.Insert(node.world_bounds, user_data, displacement);
+	if (!tree.IsValidProxy(node.cold->broadphase_proxy)) {
+		ClearTauBroadphasePairsForProxy(pairs, node.cold->broadphase_proxy);
+		node.cold->broadphase_proxy = tree.Insert(node.cold->world_bounds, user_data, displacement);
 	} else {
-		tree.GetUserData(node.broadphase_proxy, user_data);
-		tree.Update(node.broadphase_proxy, node.world_bounds, displacement);
+		tree.GetUserData(node.cold->broadphase_proxy, user_data);
+		tree.Update(node.cold->broadphase_proxy, node.cold->world_bounds, displacement);
 	}
 }
 
@@ -1943,14 +1966,14 @@ bool TryRefreshTauCoherentCuboidManifold(const TauBodyProxy &body_a, const TauWo
 	const TauWorldShape &shape_b, const TauContactManifold &cached, TauContactManifold &refreshed) {
 	if ((cached.feature.type != TauContactFeatureType::FaceA && cached.feature.type != TauContactFeatureType::FaceB) ||
 		cached.point_count == 0 || cached.point_count > cached.points.size() || cached.coherence_age >= k_tau_cuboid_coherence_max_age ||
-		body_a.node->externally_moved || body_b.node->externally_moved)
+		body_a.node->cold->externally_moved || body_b.node->cold->externally_moved)
 		return false;
 
-	const Vec3 displacement_a = body_a.node->position - body_a.node->previous_position;
-	const Vec3 displacement_b = body_b.node->position - body_b.node->previous_position;
+	const Vec3 displacement_a = body_a.node->position - body_a.node->cold->previous_position;
+	const Vec3 displacement_b = body_b.node->position - body_b.node->cold->previous_position;
 	if (Len2(displacement_a - displacement_b) > k_tau_cuboid_coherence_translation * k_tau_cuboid_coherence_translation ||
-		Abs(Dot(body_a.node->orientation, body_a.node->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot ||
-		Abs(Dot(body_b.node->orientation, body_b.node->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot)
+		Abs(Dot(body_a.node->orientation, body_a.node->cold->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot ||
+		Abs(Dot(body_b.node->orientation, body_b.node->cold->previous_orientation)) < k_tau_cuboid_coherence_orientation_dot)
 		return false;
 
 	const bool reference_is_a = cached.feature.type == TauContactFeatureType::FaceA;
@@ -2066,13 +2089,13 @@ float ComputeTauConstraintMass(const TauContactConstraint &contact, const Vec3 &
 }
 
 Vec3 GetTauConstraintAnchorA(const TauContactConstraint &contact) {
-	if (!contact.persistent || contact.shape_a >= contact.node_a->shapes.size())
+	if (!contact.persistent || contact.shape_a >= contact.node_a->cold->shapes.size())
 		return contact.point;
 	return TauBodyLocalAnchorToWorld(*contact.node_a, contact.local_point_a);
 }
 
 Vec3 GetTauConstraintAnchorB(const TauContactConstraint &contact) {
-	if (!contact.persistent || contact.shape_b >= contact.node_b->shapes.size())
+	if (!contact.persistent || contact.shape_b >= contact.node_b->cold->shapes.size())
 		return contact.point;
 	return TauBodyLocalAnchorToWorld(*contact.node_b, contact.local_point_b);
 }
@@ -2168,56 +2191,58 @@ bool CanSkipTauAllSleepingSubstep(const TauNodeStore &nodes, const DynamicAABBTr
 	for (const auto &entry : nodes) {
 		const TauNode &node = entry.second;
 		++body_checks;
-		if (!node.world_proxy_cache_valid || !broadphase_tree.IsValidProxy(node.broadphase_proxy))
+		if (!node.cold->world_proxy_cache_valid || !broadphase_tree.IsValidProxy(node.cold->broadphase_proxy))
 			return false;
 		if (!IsDynamicTauNode(node)) {
-			if (node.externally_moved)
+			if (node.cold->externally_moved)
 				return false;
 			continue;
 		}
 
 		has_dynamic_body = true;
-		if (!IsTauSleeping(node) || node.unsupported_sleep_steps != 0 || Len2(node.accumulated_force) != 0.f ||
-			Len2(node.accumulated_torque) != 0.f)
+		if (!IsTauSleeping(node) || node.cold->unsupported_sleep_steps != 0 || Len2(node.cold->accumulated_force) != 0.f ||
+			Len2(node.cold->accumulated_torque) != 0.f)
 			return false;
 	}
 	return has_dynamic_body;
 }
 
 void AddTauSleepSupport(TauNode &node, NodeRef support) {
-	if (std::find(std::begin(node.sleep_supports), std::end(node.sleep_supports), support) == std::end(node.sleep_supports))
-		node.sleep_supports.push_back(support);
+	if (std::find(std::begin(node.cold->sleep_supports), std::end(node.cold->sleep_supports), support) ==
+		std::end(node.cold->sleep_supports))
+		node.cold->sleep_supports.push_back(support);
 }
 
 void AddTauSleepNeighbor(TauNode &node, NodeRef neighbor) {
-	if (std::find(std::begin(node.sleep_neighbors), std::end(node.sleep_neighbors), neighbor) == std::end(node.sleep_neighbors))
-		node.sleep_neighbors.push_back(neighbor);
+	if (std::find(std::begin(node.cold->sleep_neighbors), std::end(node.cold->sleep_neighbors), neighbor) ==
+		std::end(node.cold->sleep_neighbors))
+		node.cold->sleep_neighbors.push_back(neighbor);
 }
 
 void AddTauDynamicSleepSupport(TauNode &node, NodeRef support) {
-	for (uint8_t i = 0; i < node.sleep_dynamic_support_count; ++i)
-		if (node.sleep_dynamic_supports[i] == support)
+	for (uint8_t i = 0; i < node.cold->sleep_dynamic_support_count; ++i)
+		if (node.cold->sleep_dynamic_supports[i] == support)
 			return;
-	if (node.sleep_dynamic_support_count < node.sleep_dynamic_supports.size())
-		node.sleep_dynamic_supports[node.sleep_dynamic_support_count++] = support;
+	if (node.cold->sleep_dynamic_support_count < node.cold->sleep_dynamic_supports.size())
+		node.cold->sleep_dynamic_supports[node.cold->sleep_dynamic_support_count++] = support;
 }
 
 bool HasTauDynamicSleepSupport(const TauNode &node, NodeRef support) {
-	for (uint8_t i = 0; i < node.sleep_dynamic_support_count; ++i)
-		if (node.sleep_dynamic_supports[i] == support)
+	for (uint8_t i = 0; i < node.cold->sleep_dynamic_support_count; ++i)
+		if (node.cold->sleep_dynamic_supports[i] == support)
 			return true;
 	return false;
 }
 
 void CaptureTauSleepingSupportSnapshots(TauNode &node, const TauNodeStore &nodes) {
-	node.sleeping_support_snapshot_count = 0;
-	node.unsupported_sleep_steps = 0;
-	for (uint8_t i = 0; i < node.sleep_dynamic_support_count; ++i) {
-		const NodeRef support_ref = node.sleep_dynamic_supports[i];
+	node.cold->sleeping_support_snapshot_count = 0;
+	node.cold->unsupported_sleep_steps = 0;
+	for (uint8_t i = 0; i < node.cold->sleep_dynamic_support_count; ++i) {
+		const NodeRef support_ref = node.cold->sleep_dynamic_supports[i];
 		const TauNode *support = FindTauNode(nodes, support_ref);
-		if (support == nullptr || node.sleeping_support_snapshot_count >= node.sleeping_support_snapshots.size())
+		if (support == nullptr || node.cold->sleeping_support_snapshot_count >= node.cold->sleeping_support_snapshots.size())
 			continue;
-		auto &snapshot = node.sleeping_support_snapshots[node.sleeping_support_snapshot_count++];
+		auto &snapshot = node.cold->sleeping_support_snapshots[node.cold->sleeping_support_snapshot_count++];
 		snapshot.ref = support_ref;
 		snapshot.position = support->position;
 		snapshot.orientation = support->orientation;
@@ -2234,13 +2259,13 @@ void BuildTauIslandGraph(TauNodeStore &nodes, const std::vector<TauContactConstr
 	graph.refs.reserve(nodes.size());
 	for (auto &entry : nodes) {
 		auto &node = entry.second;
-		node.island_index = 0xffffffff;
+		node.cold->island_index = 0xffffffff;
 		if (!IsDynamicTauNode(node))
 			continue;
-		node.sleep_supports.clear();
-		node.sleep_neighbors.clear();
-		node.sleep_dynamic_support_count = 0;
-		node.island_index = uint32_t(graph.bodies.size());
+		node.cold->sleep_supports.clear();
+		node.cold->sleep_neighbors.clear();
+		node.cold->sleep_dynamic_support_count = 0;
+		node.cold->island_index = uint32_t(graph.bodies.size());
 		graph.bodies.push_back(&node);
 		graph.refs.push_back(entry.first);
 	}
@@ -2253,7 +2278,7 @@ void BuildTauIslandGraph(TauNodeStore &nodes, const std::vector<TauContactConstr
 		const bool dynamic_a = IsDynamicTauNode(*contact.node_a);
 		const bool dynamic_b = IsDynamicTauNode(*contact.node_b);
 		if (dynamic_a && dynamic_b) {
-			graph.Union(contact.node_a->island_index, contact.node_b->island_index);
+			graph.Union(contact.node_a->cold->island_index, contact.node_b->cold->island_index);
 			AddTauSleepNeighbor(*contact.node_a, contact.ref_b);
 			AddTauSleepNeighbor(*contact.node_b, contact.ref_a);
 			const float support_normal_y = contact.normal.y;
@@ -2270,7 +2295,7 @@ void BuildTauIslandGraph(TauNodeStore &nodes, const std::vector<TauContactConstr
 		TauNode *node_a = FindTauNode(nodes, constraint.ref_a);
 		TauNode *node_b = FindTauNode(nodes, constraint.ref_b);
 		if (node_a != nullptr && node_b != nullptr && IsDynamicTauNode(*node_a) && IsDynamicTauNode(*node_b)) {
-			graph.Union(node_a->island_index, node_b->island_index);
+			graph.Union(node_a->cold->island_index, node_b->cold->island_index);
 			AddTauSleepNeighbor(*node_a, constraint.ref_b);
 			AddTauSleepNeighbor(*node_b, constraint.ref_a);
 		}
@@ -2287,16 +2312,16 @@ void WakeTauMergedIslands(
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		TauNode &node = *graph.bodies[i];
 		const uint32_t root = graph.Find(i);
-		if (!node.deactivation_enabled) {
+		if (!node.cold->deactivation_enabled) {
 			wake_root[root] = 1;
 			WakeTauNodeState(node);
 		}
 	}
 	for (auto &contact : contacts) {
-		if (IsDynamicTauNode(*contact.node_a) && !IsDynamicTauNode(*contact.node_b) && contact.node_b->externally_moved)
-			wake_root[graph.Find(contact.node_a->island_index)] = 1;
-		if (IsDynamicTauNode(*contact.node_b) && !IsDynamicTauNode(*contact.node_a) && contact.node_a->externally_moved)
-			wake_root[graph.Find(contact.node_b->island_index)] = 1;
+		if (IsDynamicTauNode(*contact.node_a) && !IsDynamicTauNode(*contact.node_b) && contact.node_b->cold->externally_moved)
+			wake_root[graph.Find(contact.node_a->cold->island_index)] = 1;
+		if (IsDynamicTauNode(*contact.node_b) && !IsDynamicTauNode(*contact.node_a) && contact.node_a->cold->externally_moved)
+			wake_root[graph.Find(contact.node_b->cold->island_index)] = 1;
 
 		const bool sleeping_a = IsTauSleeping(*contact.node_a);
 		const bool sleeping_b = IsTauSleeping(*contact.node_b);
@@ -2313,10 +2338,10 @@ void WakeTauMergedIslands(
 		if (normal_speed < -k_tau_sleep_contact_speed || Len2(tangent_velocity) > k_tau_wake_tangent_speed * k_tau_wake_tangent_speed ||
 			contact.penetration > k_tau_sleep_max_penetration) {
 			const TauNode &sleeping_node = sleeping_a ? *contact.node_a : *contact.node_b;
-			if (sleeping_node.sleep_island_id != 0)
-				wake_cohorts.insert(sleeping_node.sleep_island_id);
+			if (sleeping_node.cold->sleep_island_id != 0)
+				wake_cohorts.insert(sleeping_node.cold->sleep_island_id);
 			else
-				wake_root[graph.Find(sleeping_node.island_index)] = 1;
+				wake_root[graph.Find(sleeping_node.cold->island_index)] = 1;
 		}
 
 		// Warm-start impulses were computed for a two-dynamic-body effective
@@ -2341,8 +2366,8 @@ void WakeTauMergedIslands(
 		bool wake_due_to_pose = false;
 		bool wake_due_to_loss = false;
 		bool has_current_snapshotted_support = false;
-		for (uint8_t support_index = 0; support_index < node.sleeping_support_snapshot_count; ++support_index) {
-			const auto &snapshot = node.sleeping_support_snapshots[support_index];
+		for (uint8_t support_index = 0; support_index < node.cold->sleeping_support_snapshot_count; ++support_index) {
+			const auto &snapshot = node.cold->sleeping_support_snapshots[support_index];
 			const TauNode *support = FindTauNode(nodes, snapshot.ref);
 			if (support == nullptr) {
 				wake_supported_body = true;
@@ -2358,10 +2383,10 @@ void WakeTauMergedIslands(
 				break;
 			}
 		}
-		if (!wake_supported_body && node.sleeping_support_snapshot_count != 0) {
+		if (!wake_supported_body && node.cold->sleeping_support_snapshot_count != 0) {
 			if (has_current_snapshotted_support)
-				node.unsupported_sleep_steps = 0;
-			else if (++node.unsupported_sleep_steps >= k_tau_wake_unsupported_steps) {
+				node.cold->unsupported_sleep_steps = 0;
+			else if (++node.cold->unsupported_sleep_steps >= k_tau_wake_unsupported_steps) {
 				wake_supported_body = true;
 				wake_due_to_loss = true;
 			}
@@ -2370,8 +2395,8 @@ void WakeTauMergedIslands(
 			continue;
 
 		bool cohort_was_added = false;
-		if (node.sleep_island_id != 0) {
-			cohort_was_added = wake_cohorts.insert(node.sleep_island_id).second;
+		if (node.cold->sleep_island_id != 0) {
+			cohort_was_added = wake_cohorts.insert(node.cold->sleep_island_id).second;
 			if (cohort_was_added)
 				++diagnostics.support_wake_cohorts;
 		} else {
@@ -2390,12 +2415,12 @@ void WakeTauMergedIslands(
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		const uint32_t root = graph.Find(i);
 		TauNode &node = *graph.bodies[i];
-		if (!wake_root[root] && wake_cohorts.find(node.sleep_island_id) == std::end(wake_cohorts))
+		if (!wake_root[root] && wake_cohorts.find(node.cold->sleep_island_id) == std::end(wake_cohorts))
 			continue;
 		if (node.activation_state == TauActivationState::Sleeping)
 			++diagnostics.bodies_woken;
 		WakeTauNodeState(node);
-		node.transform_dirty = true;
+		node.cold->transform_dirty = true;
 	}
 }
 
@@ -2435,15 +2460,15 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 			++diagnostics.sleep_linear_rejects;
 		if (angular_speed_sq_value > angular_speed_sq)
 			++diagnostics.sleep_angular_rejects;
-		if (Len2(node.accumulated_force) > force_epsilon_sq || Len2(node.accumulated_torque) > force_epsilon_sq)
+		if (Len2(node.cold->accumulated_force) > force_epsilon_sq || Len2(node.cold->accumulated_torque) > force_epsilon_sq)
 			++diagnostics.sleep_force_rejects;
-		if (!node.deactivation_enabled || linear_speed_sq_value > linear_speed_sq || angular_speed_sq_value > angular_speed_sq ||
-			Len2(node.accumulated_force) > force_epsilon_sq || Len2(node.accumulated_torque) > force_epsilon_sq)
+		if (!node.cold->deactivation_enabled || linear_speed_sq_value > linear_speed_sq || angular_speed_sq_value > angular_speed_sq ||
+			Len2(node.cold->accumulated_force) > force_epsilon_sq || Len2(node.cold->accumulated_torque) > force_epsilon_sq)
 			body_stable[i] = 0;
 		const float hard_multiplier_sq = k_tau_sleep_hard_reject_multiplier * k_tau_sleep_hard_reject_multiplier;
-		if (!node.deactivation_enabled || linear_speed_sq_value > linear_speed_sq * hard_multiplier_sq ||
-			angular_speed_sq_value > angular_speed_sq * hard_multiplier_sq || Len2(node.accumulated_force) > force_epsilon_sq ||
-			Len2(node.accumulated_torque) > force_epsilon_sq)
+		if (!node.cold->deactivation_enabled || linear_speed_sq_value > linear_speed_sq * hard_multiplier_sq ||
+			angular_speed_sq_value > angular_speed_sq * hard_multiplier_sq || Len2(node.cold->accumulated_force) > force_epsilon_sq ||
+			Len2(node.cold->accumulated_torque) > force_epsilon_sq)
 			body_hard_unstable[i] = 1;
 	}
 	for (const auto &contact : contacts) {
@@ -2458,15 +2483,15 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 		if (contact.penetration <= k_tau_sleep_max_penetration && relative_speed_sq <= contact_speed_sq)
 			continue;
 		if (IsDynamicTauNode(*contact.node_a))
-			body_stable[contact.node_a->island_index] = 0;
+			body_stable[contact.node_a->cold->island_index] = 0;
 		if (IsDynamicTauNode(*contact.node_b))
-			body_stable[contact.node_b->island_index] = 0;
+			body_stable[contact.node_b->cold->island_index] = 0;
 		if (contact.penetration > k_tau_sleep_max_penetration * k_tau_sleep_hard_reject_multiplier ||
 			relative_speed_sq > contact_speed_sq * k_tau_sleep_hard_reject_multiplier * k_tau_sleep_hard_reject_multiplier) {
 			if (IsDynamicTauNode(*contact.node_a))
-				body_hard_unstable[contact.node_a->island_index] = 1;
+				body_hard_unstable[contact.node_a->cold->island_index] = 1;
 			if (IsDynamicTauNode(*contact.node_b))
-				body_hard_unstable[contact.node_b->island_index] = 1;
+				body_hard_unstable[contact.node_b->cold->island_index] = 1;
 		}
 	}
 
@@ -2478,16 +2503,16 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 			continue;
 		if (!body_stable[i]) {
 			node.activation_state = TauActivationState::Awake;
-			node.sleep_island_id = 0;
+			node.cold->sleep_island_id = 0;
 			if (body_hard_unstable[i])
-				node.sleep_timer = 0.f;
+				node.cold->sleep_timer = 0.f;
 			else
-				node.sleep_timer = std::max(0.f, node.sleep_timer - dt_sec * k_tau_sleep_timer_decay);
+				node.cold->sleep_timer = std::max(0.f, node.cold->sleep_timer - dt_sec * k_tau_sleep_timer_decay);
 			continue;
 		}
 		node.activation_state = TauActivationState::SleepCandidate;
-		node.sleep_timer = std::min(node.sleep_timer + dt_sec, k_tau_sleep_time);
-		node.sleep_island_id = 0;
+		node.cold->sleep_timer = std::min(node.cold->sleep_timer + dt_sec, k_tau_sleep_time);
+		node.cold->sleep_island_id = 0;
 	}
 
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i)
@@ -2506,12 +2531,12 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
 		const TauNode &node = *graph.bodies[i];
 		ready_graph.parents[i] = i;
-		ready[i] = node.activation_state == TauActivationState::SleepCandidate && node.sleep_timer >= k_tau_sleep_time;
+		ready[i] = node.activation_state == TauActivationState::SleepCandidate && node.cold->sleep_timer >= k_tau_sleep_time;
 	}
 	for (const auto &contact : contacts) {
 		if (!IsDynamicTauNode(*contact.node_a) || !IsDynamicTauNode(*contact.node_b))
 			continue;
-		const uint32_t index_a = contact.node_a->island_index, index_b = contact.node_b->island_index;
+		const uint32_t index_a = contact.node_a->cold->island_index, index_b = contact.node_b->cold->island_index;
 		if (ready[index_a] && ready[index_b])
 			ready_graph.Union(index_a, index_b);
 	}
@@ -2519,8 +2544,8 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 		TauNode *node_a = FindTauNode(nodes, constraint.ref_a);
 		TauNode *node_b = FindTauNode(nodes, constraint.ref_b);
 		if (node_a != nullptr && node_b != nullptr && IsDynamicTauNode(*node_a) && IsDynamicTauNode(*node_b) &&
-			ready[node_a->island_index] && ready[node_b->island_index])
-			ready_graph.Union(node_a->island_index, node_b->island_index);
+			ready[node_a->cold->island_index] && ready[node_b->cold->island_index])
+			ready_graph.Union(node_a->cold->island_index, node_b->cold->island_index);
 	}
 
 	auto &assigned_island_ids = scratch.assigned_island_ids;
@@ -2538,17 +2563,17 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 		TauNode &node = *graph.bodies[i];
 		++diagnostics.bodies_put_to_sleep;
 		node.activation_state = TauActivationState::Sleeping;
-		node.sleep_timer = k_tau_sleep_time;
-		node.sleep_island_id = assigned_island_ids[root];
+		node.cold->sleep_timer = k_tau_sleep_time;
+		node.cold->sleep_island_id = assigned_island_ids[root];
 		++assigned_island_sizes[root];
 		node.linear_velocity = Vec3::Zero;
 		node.angular_velocity = Vec3::Zero;
-		node.accumulated_force = Vec3::Zero;
-		node.accumulated_torque = Vec3::Zero;
+		node.cold->accumulated_force = Vec3::Zero;
+		node.cold->accumulated_torque = Vec3::Zero;
 		CaptureTauSleepingSupportSnapshots(node, nodes);
 		// The position solver may have changed the pose after this substep's
 		// proxy build. Refresh once at the final sleep pose before steady reuse.
-		node.world_proxy_cache_valid = false;
+		node.cold->world_proxy_cache_valid = false;
 	}
 
 	auto &sleeping_island_ids = scratch.sleeping_island_ids;
@@ -2556,8 +2581,8 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 	for (const TauNode *node : graph.bodies) {
 		if (node->activation_state == TauActivationState::Sleeping) {
 			++diagnostics.sleeping_bodies;
-			if (node->sleep_island_id != 0)
-				sleeping_island_ids.insert(node->sleep_island_id);
+			if (node->cold->sleep_island_id != 0)
+				sleeping_island_ids.insert(node->cold->sleep_island_id);
 		} else if (node->activation_state == TauActivationState::SleepCandidate)
 			++diagnostics.sleep_candidate_bodies;
 		else
@@ -2919,7 +2944,7 @@ size_t UpdateTauManifoldCache(
 }
 
 bool IsTauUnchangedContactEndpoint(const TauNode &node) {
-	return IsTauSleeping(node) || (!IsDynamicTauNode(node) && !node.externally_moved);
+	return IsTauSleeping(node) || (!IsDynamicTauNode(node) && !node.cold->externally_moved);
 }
 
 bool CanReuseTauSleepingContact(const TauNode &a, const TauNode &b) {
@@ -2997,39 +3022,39 @@ void BuildTauContacts(
 		TauProfileSection proxy_profile("Tau.ProxyUpdate");
 		for (auto &entry : nodes) {
 			TauNode &node = entry.second;
-			if (node.shapes.empty())
+			if (node.cold->shapes.empty())
 				continue;
-			scratch.has_nonzero_rolling_friction |= node.rolling_friction != 0.f;
-			const bool update_proxy = !node.world_proxy_cache_valid || (IsDynamicTauNode(node) && !IsTauSleeping(node));
+			scratch.has_nonzero_rolling_friction |= node.cold->rolling_friction != 0.f;
+			const bool update_proxy = !node.cold->world_proxy_cache_valid || (IsDynamicTauNode(node) && !IsTauSleeping(node));
 			if (update_proxy) {
-				const size_t previous_capacity = node.world_shapes.capacity();
+				const size_t previous_capacity = node.cold->world_shapes.capacity();
 				UpdateTauBodyProxyCache(node);
 				++diagnostics.proxy_updates;
-				if (node.world_shapes.capacity() != previous_capacity)
+				if (node.cold->world_shapes.capacity() != previous_capacity)
 					++diagnostics.proxy_shape_vector_reserves;
 			} else if (IsTauSleeping(node))
 				++diagnostics.sleeping_proxy_reuses;
 
-			diagnostics.proxy_shapes += node.world_shapes.size();
-			if (node.world_shapes.empty()) {
-				if (broadphase_tree.IsValidProxy(node.broadphase_proxy))
+			diagnostics.proxy_shapes += node.cold->world_shapes.size();
+			if (node.cold->world_shapes.empty()) {
+				if (broadphase_tree.IsValidProxy(node.cold->broadphase_proxy))
 					RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, node);
 				continue;
 			}
 
 			const uint32_t body_index = uint32_t(bodies.size());
-			const Vec3 displacement = node.position - node.previous_position;
-			if (!broadphase_tree.IsValidProxy(node.broadphase_proxy)) {
-				ClearTauBroadphasePairsForProxy(broadphase_pairs, node.broadphase_proxy);
-				node.broadphase_proxy = broadphase_tree.Insert(node.world_bounds, body_index, displacement);
+			const Vec3 displacement = node.position - node.cold->previous_position;
+			if (!broadphase_tree.IsValidProxy(node.cold->broadphase_proxy)) {
+				ClearTauBroadphasePairsForProxy(broadphase_pairs, node.cold->broadphase_proxy);
+				node.cold->broadphase_proxy = broadphase_tree.Insert(node.cold->world_bounds, body_index, displacement);
 				++diagnostics.broadphase_proxy_inserts;
 			} else {
-				broadphase_tree.SetUserData(node.broadphase_proxy, body_index);
-				if (update_proxy && broadphase_tree.Update(node.broadphase_proxy, node.world_bounds, displacement))
+				broadphase_tree.SetUserData(node.cold->broadphase_proxy, body_index);
+				if (update_proxy && broadphase_tree.Update(node.cold->broadphase_proxy, node.cold->world_bounds, displacement))
 					++diagnostics.broadphase_proxy_reinsertions;
 			}
-			body_bounds.push_back(node.world_bounds);
-			bodies.push_back({entry.first, &node, node.world_bounds});
+			body_bounds.push_back(node.cold->world_bounds);
+			bodies.push_back({entry.first, &node, node.cold->world_bounds});
 		}
 	}
 	diagnostics.proxy_bodies = bodies.size();
@@ -3155,14 +3180,14 @@ void BuildTauContacts(
 		for (const auto &pair : body_pairs) {
 			auto &body_a = bodies[pair.a];
 			auto &body_b = bodies[pair.b];
-			for (const auto &shape_a : body_a.node->world_shapes) {
+			for (const auto &shape_a : body_a.node->cold->world_shapes) {
 				++diagnostics.shape_body_bounds_tests;
 				if (!Overlap(shape_a.bounds, body_b.bounds)) {
 					++diagnostics.shape_body_bounds_rejects;
 					continue;
 				}
 
-				for (const auto &shape_b : body_b.node->world_shapes) {
+				for (const auto &shape_b : body_b.node->cold->world_shapes) {
 					++diagnostics.shape_pair_bounds_tests;
 					if (!Overlap(shape_a.bounds, shape_b.bounds)) {
 						++diagnostics.shape_pair_bounds_rejects;
@@ -3432,19 +3457,19 @@ void StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 			if (node.activation_state == TauActivationState::Sleeping)
 				continue;
 
-			node.previous_position = node.position;
-			node.previous_orientation = node.orientation;
-			node.linear_velocity += (k_tau_gravity + node.accumulated_force * node.inverse_mass) * dt_sec;
-			node.linear_velocity *= std::max(0.f, 1.f - node.linear_damping * dt_sec);
+			node.cold->previous_position = node.position;
+			node.cold->previous_orientation = node.orientation;
+			node.linear_velocity += (k_tau_gravity + node.cold->accumulated_force * node.inverse_mass) * dt_sec;
+			node.linear_velocity *= std::max(0.f, 1.f - node.cold->linear_damping * dt_sec);
 			node.linear_velocity = node.linear_velocity * node.linear_factor;
 
-			node.angular_velocity += (GetTauInverseInertiaWorld(node) * node.accumulated_torque) * dt_sec;
-			node.angular_velocity *= std::max(0.f, 1.f - node.angular_damping * dt_sec);
+			node.angular_velocity += (GetTauInverseInertiaWorld(node) * node.cold->accumulated_torque) * dt_sec;
+			node.angular_velocity *= std::max(0.f, 1.f - node.cold->angular_damping * dt_sec);
 			node.angular_velocity = node.angular_velocity * node.angular_factor;
 
 			node.position += node.linear_velocity * dt_sec;
 			IntegrateTauOrientation(node, node.angular_velocity * dt_sec);
-			node.transform_dirty = true;
+			node.cold->transform_dirty = true;
 		}
 	}
 
@@ -3485,7 +3510,7 @@ void StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 		for (auto &entry : nodes) {
 			if (entry.second.body_type == RBT_Dynamic && entry.second.activation_state != TauActivationState::Sleeping) {
 				UpdateTauMotionFromState(entry.second);
-				entry.second.transform_dirty = true;
+				entry.second.cold->transform_dirty = true;
 				++diagnostics.motion_updates;
 			}
 		}
@@ -3496,7 +3521,7 @@ void StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	}
 	for (auto &entry : nodes)
 		if (!IsDynamicTauNode(entry.second))
-			entry.second.externally_moved = false;
+			entry.second.cold->externally_moved = false;
 	reuse_stats.proxy_reuses = diagnostics.sleeping_proxy_reuses;
 	reuse_stats.manifold_reuses = diagnostics.sleeping_manifold_reuses;
 	reuse_stats.manifold_points_reused = diagnostics.sleeping_manifold_points_reused;
@@ -3557,13 +3582,13 @@ bool IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref) {
 
 uint32_t GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref) {
 	if (const TauNode *node = FindTauNode(physics.nodes, ref))
-		return node->sleep_island_id;
+		return node->cold->sleep_island_id;
 	return 0;
 }
 
 bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref) {
 	if (const TauNode *node = FindTauNode(physics.nodes, ref))
-		return node->sleeping_support_snapshot_count != 0;
+		return node->cold->sleeping_support_snapshot_count != 0;
 	return false;
 }
 
@@ -3574,23 +3599,23 @@ void TransformNodeSleepCohortForTest(
 	TauNode *node = FindTauNode(physics.nodes, ref);
 	if (node == nullptr)
 		return;
-	const uint32_t sleep_island_id = node->sleep_island_id;
+	const uint32_t sleep_island_id = node->cold->sleep_island_id;
 	if (sleep_island_id != 0) {
 		for (auto &entry : physics.nodes) {
-			if (entry.second.sleep_island_id != sleep_island_id)
+			if (entry.second.cold->sleep_island_id != sleep_island_id)
 				continue;
 			WakeTauNodeState(entry.second);
-			entry.second.transform_dirty = true;
+			entry.second.cold->transform_dirty = true;
 		}
 	}
-	node->previous_position = node->position;
+	node->cold->previous_position = node->position;
 	node->position += displacement;
 	node->linear_velocity = Vec3::Zero;
-	node->previous_orientation = node->orientation;
+	node->cold->previous_orientation = node->orientation;
 	node->orientation = Normalize(rotation * node->orientation);
 	RefreshTauWorldPoseCache(*node);
 	node->angular_velocity = Vec3::Zero;
-	node->transform_dirty = true;
+	node->cold->transform_dirty = true;
 }
 
 } // namespace tau_internal
@@ -3650,14 +3675,16 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	}
 
 	TauNode tau_node;
-	tau_node.shapes = std::move(shapes);
+	TauNodeCold tau_node_cold;
+	tau_node.cold = &tau_node_cold;
+	tau_node.cold->shapes = std::move(shapes);
 	tau_node.body_type = type;
 	tau_node.total_mass = type == RBT_Dynamic ? total_mass : 0.f;
-	tau_node.linear_damping = rigid_body.GetLinearDamping();
-	tau_node.angular_damping = rigid_body.GetAngularDamping();
-	tau_node.friction = rigid_body.GetFriction();
-	tau_node.restitution = rigid_body.GetRestitution();
-	tau_node.rolling_friction = rigid_body.GetRollingFriction();
+	tau_node.cold->linear_damping = rigid_body.GetLinearDamping();
+	tau_node.cold->angular_damping = rigid_body.GetAngularDamping();
+	tau_node.cold->friction = rigid_body.GetFriction();
+	tau_node.cold->restitution = rigid_body.GetRestitution();
+	tau_node.cold->rolling_friction = rigid_body.GetRollingFriction();
 
 	SetTauNodeWorld(tau_node, GetNodeWorld(node), TauWorldWriteMode::Reset);
 	RefreshTauMassProperties(tau_node);
@@ -3671,7 +3698,7 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 			WakeTauSupportedIslands(nodes, node.ref);
 		RemoveTauBroadphaseProxy(broadphase_tree, broadphase_pairs, existing->second);
 	}
-	auto &created = nodes[node.ref] = std::move(tau_node);
+	auto &created = nodes.InsertOrAssign(node.ref, std::move(tau_node), std::move(tau_node_cold));
 	RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, created);
 	requires_full_substep = true;
 }
@@ -3772,8 +3799,8 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 
 	if (!all_substeps_skipped)
 		for (auto &entry : nodes) {
-			entry.second.accumulated_force = Vec3::Zero;
-			entry.second.accumulated_torque = Vec3::Zero;
+			entry.second.cold->accumulated_force = Vec3::Zero;
+			entry.second.cold->accumulated_torque = Vec3::Zero;
 		}
 }
 
@@ -3794,10 +3821,10 @@ void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
 				WakeTauSupportedIslands(nodes, entry.first);
 			requires_full_substep |= transform_changed;
 			SetTauNodeWorld(entry.second, world, TauWorldWriteMode::CaptureSource);
-			entry.second.externally_moved |= transform_changed;
-			if (transform_changed || !entry.second.world_proxy_cache_valid)
+			entry.second.cold->externally_moved |= transform_changed;
+			if (transform_changed || !entry.second.cold->world_proxy_cache_valid)
 				RefreshTauBroadphaseProxy(
-					broadphase_tree, broadphase_pairs, entry.second, entry.second.position - entry.second.previous_position);
+					broadphase_tree, broadphase_pairs, entry.second, entry.second.position - entry.second.cold->previous_position);
 		}
 	}
 }
@@ -3811,9 +3838,9 @@ void SceneTauPhysics::SyncTransformsToScene(Scene &scene) {
 		// accumulator did not advance this frame: ReadyWorldMatrices invalidates
 		// the previous frame's cache regardless of whether physics stepped.
 		const bool publish_dynamic = entry.second.body_type == RBT_Dynamic &&
-			(entry.second.activation_state != TauActivationState::Sleeping || entry.second.transform_dirty);
+			(entry.second.activation_state != TauActivationState::Sleeping || entry.second.cold->transform_dirty);
 		if (publish_dynamic) {
-			const Mat4 &world = entry.second.motion.GetWorld();
+			const Mat4 &world = entry.second.cold->motion.GetWorld();
 
 			// SetNodeWorldMatrix only overrides the scene's world-matrix cache for
 			// the current frame. ReadyWorldMatrices invalidates that cache on the
@@ -3830,7 +3857,7 @@ void SceneTauPhysics::SyncTransformsToScene(Scene &scene) {
 			}
 
 			scene.SetNodeWorldMatrix(entry.first, world);
-			entry.second.transform_dirty = false;
+			entry.second.cold->transform_dirty = false;
 		}
 	}
 }
@@ -3917,7 +3944,7 @@ void SceneTauPhysics::NodeSetDeactivation(NodeRef ref, bool enable) {
 	if (!enable)
 		WakeTauIsland(nodes, ref);
 	if (auto *node = FindTauNode(nodes, ref)) {
-		node->deactivation_enabled = enable;
+		node->cold->deactivation_enabled = enable;
 		if (!enable)
 			WakeTauNodeState(*node);
 	}
@@ -3925,7 +3952,7 @@ void SceneTauPhysics::NodeSetDeactivation(NodeRef ref, bool enable) {
 
 bool SceneTauPhysics::NodeGetDeactivation(NodeRef ref) const {
 	if (const auto *node = FindTauNode(nodes, ref))
-		return node->deactivation_enabled;
+		return node->cold->deactivation_enabled;
 	return true;
 }
 
@@ -3939,7 +3966,7 @@ void SceneTauPhysics::NodeResetWorld(NodeRef ref, const Mat4 &world) {
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Reset);
 		RefreshTauMassProperties(*node);
 		ResetDynamicState(*node);
-		node->transform_dirty = true;
+		node->cold->transform_dirty = true;
 		RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, *node);
 	}
 }
@@ -3954,7 +3981,7 @@ void SceneTauPhysics::NodeTeleport(NodeRef ref, const Mat4 &world) {
 		SetTauNodeWorld(*node, world, TauWorldWriteMode::Solved);
 		RefreshTauMassProperties(*node);
 		WakeTauNodeState(*node);
-		node->transform_dirty = true;
+		node->cold->transform_dirty = true;
 		RefreshTauBroadphaseProxy(broadphase_tree, broadphase_pairs, *node);
 	}
 }
@@ -3964,7 +3991,7 @@ void SceneTauPhysics::NodeAddForce(NodeRef ref, const Vec3 &F) {
 	if (auto *node = FindTauNode(nodes, ref)) {
 		if (!IsDynamicTauNode(*node))
 			return;
-		node->accumulated_force += F;
+		node->cold->accumulated_force += F;
 	}
 }
 
@@ -3973,8 +4000,8 @@ void SceneTauPhysics::NodeAddForce(NodeRef ref, const Vec3 &F, const Vec3 &world
 	if (auto *node = FindTauNode(nodes, ref)) {
 		if (!IsDynamicTauNode(*node))
 			return;
-		node->accumulated_force += F;
-		node->accumulated_torque += Cross(world_pos - node->position, F);
+		node->cold->accumulated_force += F;
+		node->cold->accumulated_torque += Cross(world_pos - node->position, F);
 	}
 }
 
@@ -4003,7 +4030,7 @@ void SceneTauPhysics::NodeAddTorque(NodeRef ref, const Vec3 &T) {
 	if (auto *node = FindTauNode(nodes, ref)) {
 		if (!IsDynamicTauNode(*node))
 			return;
-		node->accumulated_torque += T;
+		node->cold->accumulated_torque += T;
 	}
 }
 
@@ -4087,7 +4114,7 @@ std::vector<RaycastOut> SceneTauPhysics::RaycastAllHits(const Scene &scene, cons
 	for (const auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
-		for (const auto &shape : entry.second.shapes) {
+		for (const auto &shape : entry.second.cold->shapes) {
 			TauRayShapeHit shape_hit;
 			if (!IntersectTauRayShape(entry.second, shape, world_p0, direction, max_distance, shape_hit))
 				continue;
@@ -4117,7 +4144,7 @@ RaycastOut SceneTauPhysics::RaycastFirstHit(const Scene &scene, const Vec3 &worl
 	for (const auto &entry : nodes) {
 		if (!scene.IsValidNodeRef(entry.first))
 			continue;
-		for (const auto &shape : entry.second.shapes) {
+		for (const auto &shape : entry.second.cold->shapes) {
 			TauRayShapeHit shape_hit;
 			if (!IntersectTauRayShape(entry.second, shape, world_p0, direction, max_distance, shape_hit) || shape_hit.t >= closest.t)
 				continue;
@@ -4134,7 +4161,7 @@ void SceneTauPhysics::RenderCollision(
 	bgfx::ViewId view_id, const bgfx::VertexLayout &vtx_decl, bgfx::ProgramHandle program, RenderState state, uint32_t depth) {
 	size_t shape_count = 0;
 	for (const auto &entry : nodes)
-		shape_count += entry.second.shapes.size();
+		shape_count += entry.second.cold->shapes.size();
 	size_t manifold_point_count = 0;
 	for (const auto &manifold : contact_manifolds)
 		if (manifold.last_seen_step == contact_step)
@@ -4145,7 +4172,7 @@ void SceneTauPhysics::RenderCollision(
 
 	size_t vertex_capacity = manifold_point_count * 8;
 	for (const auto &entry : nodes) {
-		for (const auto &shape : entry.second.shapes) {
+		for (const auto &shape : entry.second.cold->shapes) {
 			if (shape.type == CT_Mesh && shape.collision_geometry)
 				vertex_capacity += shape.collision_geometry->triangles.size() * 6;
 			else
@@ -4159,7 +4186,7 @@ void SceneTauPhysics::RenderCollision(
 		const auto &node = entry.second;
 		const Color color = GetTauDebugColor(node);
 
-		for (const auto &shape : node.shapes) {
+		for (const auto &shape : node.cold->shapes) {
 			if (shape.type == CT_Sphere)
 				AppendTauSphereWireframe(vtx, vtx_count, BuildTauWorldSphereCenter(node, shape), BuildTauWorldSphereRadius(node, shape),
 					BuildTauWorldSphereRotation(node, shape), color);
@@ -4169,7 +4196,7 @@ void SceneTauPhysics::RenderCollision(
 				AppendTauMeshWireframe(vtx, vtx_count, ComposeTauWorld(node) * shape.local_transform, *shape.collision_geometry, color);
 			else {
 				const TauPrimitiveFrame frame = BuildTauPrimitiveFrame(node, shape);
-				const Vec3 scale = Abs(node.scale);
+				const Vec3 scale = Abs(node.cold->scale);
 				const float radius = shape.radius * std::max(scale.x, scale.z);
 				const float height = Abs(shape.size.y) * scale.y;
 				if (shape.type == CT_Capsule)
@@ -4187,10 +4214,11 @@ void SceneTauPhysics::RenderCollision(
 			continue;
 		const TauNode *node_a = FindTauNode(nodes, manifold.ref_a);
 		const TauNode *node_b = FindTauNode(nodes, manifold.ref_b);
-		if (node_a == nullptr || node_b == nullptr || manifold.shape_a >= node_a->shapes.size() || manifold.shape_b >= node_b->shapes.size())
+		if (node_a == nullptr || node_b == nullptr || manifold.shape_a >= node_a->cold->shapes.size() ||
+			manifold.shape_b >= node_b->cold->shapes.size())
 			continue;
-		const OBB obb_a = BuildTauWorldOBB(*node_a, node_a->shapes[manifold.shape_a]);
-		const OBB obb_b = BuildTauWorldOBB(*node_b, node_b->shapes[manifold.shape_b]);
+		const OBB obb_a = BuildTauWorldOBB(*node_a, node_a->cold->shapes[manifold.shape_a]);
+		const OBB obb_b = BuildTauWorldOBB(*node_b, node_b->cold->shapes[manifold.shape_b]);
 		for (uint8_t point_index = 0; point_index < manifold.point_count; ++point_index) {
 			const auto &manifold_point = manifold.points[point_index];
 			const Vec3 point = (TauObbLocalToWorld(obb_a, manifold_point.local_point_a) + TauObbLocalToWorld(obb_b, manifold_point.local_point_b)) * 0.5f;
