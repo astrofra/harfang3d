@@ -537,6 +537,12 @@ bool SceneBullet3Physics::NodeGetDeactivation(NodeRef ref) const {
 	return true;
 }
 
+bool SceneBullet3Physics::NodeIsSleeping(NodeRef ref) const {
+	if (auto body = GetNodeBody(ref, __func__))
+		return body->getActivationState() == ISLAND_SLEEPING;
+	return false;
+}
+
 //
 void SceneBullet3Physics::NodeResetWorld(NodeRef ref, const Mat4 &world) const {
 	if (auto body = GetNodeBody(ref, __func__)) {

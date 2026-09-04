@@ -1689,6 +1689,7 @@ def bind_scene_physics_common_methods(gen, physics):
 
 	gen.bind_method(physics, 'NodeSetDeactivation', 'void', ['const hg::Node &node', 'bool enable'])
 	gen.bind_method(physics, 'NodeGetDeactivation', 'bool', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeIsSleeping', 'bool', ['const hg::Node &node'])
 
 	gen.bind_method(physics, 'NodeResetWorld', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])
 	gen.bind_method(physics, 'NodeTeleport', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])

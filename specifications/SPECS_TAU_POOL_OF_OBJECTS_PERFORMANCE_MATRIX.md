@@ -3,11 +3,12 @@
 Date: 2026-09-04
 
 Status: complete for the deterministic physics-only acceptance rerun after
-the split velocity-constraint working set. The 2026-09-02, 2026-09-03, and
+the split velocity-constraint working set, followed by a focused acceptance
+of the scalable all-sleeping fast path. The 2026-09-02, 2026-09-03, and
 hot/cold matrices are retained below as historical baselines; the current
-physics results and next-stage decision are in the final section. Controlled
-scene/render results were not rerun because this slice changes only Tau's
-internal physics storage.
+physics results and next-stage decision are in the final sections. Controlled
+scene/render results were not rerun because these slices change only Tau's
+internal physics storage and idle-step eligibility.
 
 Related roadmap:
 `specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_ROADMAP.md`.
@@ -33,6 +34,11 @@ equal-cell median ratio is **0.626x**. Active sum-time parity is retained at
 cube-only physics, which is 1.12x to 1.61x slower by median. The stretch goal
 therefore remains open because the same six median cells and seven p95 cells
 exceed 1.10x.
+
+All historical `settled` rows use a fixed 600-step cooldown. They are useful
+and reproducible hot/cold workload samples, but the label does not prove that
+every dynamic body is asleep. The final section introduces the separately
+observable `all_sleeping` phase and does not reinterpret the historical data.
 
 ## 2026-09-02 Baseline Protocol
 
@@ -702,3 +708,72 @@ three-pass count. Island-size/work instrumentation remains required after that
 slice and before island parallelism, but its immediate measured scope is only
 0.221 ms and the known dominant pile component makes a parallel-speedup claim
 premature without the histogram.
+
+## 2026-09-04 Scalable All-Sleeping Fast-Path Acceptance
+
+The benchmark now distinguishes a fixed cooldown from a verified sleeping
+world. Both backends expose the additive `NodeIsSleeping(node)` C++/Lua query,
+and `BENCH_PHASE=all_sleeping` waits until every benchmark dynamic body reports
+that state. `BENCH_SLEEP_MAX` bounds the wait, `BENCH_SLEEP_POLL` controls the
+poll interval, and each JSONL record stores `phase_semantics`,
+`sleep_wait_steps`, and the sleep controls. Existing `phase=settled` behavior
+and files remain backward compatible and are marked `fixed_cooldown`.
+
+Tau no longer limits the world-wide shortcut to 512 bodies. The complete
+solver substep publishes an all-dynamic-sleeping bit. An active world rejects
+the shortcut from that bit in O(1); transition to the sleeping state triggers
+one exhaustive validation over bodies and proxies; later idle substeps reuse
+the validation without scanning bodies. All public activation, body,
+constraint, support-transform, force, impulse, velocity, and factor mutations
+invalidate it. A focused 513-body test verifies the one-time 513 checks and
+zero checks on the next skipped step, then verifies that an impulse forces a
+complete substep.
+
+The unprofiled Release artifact is
+`build/tau-all-sleeping-20260904`. Measurements use 1,500 mixed bodies, 120
+samples after 10 warm-up steps, and the established deterministic seeds.
+
+| Measurement | Records | Median of medians | Median p95 | Notes |
+|---|---:|---:|---:|---|
+| Tau before slice, fixed 2,400-step cooldown | 3 | 2.9119 ms | 3.4487 ms | preserved runtime, seeds 5,521,749-51 |
+| Tau after slice, fixed 2,400-step cooldown | 3 | 0.0002 ms | 0.0003 ms | same seeds, timer-floor result |
+| Tau strict all-sleeping | 3 | 0.0002 ms | 0.0003 ms | successful seeds waited 600, 600, 900 steps |
+| Bullet strict all-sleeping | 5 | 0.7599 ms | 0.8937 ms | waits: 2,040, 1,680, 5,280, 2,640, 1,620 steps |
+
+For the three common successful seeds, the old/new Tau fixed-cooldown ratio is
+0.000069x by median. The strict Tau/Bullet ratio is 0.000263x by median and
+0.000336x by p95, but these ratios are at the timer's resolution floor and are
+reported only to validate removal of residual idle work. They are not a claim
+that Tau wins the complete workload: creation, active simulation, transition
+time, and the cube-only stretch cells remain part of acceptance.
+
+The five-seed strict Tau phase deliberately did not produce five timed
+records. Seed 5,521,752 timed out at 7,200 steps with 1,499/1,500 sleepers and
+a zero reported linear velocity on the remaining body. Seed 5,521,753 also
+had 1,499/1,500 sleepers, with the remaining body in free fall at
+`vy=-1168.632324 m/s`, consistent with escape from the finite pool. Because
+the all-sleeping bit stays false, neither case can enter the new shortcut.
+The benchmark fails rather than mislabeling these states as settled.
+
+Focused active spot checks compare the same implementation to the preceding
+clean split-velocity matrix:
+
+| 1,500 active Tau | Previous median / p95 | Current median / p95 | Change |
+|---|---:|---:|---:|
+| mixed | 10.443 / 12.811 ms | 10.965 / 13.028 ms | +5.0% / +1.7% |
+| cube | 15.560 / 19.037 ms | 15.995 / 19.587 ms | +2.8% / +2.9% |
+
+Both rows remain inside the 10% absolute regression policy. They are focused
+same-machine checks, not a replacement for the preceding alternating complete
+matrix. Full Bullet and Tau C++ suites pass. Fresh chain and callback captures
+retain their accepted byte-identical hashes and metrics: 4.64718 m chain
+vertical envelope, 16.4712 m/s peak Tau chain speed, zero static drift,
+0.03582168 m callback maximum position error, and -0.00141478 m amplitude
+delta. Solver iterations remain three position and eight velocity passes.
+
+This idle-path slice is accepted. Compact position constraints remain the next
+performance slice. The stable zero-velocity non-sleeper requires focused
+sleep/contact diagnostics, and benchmark containment must classify or prevent
+escaped bodies before a five-seed strict all-sleeping acceptance can be
+claimed. Island work-size instrumentation remains next after position
+compaction and before parallelism.

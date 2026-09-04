@@ -710,6 +710,7 @@ static void test_PhysicDeactivationCanBeDisabledAndReenabled() {
 	physics.SceneCreatePhysicsFromAssets(scene);
 
 	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	TEST_CHECK(!physics.NodeIsSleeping(cube));
 	physics.NodeSetDeactivation(cube, false);
 	TEST_CHECK(!physics.NodeGetDeactivation(cube));
 
@@ -726,6 +727,7 @@ static void test_PhysicDeactivationCanBeDisabledAndReenabled() {
 	for (int i = 0; i < 600; ++i)
 		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
 	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	TEST_CHECK(physics.NodeIsSleeping(cube));
 }
 
 static void test_PhysicKinematicRigidBodyCollideWorld() {

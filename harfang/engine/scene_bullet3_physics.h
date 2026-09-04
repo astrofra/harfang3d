@@ -78,6 +78,9 @@ public:
 	/// Return whether automatic body deactivation is enabled.
 	bool NodeGetDeactivation(NodeRef ref) const;
 	bool NodeGetDeactivation(const Node &node) const { return NodeGetDeactivation(node.ref); }
+	/// Return whether the body is currently sleeping.
+	bool NodeIsSleeping(NodeRef ref) const;
+	bool NodeIsSleeping(const Node &node) const { return NodeIsSleeping(node.ref); }
 
 	void NodeResetWorld(NodeRef ref, const Mat4 &world) const;
 	void NodeResetWorld(const Node &node, const Mat4 &world) const { NodeResetWorld(node.ref, world); }

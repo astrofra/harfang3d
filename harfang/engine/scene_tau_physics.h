@@ -253,6 +253,9 @@ public:
 	void NodeSetDeactivation(const Node &node, bool enable) { NodeSetDeactivation(node.ref, enable); }
 	bool NodeGetDeactivation(NodeRef ref) const;
 	bool NodeGetDeactivation(const Node &node) const { return NodeGetDeactivation(node.ref); }
+	/// Return whether the body is currently sleeping.
+	bool NodeIsSleeping(NodeRef ref) const;
+	bool NodeIsSleeping(const Node &node) const { return NodeIsSleeping(node.ref); }
 
 	void NodeResetWorld(NodeRef ref, const Mat4 &world);
 	void NodeResetWorld(const Node &node, const Mat4 &world) { NodeResetWorld(node.ref, world); }
@@ -321,6 +324,10 @@ private:
 
 	std::shared_ptr<const CollisionGeometry> LoadCollisionGeometryResource(
 		const Reader &ir, const ReadProvider &ip, const std::string &resource);
+	void InvalidateAllSleepingFastPath() const {
+		all_dynamic_bodies_sleeping = false;
+		all_sleeping_fast_path_validated = false;
+	}
 
 	tau_internal::TauNodeStore nodes;
 	std::map<std::string, std::shared_ptr<const CollisionGeometry>> collision_geometries;
@@ -333,6 +340,11 @@ private:
 	uint32_t next_sleep_island_id{1};
 	time_ns fixed_step_accumulator{0};
 	bool requires_full_substep{false};
+	// Updated after each complete substep. Public mutations invalidate both
+	// fields so active worlds reject the all-sleeping path in O(1). Once all
+	// dynamic bodies sleep, one defensive scan validates the steady state.
+	mutable bool all_dynamic_bodies_sleeping{false};
+	mutable bool all_sleeping_fast_path_validated{false};
 	std::map<NodeRef, CollisionEventTrackingMode> node_collision_event_tracking_modes;
 	NodePairContacts latest_contacts;
 	std::unique_ptr<TauStepScratch> step_scratch;

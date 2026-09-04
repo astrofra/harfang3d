@@ -21,6 +21,9 @@
 -- Render modes use a 1280x720 forward pipeline with 4x MSAA and no RF_VSync.
 -- The untimed settling transition skips GPU submission, then the complete
 -- render path is warmed again before the settled measurement window.
+-- BENCH_PHASE=settled is a fixed BENCH_SETTLE-step cooldown; it does not
+-- imply that every body is asleep. BENCH_PHASE=all_sleeping waits for that
+-- observable backend state, up to BENCH_SLEEP_MAX steps.
 
 local hg = require("harfang")
 
@@ -74,8 +77,10 @@ local render_enabled = mode == "render" or mode == "render_no_physics"
 local physics_enabled = mode ~= "no_physics" and mode ~= "render_no_physics"
 
 local phase_selection = env_string("BENCH_PHASE", "both")
-assert(phase_selection == "active" or phase_selection == "settled" or phase_selection == "both",
-	"BENCH_PHASE must be 'active', 'settled', or 'both'")
+assert(phase_selection == "active" or phase_selection == "settled" or phase_selection == "all_sleeping" or phase_selection == "both",
+	"BENCH_PHASE must be 'active', 'settled', 'all_sleeping', or 'both'")
+assert(phase_selection ~= "all_sleeping" or physics_enabled,
+	"BENCH_PHASE=all_sleeping requires a physics-enabled BENCH_MODE")
 
 local shape_mix = env_string("BENCH_SHAPES", "mixed")
 assert(shape_mix == "mixed" or shape_mix == "cube" or shape_mix == "sphere",
@@ -89,6 +94,8 @@ local batch_size = math.floor(env_number("BENCH_BATCH", 7))
 local sample_steps = math.floor(env_number("BENCH_SAMPLES", 120))
 local warmup_steps = math.floor(env_number("BENCH_WARMUP", 10))
 local settle_steps = math.floor(env_number("BENCH_SETTLE", 600))
+local sleep_max_steps = math.floor(env_number("BENCH_SLEEP_MAX", 7200))
+local sleep_poll_steps = math.floor(env_number("BENCH_SLEEP_POLL", 60))
 local repetitions = math.floor(env_number("BENCH_REPETITIONS", 5))
 local base_seed = math.floor(env_number("BENCH_SEED", 0x544155))
 local fixed_step = hg.time_from_sec_f(1 / 60)
@@ -101,6 +108,8 @@ assert(batch_size > 0, "BENCH_BATCH must be positive")
 assert(sample_steps > 0, "BENCH_SAMPLES must be positive")
 assert(warmup_steps >= 0, "BENCH_WARMUP must not be negative")
 assert(settle_steps >= 0, "BENCH_SETTLE must not be negative")
+assert(sleep_max_steps >= 0, "BENCH_SLEEP_MAX must not be negative")
+assert(sleep_poll_steps > 0, "BENCH_SLEEP_POLL must be positive")
 assert(repetitions > 0, "BENCH_REPETITIONS must be positive")
 
 if profiling and backend ~= "tau" then
@@ -298,12 +307,53 @@ local function run_steps(world, count, submit_render)
 	end
 end
 
+local function count_sleeping_dynamic_nodes(world)
+	if world.physics == nil or #world.nodes == 0 then
+		return 0
+	end
+	local sleeping_count = 0
+	for _, node in ipairs(world.nodes) do
+		if world.physics:NodeIsSleeping(node) then
+			sleeping_count = sleeping_count + 1
+		end
+	end
+	return sleeping_count
+end
+
+local function wait_for_all_sleeping(world)
+	local waited_steps = 0
+	local sleeping_count = count_sleeping_dynamic_nodes(world)
+	while sleeping_count ~= #world.nodes and waited_steps < sleep_max_steps do
+		local step_count = math.min(sleep_poll_steps, sleep_max_steps - waited_steps)
+		run_steps(world, step_count, false)
+		waited_steps = waited_steps + step_count
+		sleeping_count = count_sleeping_dynamic_nodes(world)
+	end
+	if sleeping_count == #world.nodes then
+		return waited_steps, sleeping_count
+	end
+	return nil, sleeping_count
+end
+
+local function describe_first_awake_node(world)
+	for index, node in ipairs(world.nodes) do
+		if not world.physics:NodeIsSleeping(node) then
+			local linear_velocity = world.physics:NodeGetLinearVelocity(node)
+			local angular_velocity = world.physics:NodeGetAngularVelocity(node)
+			return string.format("first awake node=%d linear=(%.6f, %.6f, %.6f) angular=(%.6f, %.6f, %.6f)",
+				index, linear_velocity.x, linear_velocity.y, linear_velocity.z,
+				angular_velocity.x, angular_velocity.y, angular_velocity.z)
+		end
+	end
+	return "no awake node found"
+end
+
 local function percentile(sorted_samples, ratio)
 	local index = math.floor((#sorted_samples - 1) * ratio) + 1
 	return sorted_samples[index]
 end
 
-local function measure_phase(world, phase, repetition, seed)
+local function measure_phase(world, phase, repetition, seed, sleep_wait_steps)
 	run_steps(world, warmup_steps)
 	hg.EndProfilerFrame()
 
@@ -327,14 +377,19 @@ local function measure_phase(world, phase, repetition, seed)
 	table.sort(samples)
 	local median_ns = percentile(samples, 0.50)
 	local p95_ns = percentile(samples, 0.95)
+	local phase_semantics = phase == "active" and "active_drop" or
+		(phase == "settled" and "fixed_cooldown" or "all_dynamic_bodies_sleeping")
+	local sleep_wait_json = sleep_wait_steps ~= nil and tostring(sleep_wait_steps) or "null"
 	local record = string.format(
 		'{"schema":1,"timestamp_utc":%s,"backend":%s,"mode":%s,"phase":%s,"shape_mix":%s,"layout":%s,' ..
 		'"bodies":%d,"static_bodies":5,"batch":%d,"seed":%d,"repetition":%d,"samples":%d,' ..
-		'"fixed_step_ns":%d,"warmup_steps":%d,"settle_steps":%d,"profiled":%s,' ..
+		'"fixed_step_ns":%d,"warmup_steps":%d,"settle_steps":%d,"phase_semantics":%s,' ..
+		'"sleep_wait_steps":%s,"sleep_poll_steps":%d,"sleep_max_steps":%d,"profiled":%s,' ..
 		'"total_ns":%d,"mean_us":%.3f,"median_us":%.3f,"p95_us":%.3f,"min_us":%.3f,"max_us":%.3f,' ..
 		'"revision":%s,"build_config":%s,"computer":%s,"processor":%s,"logical_processors":%s}',
 		json_string(os.date("!%Y-%m-%dT%H:%M:%SZ")), json_string(backend), json_string(mode), json_string(phase), json_string(shape_mix), json_string(layout),
-		target_count, batch_size, seed, repetition, sample_steps, fixed_step, warmup_steps, settle_steps, profiling and "true" or "false",
+		target_count, batch_size, seed, repetition, sample_steps, fixed_step, warmup_steps, settle_steps, json_string(phase_semantics),
+		sleep_wait_json, sleep_poll_steps, sleep_max_steps, profiling and "true" or "false",
 		total_ns, hg.time_to_us_f(total_ns) / sample_steps, hg.time_to_us_f(median_ns), hg.time_to_us_f(p95_ns),
 		hg.time_to_us_f(samples[1]), hg.time_to_us_f(samples[#samples]), json_string(env_string("BENCH_REVISION", "unknown")),
 		json_string(env_string("BENCH_BUILD_CONFIG", "unknown")), json_string(env_string("COMPUTERNAME", "unknown")),
@@ -362,6 +417,16 @@ for repetition = 1, repetitions do
 		-- path again before measuring the settled window.
 		run_steps(world, settle_steps, false)
 		measure_phase(world, "settled", repetition, seed)
+	end
+
+	if phase_selection == "all_sleeping" then
+		local sleep_wait_steps, sleeping_count = wait_for_all_sleeping(world)
+		assert(sleep_wait_steps ~= nil, string.format(
+			"only %d/%d dynamic bodies slept within BENCH_SLEEP_MAX=%d steps (backend=%s repetition=%d seed=%d; %s)",
+			sleeping_count, #world.nodes, sleep_max_steps, backend, repetition, seed, describe_first_awake_node(world)))
+		print(string.format("[benchmark] backend=%s repetition=%d all dynamic bodies sleeping after %d wait steps",
+			backend, repetition, sleep_wait_steps))
+		measure_phase(world, "all_sleeping", repetition, seed, sleep_wait_steps)
 	end
 
 	if world.physics ~= nil then

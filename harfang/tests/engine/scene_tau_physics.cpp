@@ -700,14 +700,27 @@ void TestAllSleepingSmallWorldFastPath() {
 
 	SceneTauPhysics physics;
 	physics.SceneCreatePhysicsFromAssets(scene);
-	StepTauWorld(physics, 240);
+	for (int step = 0; step < 240 && !physics.NodeIsSleeping(body); ++step)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_ASSERT(physics.NodeIsSleeping(body));
 	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, body.ref));
 
+	// Sleeping captures the final pose after broad-phase construction, so the
+	// next full substep refreshes that proxy before the steady state is valid.
 	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
 	tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.all_sleeping_substeps_skipped == 0);
+
+	// Validate every body once, then reject subsequent work in O(1).
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	stats = tau_internal::GetLastStepReuseStats(physics);
 	TEST_CHECK(stats.all_sleeping_substeps_skipped == 1);
 	TEST_CHECK(stats.all_sleeping_body_checks == 2);
 	TEST_CHECK(stats.body_proxy_capacity >= 2);
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.all_sleeping_substeps_skipped == 1);
+	TEST_CHECK(stats.all_sleeping_body_checks == 0);
 
 	int callback_count = 0;
 	physics.SetPreTickCallback([&](SceneTauPhysics &callback_physics, time_ns) {
@@ -746,7 +759,7 @@ void TestAllSleepingFastPathRejectsSupportRemoval() {
 	TEST_CHECK(!tau_internal::IsNodeSleeping(physics, body.ref));
 }
 
-void TestAllSleepingFastPathBodyLimit() {
+void TestAllSleepingLargeWorldFastPath() {
 	Scene scene;
 	const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.5f, 0.f), RBT_Dynamic, 1.f);
 	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
@@ -756,10 +769,27 @@ void TestAllSleepingFastPathBodyLimit() {
 
 	SceneTauPhysics physics;
 	physics.SceneCreatePhysicsFromAssets(scene);
-	StepTauWorld(physics, 240);
-	TEST_ASSERT(tau_internal::IsNodeSleeping(physics, body.ref));
+	for (int step = 0; step < 240 && !physics.NodeIsSleeping(body); ++step)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_ASSERT(physics.NodeIsSleeping(body));
+
+	// Refresh the final sleeping proxy, then validate the 513-body world once.
 	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
 	TEST_CHECK(tau_internal::GetLastStepReuseStats(physics).all_sleeping_substeps_skipped == 0);
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.all_sleeping_substeps_skipped == 1);
+	TEST_CHECK(stats.all_sleeping_body_checks == 513);
+
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.all_sleeping_substeps_skipped == 1);
+	TEST_CHECK(stats.all_sleeping_body_checks == 0);
+
+	physics.NodeAddImpulse(body, Vec3::Right);
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(tau_internal::GetLastStepReuseStats(physics).all_sleeping_substeps_skipped == 0);
+	TEST_CHECK(physics.NodeGetLinearVelocity(body).x > 0.f);
 }
 
 void TestCapsuleSettlesOnCuboid() {
@@ -1059,7 +1089,7 @@ void test_scene_tau_physics() {
 	TestSleepingSphereManifoldReuse();
 	TestAllSleepingSmallWorldFastPath();
 	TestAllSleepingFastPathRejectsSupportRemoval();
-	TestAllSleepingFastPathBodyLimit();
+	TestAllSleepingLargeWorldFastPath();
 	TestCapsuleCollisionPairs();
 	TestCapsulePrimitiveManifoldPersistence();
 	TestCapsuleSettlesOnCuboid();

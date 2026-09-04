@@ -11,8 +11,10 @@ split compact velocity-constraint working set are implemented and measured.
 Active face-feature cuboid manifold coherence is
 also implemented with conservative validation and periodic full refresh.
 Zero-restitution, non-positive-friction, and world-wide zero-rolling-friction
-solver fast paths are implemented and measured. A guarded all-sleeping fast
-path for worlds of at most 512 bodies is also implemented and measured. The
+solver fast paths are implemented and measured. The guarded all-sleeping fast
+path now scales to arbitrary world sizes: active worlds reject it in O(1), a
+newly all-sleeping world is validated by one defensive body scan, and later
+idle substeps are O(1). The
 complete physics-only body-count/shape matrix and controlled scene/render
 passes have been rerun against all accumulated optimizations. Tau beats Bullet
 on the representative mixed active, settled, and end-to-end gates. A first,
@@ -20,7 +22,8 @@ behavior-preserving dense body-storage slice and a solver-hot/body-cold data
 split are implemented and measured. The split improves both the focused
 active-cube median and p95 while preserving byte-identical QA trajectories.
 The complete matrix confirms the gain without a greater-than-10% per-cell
-regression. Compact mutable velocity-constraint storage is selected before
+regression. Compact mutable velocity-constraint storage is implemented and
+accepted. Compact position-constraint storage is selected before
 independent-island parallelism. Solver iteration tuning remains deferred.
 
 Scope: Harfang's Tau rigid-body backend under
@@ -1633,7 +1636,7 @@ physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
 normalizes cuboid axes, refreshes persistent anchors, or recomputes normal
 effective mass inside velocity iterations. Conservative coherent FaceA/FaceB
 manifold refresh is also implemented and periodically revalidated by the full
-generator. Coefficient fast paths and the guarded all-sleeping small-world
+generator. Coefficient fast paths and the scalable guarded all-sleeping
 shortcut are also implemented. The first ordered dense body-ownership and
 hashed lookup slice is implemented without changing traversal order. The
 follow-up hot/cold `TauNode` split improves the focused active-cube median and
@@ -1736,7 +1739,8 @@ static BVH and dynamic broad phase must not be confused or coupled:
 - collision-event continuity for sleeping contacts;
 - no stale cache/tree handle after destroy or garbage collection;
 - fixed callback count and fixed callback `dt`;
-- no change to public Harfang Lua/C++ physics APIs.
+- no breaking change to public Harfang Lua/C++ physics APIs; additive
+  observability such as `NodeIsSleeping` must have matching backend semantics.
 
 ### Performance regression policy
 
@@ -1790,6 +1794,83 @@ Require the weighted benchmark suite, both median and p95, all supported
 primitive mixes, and the no-regression matrix. A win limited to a fully
 sleeping pool or obtained through fewer solver iterations is not sufficient.
 
+## 2026-09-04 Scalable All-Sleeping Fast Path And Sleep Observability
+
+This bounded slice removes the former 512-body eligibility limit without
+adding an active-world body scan. `SceneTauPhysics` now records whether the
+last complete substep ended with every dynamic body sleeping. While that bit
+is false, the all-sleeping shortcut rejects in O(1). When it first becomes
+true, the next eligible substep performs one defensive scan over bodies,
+proxies, support state, external motion, and force/torque accumulators. A
+successful scan is cached, so subsequent idle substeps do no body traversal.
+
+Every public mutation that can affect activation or collision state
+invalidates the cached result: body creation/destruction, constraints, wake,
+deactivation changes, reset/teleport, force/impulse/torque, velocity/factor
+changes, moving static or kinematic supports, and garbage collection. Pre-tick
+callback mutations use those same APIs and therefore invalidate before the
+eligibility check. Collision-event tracking, moved broad-phase proxies, and
+the existing `requires_full_substep` flag remain conservative rejection gates.
+The first complete substep after a body enters sleep still refreshes its final
+pose proxy before validation. Solver equations and the three position/eight
+velocity iteration counts are unchanged.
+
+The common Bullet/Tau C++ and Lua API now exposes `NodeIsSleeping(node)`.
+Unlike `NodeGetDeactivation`, which reports whether automatic deactivation is
+allowed, the new query reports the body's current state. The benchmark uses
+it to add a strict `BENCH_PHASE=all_sleeping` mode with bounded
+`BENCH_SLEEP_MAX` and `BENCH_SLEEP_POLL` controls. JSONL records now identify
+their phase semantics and sleep wait. Historical `phase=settled` records are
+therefore explicitly a fixed cooldown after `BENCH_SETTLE` steps; they must
+not be interpreted as proof that every body slept.
+
+Focused Release tests cover the one-time scan, zero-scan cached step, callback
+wake, support removal, destruction, and a 513-body world above the former
+limit. Both complete C++ backend suites pass. Two fresh 600-sample Tau ring
+captures are byte-identical, with SHA-256
+`619CC48B2BE46D91E7B4961DDAE9705DEE0CA151F25104CE9DEF7BA3735A557E`,
+4.64718 m maximum vertical error, 16.4712 m/s maximum Tau speed, and zero
+static drift. The impulse-callback capture is also byte-identical to the
+accepted result, with SHA-256
+`928E478D3CABE1DE0135CFE16D0AAABF8D67288BE76BB22671A7DB51223296E9`,
+0.03582168 m maximum position error, and -0.00141478 m peak-to-peak amplitude
+delta.
+
+The measurement artifact is `build/tau-all-sleeping-20260904`. A pre-run
+system check reported about 9.5% total CPU load; the resident Ollama services
+had no model working set or observed benchmark load. At 1,500 mixed bodies,
+the first three deterministic Tau seeds reached strict all-sleeping state
+after 600, 600, and 900 wait steps. Their median-of-medians step cost is at
+the 0.2 us timer floor, with 0.3 us p95. The same three seeds measured after a
+fixed 2,400-step cooldown fall from 2.9119 ms in the preserved pre-slice Tau
+runtime to 0.0002 ms in the new runtime. Bullet reaches strict all-sleeping on
+all five seeds after 1,620 to 5,280 steps and measures 0.7599 ms median and
+0.8937 ms p95. These numbers validate the scalable steady-state shortcut, but
+they do not replace the weighted active/settled acceptance matrix.
+
+Two Tau seeds expose pre-existing physical-state issues before the shortcut
+can engage. Seed 5,521,752 leaves 1,499/1,500 bodies sleeping after 7,200
+steps; the remaining body's reported linear velocity is zero. Seed 5,521,753
+also leaves 1,499/1,500 asleep, but its remaining body is in clear free fall
+(`vy=-1168.632324 m/s`), consistent with escape from the finite pool. The
+strict benchmark fails instead of timing either state as all-sleeping. The
+zero-velocity non-sleeper needs a focused activation/contact-eligibility
+capture, while the escaped-body case needs an explicit containment policy for
+the benchmark rather than weaker sleep semantics.
+
+Active 1,500-body spot checks remain below the 10% regression threshold
+against the preceding clean matrix. Mixed median/p95 is 10.965/13.028 ms,
+about +5.0%/+1.7%; cube-only is 15.995/19.587 ms, about +2.8%/+2.9%. Because
+this is a focused same-machine check rather than a new alternating complete
+matrix, the preceding complete matrix remains the formal active comparison.
+
+The scalable all-sleeping slice is accepted. The next bounded performance
+slice remains compact position-constraint storage. Sleep-eligibility triage
+and benchmark containment form a separate correctness/measurement lane that
+must close before making a five-seed strict all-sleeping claim. Island
+size/work instrumentation still follows position compaction and precedes any
+parallel scheduler.
+
 ## Expected Outcome
 
 The current fourfold visible gap is not one narrow-phase bug. It is the
@@ -1814,8 +1895,9 @@ outperforms Bullet strongly once the pool settles. Prepared active constraints
 reduce the cube velocity solve by about 23%, while coherent cuboid refresh cuts
 the focused active-cube p95 by another 5.5%. Coefficient fast paths then reduce
 the focused active-cube median and p95 by another 1.2% without changing any
-measured QA trajectory. Fully sleeping small worlds now fall to 3.0 us at 250
-dynamic bodies and 7.6 us at 500, eliminating the previous fixed Tau floor.
+measured QA trajectory. The first all-sleeping shortcut brought small worlds
+to 3.0 us at 250 dynamic bodies and 7.6 us at 500; the scalable cached version
+now reaches the 0.2 us timer floor at 1,500 bodies after one defensive scan.
 The first updated complete matrix reached 0.974x/0.996x active sum-time
 median/p95 and selected dense body storage before parallel independent
 islands. The first
