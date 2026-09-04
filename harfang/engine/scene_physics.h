@@ -11,6 +11,9 @@
 
 namespace hg {
 
+/// Return the display name of the scene physics backend selected at build time.
+const char *GetScenePhysicsBackendName();
+
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 class ScenePhysics : public SceneBullet3Physics {
 public:

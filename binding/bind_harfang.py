@@ -1746,6 +1746,7 @@ def bind_tau_physics(gen):
 
 def bind_scene_physics(gen):
 	gen.add_include('engine/scene_physics.h')
+	gen.bind_function('hg::GetScenePhysicsBackendName', 'const char *', [])
 
 	physics = gen.begin_class('hg::ScenePhysics', noncopyable=True)
 	gen.bind_constructor(physics, ['?int thread_count'])

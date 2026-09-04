@@ -92,6 +92,7 @@ set(SRCS
 	render_pipeline.cpp
 	sao.cpp
 	scene.cpp
+	scene_physics.cpp
 	scene_systems.cpp
 	scene_forward_pipeline.cpp
 	scene_load_binary.cpp

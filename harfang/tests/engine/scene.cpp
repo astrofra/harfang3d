@@ -16,6 +16,9 @@
 #include "engine/forward_pipeline.h"
 #include "engine/scene_forward_pipeline.h"
 #include "engine/scene_lua_vm.h"
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+#include "engine/scene_physics.h"
+#endif
 #include "engine/scene_systems.h"
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 #include "engine/scene_bullet3_physics.h"
@@ -27,6 +30,16 @@
 #include "foundation/math.h"
 
 using namespace hg;
+
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+static void test_ScenePhysicsBackendName() {
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS
+	TEST_CHECK(strcmp(GetScenePhysicsBackendName(), "Bullet Physics") == 0);
+#elif HG_ENABLE_TAU_SCENE_PHYSICS
+	TEST_CHECK(strcmp(GetScenePhysicsBackendName(), "Tau") == 0);
+#endif
+}
+#endif
 
 static void test_ComponentGarbageCollection() {
 	Scene scene;
@@ -769,6 +782,9 @@ static void test_PhysicRaycastAllHitsOutOfReach() {
 #endif // HG_ENABLE_BULLET3_SCENE_PHYSICS
 
 void test_scene() {
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+	test_ScenePhysicsBackendName();
+#endif
 	test_ComponentGarbageCollection();
 	test_DuplicateNodes();
 	test_WalkHierarchy();
