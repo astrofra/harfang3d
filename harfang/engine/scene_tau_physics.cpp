@@ -18,9 +18,15 @@
 #include "foundation/string.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdlib>
 #include <iterator>
 #include <limits>
+#include <new>
+
+#if defined(_MSC_VER)
+#include <malloc.h>
+#endif
 
 namespace hg {
 
@@ -206,6 +212,57 @@ struct TauBodyPair {
 	uint32_t a{0}, b{0};
 };
 
+template <typename T, size_t alignment> class TauAlignedAllocator {
+public:
+	using value_type = T;
+	using size_type = size_t;
+	using difference_type = std::ptrdiff_t;
+
+	template <typename U> struct rebind {
+		using other = TauAlignedAllocator<U, alignment>;
+	};
+
+	TauAlignedAllocator() noexcept = default;
+	template <typename U> TauAlignedAllocator(const TauAlignedAllocator<U, alignment> &) noexcept {}
+
+	T *allocate(size_t count) {
+		if (count == 0)
+			return nullptr;
+		if (count > max_size())
+			throw std::bad_array_new_length();
+		void *memory = nullptr;
+#if defined(_MSC_VER)
+		memory = _aligned_malloc(count * sizeof(T), alignment);
+#else
+		if (posix_memalign(&memory, alignment, count * sizeof(T)) != 0)
+			memory = nullptr;
+#endif
+		if (memory == nullptr)
+			throw std::bad_alloc();
+		return static_cast<T *>(memory);
+	}
+
+	void deallocate(T *memory, size_t) noexcept {
+#if defined(_MSC_VER)
+		_aligned_free(memory);
+#else
+		std::free(memory);
+#endif
+	}
+
+	size_t max_size() const noexcept { return std::numeric_limits<size_t>::max() / sizeof(T); }
+};
+
+template <typename T, typename U, size_t alignment>
+bool operator==(const TauAlignedAllocator<T, alignment> &, const TauAlignedAllocator<U, alignment> &) noexcept {
+	return true;
+}
+
+template <typename T, typename U, size_t alignment>
+bool operator!=(const TauAlignedAllocator<T, alignment> &, const TauAlignedAllocator<U, alignment> &) noexcept {
+	return false;
+}
+
 struct TauContactConstraint {
 	NodeRef ref_a{};
 	NodeRef ref_b{};
@@ -227,17 +284,30 @@ struct TauContactConstraint {
 	bool persistent{false};
 };
 
-// Position solving is complete before this cache is prepared. Contact points,
-// arms, normal effective masses, and penetration bias are therefore invariant
-// throughout the velocity iterations and do not belong in the repeated hot
-// path. The source contact remains authoritative for accumulated impulses and
-// manifold publication.
-struct TauVelocityConstraint {
-	TauContactConstraint *contact{nullptr};
+// Position solving is complete before this cache is prepared. Keep immutable
+// velocity data in a compact sequential record and isolate the fields dirtied
+// by every solver pass in a second stream. The larger source contact is reached
+// only for restitution setup and final impulse publication.
+struct alignas(64) TauVelocityConstraint {
+	TauNode *node_a{nullptr};
+	TauNode *node_b{nullptr};
 	Vec3 arm_a{Vec3::Zero}, arm_b{Vec3::Zero};
+	Vec3 normal{Vec3::Up};
 	float normal_mass{0.f};
 	float bias{0.f};
+	float friction{0.f};
 };
+
+struct alignas(16) TauVelocityImpulse {
+	Vec3 tangent{Vec3::Zero};
+	float normal{0.f};
+};
+
+static_assert(sizeof(TauVelocityConstraint) == 64, "Tau immutable velocity constraint must occupy one cache line");
+static_assert(sizeof(TauVelocityImpulse) == 16, "Tau mutable velocity impulse must occupy one quarter cache line");
+
+using TauVelocityConstraintStream = std::vector<TauVelocityConstraint, TauAlignedAllocator<TauVelocityConstraint, 64>>;
+using TauVelocityImpulseStream = std::vector<TauVelocityImpulse, TauAlignedAllocator<TauVelocityImpulse, 16>>;
 
 struct TauContactDiagnostics {
 	bool enabled{false};
@@ -2088,6 +2158,12 @@ float ComputeTauConstraintMass(const TauContactConstraint &contact, const Vec3 &
 	return inverse_mass + ComputeTauAngularMassTerm(*contact.node_a, arm_a, axis) + ComputeTauAngularMassTerm(*contact.node_b, arm_b, axis);
 }
 
+float ComputeTauConstraintMass(
+	const TauNode &node_a, const Vec3 &arm_a, const TauNode &node_b, const Vec3 &arm_b, const Vec3 &axis) {
+	const float inverse_mass = GetTauInverseMass(node_a) + GetTauInverseMass(node_b);
+	return inverse_mass + ComputeTauAngularMassTerm(node_a, arm_a, axis) + ComputeTauAngularMassTerm(node_b, arm_b, axis);
+}
+
 Vec3 GetTauConstraintAnchorA(const TauContactConstraint &contact) {
 	if (!contact.persistent || contact.shape_a >= contact.node_a->cold->shapes.size())
 		return contact.point;
@@ -2146,7 +2222,10 @@ struct TauStepScratch {
 	std::vector<TauBodyProxy> bodies;
 	std::vector<MinMax> body_bounds;
 	std::vector<TauContactConstraint> contacts;
-	std::vector<TauVelocityConstraint> velocity_constraints;
+	TauVelocityConstraintStream velocity_constraints;
+	TauVelocityImpulseStream velocity_impulses;
+	std::vector<float> velocity_restitution_velocities;
+	std::vector<size_t> velocity_contact_indices;
 	std::vector<TauBodyPair> body_pairs;
 	std::vector<DynamicAABBTreeProxy> moved_proxies;
 	TauIslandGraph islands;
@@ -2161,8 +2240,9 @@ struct TauStepScratch {
 	std::unordered_set<uint32_t> sleeping_island_ids;
 	bool has_nonzero_rolling_friction{false};
 
-	std::array<size_t, 22> GetCapacitySnapshot() const {
-		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), velocity_constraints.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
+	std::array<size_t, 25> GetCapacitySnapshot() const {
+		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), velocity_constraints.capacity(), velocity_impulses.capacity(),
+			velocity_restitution_velocities.capacity(), velocity_contact_indices.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
 			islands.bodies.capacity(), islands.refs.capacity(), islands.parents.capacity(), islands.ranks.capacity(), wake_roots.capacity(),
 			wake_cohorts.bucket_count(), ready_islands.bodies.capacity(), ready_islands.refs.capacity(), ready_islands.parents.capacity(),
 			ready_islands.ranks.capacity(), body_stable.capacity(), body_hard_unstable.capacity(), ready.capacity(),
@@ -2625,11 +2705,17 @@ void SolveTauPositionConstraints(std::vector<TauContactConstraint> &contacts, Ta
 }
 
 bool PrepareTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, float dt_sec,
-	std::vector<TauVelocityConstraint> &velocity_constraints, TauContactDiagnostics &diagnostics) {
+	TauVelocityConstraintStream &velocity_constraints, TauVelocityImpulseStream &velocity_impulses,
+	std::vector<size_t> &velocity_contact_indices, TauContactDiagnostics &diagnostics) {
 	velocity_constraints.clear();
+	velocity_impulses.clear();
+	velocity_contact_indices.clear();
 	velocity_constraints.reserve(contacts.size());
+	velocity_impulses.reserve(contacts.size());
+	velocity_contact_indices.reserve(contacts.size());
 	bool has_nonzero_restitution = false;
-	for (auto &contact : contacts) {
+	for (size_t contact_index = 0; contact_index < contacts.size(); ++contact_index) {
+		auto &contact = contacts[contact_index];
 		if (!IsTauContactSolverActive(contact))
 			continue;
 		if (contact.restitution == 0.f)
@@ -2644,12 +2730,21 @@ bool PrepareTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, 
 			++diagnostics.nonzero_friction_constraints;
 
 		TauVelocityConstraint prepared;
-		prepared.contact = &contact;
+		prepared.node_a = contact.node_a;
+		prepared.node_b = contact.node_b;
 		prepared.arm_a = contact.point - contact.node_a->position;
 		prepared.arm_b = contact.point - contact.node_b->position;
-		prepared.normal_mass = ComputeTauConstraintMass(contact, prepared.arm_a, prepared.arm_b, contact.normal);
+		prepared.normal = contact.normal;
+		prepared.normal_mass = ComputeTauConstraintMass(*prepared.node_a, prepared.arm_a, *prepared.node_b, prepared.arm_b, prepared.normal);
 		prepared.bias = dt_sec > 0.f ? k_tau_baumgarte * std::max(contact.penetration - k_tau_position_slop, 0.f) / dt_sec : 0.f;
+		prepared.friction = contact.friction;
+
+		TauVelocityImpulse impulses;
+		impulses.tangent = contact.accumulated_tangent_impulse;
+		impulses.normal = contact.accumulated_normal_impulse;
 		velocity_constraints.push_back(prepared);
+		velocity_impulses.push_back(impulses);
+		velocity_contact_indices.push_back(contact_index);
 	}
 	return has_nonzero_restitution;
 }
@@ -2658,93 +2753,129 @@ Vec3 GetTauPreparedPointVelocity(const TauNode &node, const Vec3 &arm) {
 	return node.linear_velocity + Cross(node.angular_velocity, arm);
 }
 
-void WarmStartTauVelocityConstraints(
-	const std::vector<TauVelocityConstraint> &velocity_constraints, bool has_nonzero_restitution) {
-	for (const auto &prepared : velocity_constraints) {
-		TauContactConstraint &contact = *prepared.contact;
-		contact.restitution_velocity = 0.f;
-		if (has_nonzero_restitution && contact.restitution != 0.f) {
-			const Vec3 relative_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
-				GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
-			const float normal_speed = Dot(relative_velocity, contact.normal);
-			contact.restitution_velocity = normal_speed < -k_tau_restitution_threshold ? -contact.restitution * normal_speed : 0.f;
+void WarmStartTauVelocityConstraints(const std::vector<TauContactConstraint> &contacts,
+	const TauVelocityConstraintStream &velocity_constraints, TauVelocityImpulseStream &velocity_impulses,
+	std::vector<float> &velocity_restitution_velocities, const std::vector<size_t> &velocity_contact_indices,
+	bool has_nonzero_restitution) {
+	velocity_restitution_velocities.clear();
+	if (has_nonzero_restitution)
+		velocity_restitution_velocities.resize(velocity_constraints.size(), 0.f);
+	for (size_t i = 0; i < velocity_constraints.size(); ++i) {
+		const auto &prepared = velocity_constraints[i];
+		auto &impulses = velocity_impulses[i];
+		if (has_nonzero_restitution) {
+			const float restitution = contacts[velocity_contact_indices[i]].restitution;
+			if (restitution != 0.f) {
+				const Vec3 relative_velocity = GetTauPreparedPointVelocity(*prepared.node_b, prepared.arm_b) -
+					GetTauPreparedPointVelocity(*prepared.node_a, prepared.arm_a);
+				const float normal_speed = Dot(relative_velocity, prepared.normal);
+				velocity_restitution_velocities[i] =
+					normal_speed < -k_tau_restitution_threshold ? -restitution * normal_speed : 0.f;
+			}
 		}
-		if (contact.friction <= 0.f) {
-			contact.accumulated_tangent_impulse = Vec3::Zero;
+		if (prepared.friction <= 0.f) {
+			impulses.tangent = Vec3::Zero;
 		} else {
-			contact.accumulated_tangent_impulse -= contact.normal * Dot(contact.accumulated_tangent_impulse, contact.normal);
-			const float max_friction_impulse = std::max(contact.friction, 0.f) * contact.accumulated_normal_impulse;
-			const float tangent_length = Len(contact.accumulated_tangent_impulse);
+			impulses.tangent -= prepared.normal * Dot(impulses.tangent, prepared.normal);
+			const float max_friction_impulse = std::max(prepared.friction, 0.f) * impulses.normal;
+			const float tangent_length = Len(impulses.tangent);
 			if (tangent_length > max_friction_impulse && tangent_length > k_tau_collision_epsilon)
-				contact.accumulated_tangent_impulse *= max_friction_impulse / tangent_length;
+				impulses.tangent *= max_friction_impulse / tangent_length;
 		}
 
-		const Vec3 impulse = contact.normal * contact.accumulated_normal_impulse + contact.accumulated_tangent_impulse;
+		const Vec3 impulse = prepared.normal * impulses.normal + impulses.tangent;
 		if (Len2(impulse) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
 			continue;
-		ApplyTauImpulse(*contact.node_a, -impulse, prepared.arm_a);
-		ApplyTauImpulse(*contact.node_b, impulse, prepared.arm_b);
+		ApplyTauImpulse(*prepared.node_a, -impulse, prepared.arm_a);
+		ApplyTauImpulse(*prepared.node_b, impulse, prepared.arm_b);
 	}
 }
 
+template <bool has_restitution>
+size_t SolveTauVelocityConstraintPass(const TauVelocityConstraintStream &velocity_constraints,
+	TauVelocityImpulseStream &velocity_impulses, const std::vector<float> &velocity_restitution_velocities) {
+	size_t friction_clamps = 0;
+	for (size_t i = 0; i < velocity_constraints.size(); ++i) {
+		const auto &prepared = velocity_constraints[i];
+		auto &impulses = velocity_impulses[i];
+		const Vec3 relative_velocity = GetTauPreparedPointVelocity(*prepared.node_b, prepared.arm_b) -
+			GetTauPreparedPointVelocity(*prepared.node_a, prepared.arm_a);
+		const float normal_speed = Dot(relative_velocity, prepared.normal);
+
+		if (prepared.normal_mass <= k_tau_collision_epsilon)
+			continue;
+
+		const float restitution_velocity = has_restitution ? velocity_restitution_velocities[i] : 0.f;
+		const float normal_impulse_delta = (-normal_speed + restitution_velocity + prepared.bias) / prepared.normal_mass;
+		const float old_normal_impulse = impulses.normal;
+		impulses.normal = std::max(old_normal_impulse + normal_impulse_delta, 0.f);
+		const float applied_normal_impulse = impulses.normal - old_normal_impulse;
+		const Vec3 normal_impulse = prepared.normal * applied_normal_impulse;
+
+		ApplyTauImpulse(*prepared.node_a, -normal_impulse, prepared.arm_a);
+		ApplyTauImpulse(*prepared.node_b, normal_impulse, prepared.arm_b);
+		if (prepared.friction <= 0.f)
+			continue;
+
+		const Vec3 post_normal_velocity = GetTauPreparedPointVelocity(*prepared.node_b, prepared.arm_b) -
+			GetTauPreparedPointVelocity(*prepared.node_a, prepared.arm_a);
+		const Vec3 tangent_velocity = post_normal_velocity - prepared.normal * Dot(post_normal_velocity, prepared.normal);
+		const float tangent_length = Len(tangent_velocity);
+		if (tangent_length <= k_tau_collision_epsilon)
+			continue;
+
+		const Vec3 tangent = tangent_velocity / tangent_length;
+		const float tangent_mass =
+			ComputeTauConstraintMass(*prepared.node_a, prepared.arm_a, *prepared.node_b, prepared.arm_b, tangent);
+		if (tangent_mass <= k_tau_collision_epsilon)
+			continue;
+
+		const Vec3 tangent_impulse_delta = tangent * (-Dot(post_normal_velocity, tangent) / tangent_mass);
+		const Vec3 old_tangent_impulse = impulses.tangent;
+		Vec3 new_tangent_impulse = old_tangent_impulse + tangent_impulse_delta;
+		new_tangent_impulse -= prepared.normal * Dot(new_tangent_impulse, prepared.normal);
+		const float max_friction_impulse = std::max(prepared.friction, 0.f) * impulses.normal;
+		const float accumulated_tangent_length = Len(new_tangent_impulse);
+		if (accumulated_tangent_length > max_friction_impulse && accumulated_tangent_length > k_tau_collision_epsilon) {
+			new_tangent_impulse *= max_friction_impulse / accumulated_tangent_length;
+			++friction_clamps;
+		}
+		impulses.tangent = new_tangent_impulse;
+		const Vec3 applied_tangent_impulse = new_tangent_impulse - old_tangent_impulse;
+		ApplyTauImpulse(*prepared.node_a, -applied_tangent_impulse, prepared.arm_a);
+		ApplyTauImpulse(*prepared.node_b, applied_tangent_impulse, prepared.arm_b);
+	}
+	return friction_clamps;
+}
+
 void SolveTauVelocityConstraints(std::vector<TauContactConstraint> &contacts, float dt_sec, TauContactDiagnostics &diagnostics,
-	std::vector<TauVelocityConstraint> &velocity_constraints) {
+	TauVelocityConstraintStream &velocity_constraints, TauVelocityImpulseStream &velocity_impulses,
+	std::vector<float> &velocity_restitution_velocities, std::vector<size_t> &velocity_contact_indices) {
 	if (dt_sec <= 0.f)
 		return;
 
-	const bool has_nonzero_restitution = PrepareTauVelocityConstraints(contacts, dt_sec, velocity_constraints, diagnostics);
-	WarmStartTauVelocityConstraints(velocity_constraints, has_nonzero_restitution);
+	const bool has_nonzero_restitution = PrepareTauVelocityConstraints(
+		contacts, dt_sec, velocity_constraints, velocity_impulses, velocity_contact_indices, diagnostics);
+	WarmStartTauVelocityConstraints(contacts, velocity_constraints, velocity_impulses, velocity_restitution_velocities,
+		velocity_contact_indices, has_nonzero_restitution);
 
-	for (int iteration = 0; iteration < k_tau_velocity_iterations; ++iteration) {
-		for (const auto &prepared : velocity_constraints) {
-			TauContactConstraint &contact = *prepared.contact;
-			++diagnostics.velocity_constraint_evaluations;
-			const Vec3 relative_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
-				GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
-			const float normal_speed = Dot(relative_velocity, contact.normal);
+	size_t friction_clamps = 0;
+	if (has_nonzero_restitution)
+		for (int iteration = 0; iteration < k_tau_velocity_iterations; ++iteration)
+			friction_clamps +=
+				SolveTauVelocityConstraintPass<true>(velocity_constraints, velocity_impulses, velocity_restitution_velocities);
+	else
+		for (int iteration = 0; iteration < k_tau_velocity_iterations; ++iteration)
+			friction_clamps +=
+				SolveTauVelocityConstraintPass<false>(velocity_constraints, velocity_impulses, velocity_restitution_velocities);
+	diagnostics.velocity_constraint_evaluations += velocity_constraints.size() * k_tau_velocity_iterations;
+	diagnostics.friction_clamps += friction_clamps;
 
-			if (prepared.normal_mass <= k_tau_collision_epsilon)
-				continue;
-
-			const float normal_impulse_delta =
-				(-normal_speed + contact.restitution_velocity + prepared.bias) / prepared.normal_mass;
-			const float old_normal_impulse = contact.accumulated_normal_impulse;
-			contact.accumulated_normal_impulse = std::max(old_normal_impulse + normal_impulse_delta, 0.f);
-			const float applied_normal_impulse = contact.accumulated_normal_impulse - old_normal_impulse;
-			const Vec3 normal_impulse = contact.normal * applied_normal_impulse;
-
-			ApplyTauImpulse(*contact.node_a, -normal_impulse, prepared.arm_a);
-			ApplyTauImpulse(*contact.node_b, normal_impulse, prepared.arm_b);
-			if (contact.friction <= 0.f)
-				continue;
-
-			const Vec3 post_normal_velocity = GetTauPreparedPointVelocity(*contact.node_b, prepared.arm_b) -
-				GetTauPreparedPointVelocity(*contact.node_a, prepared.arm_a);
-			const Vec3 tangent_velocity = post_normal_velocity - contact.normal * Dot(post_normal_velocity, contact.normal);
-			const float tangent_length = Len(tangent_velocity);
-			if (tangent_length <= k_tau_collision_epsilon)
-				continue;
-
-			const Vec3 tangent = tangent_velocity / tangent_length;
-			const float tangent_mass = ComputeTauConstraintMass(contact, prepared.arm_a, prepared.arm_b, tangent);
-			if (tangent_mass <= k_tau_collision_epsilon)
-				continue;
-
-			const Vec3 tangent_impulse_delta = tangent * (-Dot(post_normal_velocity, tangent) / tangent_mass);
-			const Vec3 old_tangent_impulse = contact.accumulated_tangent_impulse;
-			Vec3 new_tangent_impulse = old_tangent_impulse + tangent_impulse_delta;
-			new_tangent_impulse -= contact.normal * Dot(new_tangent_impulse, contact.normal);
-			const float max_friction_impulse = std::max(contact.friction, 0.f) * contact.accumulated_normal_impulse;
-			const float accumulated_tangent_length = Len(new_tangent_impulse);
-			if (accumulated_tangent_length > max_friction_impulse && accumulated_tangent_length > k_tau_collision_epsilon) {
-				new_tangent_impulse *= max_friction_impulse / accumulated_tangent_length;
-				++diagnostics.friction_clamps;
-			}
-			contact.accumulated_tangent_impulse = new_tangent_impulse;
-			const Vec3 applied_tangent_impulse = new_tangent_impulse - old_tangent_impulse;
-			ApplyTauImpulse(*contact.node_a, -applied_tangent_impulse, prepared.arm_a);
-			ApplyTauImpulse(*contact.node_b, applied_tangent_impulse, prepared.arm_b);
-		}
+	for (size_t i = 0; i < velocity_constraints.size(); ++i) {
+		auto &contact = contacts[velocity_contact_indices[i]];
+		contact.restitution_velocity = has_nonzero_restitution ? velocity_restitution_velocities[i] : 0.f;
+		contact.accumulated_normal_impulse = velocity_impulses[i].normal;
+		contact.accumulated_tangent_impulse = velocity_impulses[i].tangent;
 	}
 
 	for (const auto &contact : contacts) {
@@ -3487,7 +3618,8 @@ void StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	}
 	{
 		TauProfileSection velocity_profile("Tau.VelocitySolve");
-		SolveTauVelocityConstraints(contacts, dt_sec, diagnostics, scratch.velocity_constraints);
+		SolveTauVelocityConstraints(contacts, dt_sec, diagnostics, scratch.velocity_constraints, scratch.velocity_impulses,
+			scratch.velocity_restitution_velocities, scratch.velocity_contact_indices);
 	}
 	{
 		TauProfileSection rolling_profile("Tau.RollingFriction");

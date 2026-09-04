@@ -6,8 +6,9 @@ Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
 contact-island activation, sleeping proxy/cuboid-manifold reuse, and persistent
 per-world step scratch, shape-neutral contact persistence, solver
-pose/inertia/cuboid-axis caches, and prepared active velocity constraints are
-implemented and measured. Active face-feature cuboid manifold coherence is
+pose/inertia/cuboid-axis caches, prepared active velocity constraints, and the
+split compact velocity-constraint working set are implemented and measured.
+Active face-feature cuboid manifold coherence is
 also implemented with conservative validation and periodic full refresh.
 Zero-restitution, non-positive-friction, and world-wide zero-rolling-friction
 solver fast paths are implemented and measured. A guarded all-sleeping fast
@@ -1089,6 +1090,64 @@ measurable follow-up. Before island parallelism, add an island-size/work
 histogram: current topology indicates that the expensive pile belongs to one
 dominant component while many islands contain little solver work. Complete
 tables are archived in `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`.
+
+### Eighteenth optimization result: split velocity working set
+
+The eight-pass velocity loop no longer follows each prepared record back into
+the larger source-contact array. Preparation now emits four persistent,
+canonical-order streams:
+
+- a cache-line-aligned 64-byte immutable constraint containing the two hot
+  body pointers, both contact arms, the normal, normal effective mass, bias,
+  and friction coefficient;
+- a 16-byte mutable impulse record containing only the accumulated tangent
+  and normal impulses;
+- a restitution-velocity stream that remains empty for the common
+  all-zero-restitution world and is populated only when required;
+- a source-contact index stream consumed by restitution setup and by the
+  single post-solve publication pass, never by the repeated loop.
+
+The hot pass also accumulates its evaluation and friction-clamp diagnostics in
+locals and publishes those counters once, so diagnostics state is not part of
+the repeated working set. Compile-time size guards enforce the 64-byte and
+16-byte layouts. All streams reuse per-world scratch capacity and remain part
+of the existing scratch-growth diagnostics.
+
+Canonical contact order, warm-start order, arithmetic order, and the three
+position/eight velocity iteration counts are unchanged. Accumulated impulses
+are copied back once before rolling friction and manifold impulse storage, so
+the authoritative persistent contacts and public diagnostics retain the same
+values. The 600-sample ring-chain capture is byte-identical across two runs
+and to the pre-change baseline, with SHA-256
+`619CC48B2BE46D91E7B4961DDAE9705DEE0CA151F25104CE9DEF7BA3735A557E`, a
+4.64718 m maximum vertical error, 16.4712 m/s peak Tau speed, and zero static
+drift. The impulse-callback capture is also unchanged at
+`928E478D3CABE1DE0135CFE16D0AAABF8D67288BE76BB22671A7DB51223296E9` and
+retains its 0.0358217 m maximum Bullet/Tau position error. All 54 C++ test
+groups pass, including zero/nonzero restitution and friction coverage. The
+variable-restitution and variable-friction captures are also byte-identical
+to their pre-change baselines, with hashes
+`7ACCE6ADE2B2C7D42B845E996A541CC0149794EB2C41E6902166066AC327C69F` and
+`AB3F3F8A17619DD176D3113014985B65F6FCF2C083E6B8BD55A411938F14C310`.
+
+A separate Release build of the preceding revision was retained for paired
+A/B measurement. A Windows Defender scan occupied approximately 84-100% of
+one CPU during the final runs, so these are provisional normalized controls,
+not a replacement for the clean complete matrix. Across sixteen interleaved,
+high-priority 1,500-cube active repetitions, the compact build measured
+1.002x by median and 0.989x by p95 relative to the preceding revision. Five-
+seed shape controls stayed within one percent by median: mixed measured
+1.002x/0.984x and sphere measured 1.002x/1.009x by median/p95. The bounded
+slice therefore shows no material regression and a small cube-tail benefit,
+but its expected gain is modest because the active window contains only about
+1,850 constraints and both old and new streams mostly fit in cache.
+
+The next acceptance action is a clean complete active/settled matrix after
+external CPU load is idle. If it passes the existing per-cell regression gate,
+the next implementation choice is between separately compacting the position
+constraint path and adding the island-size/work histogram required before
+deterministic independent-island parallelism. Solver-iteration tuning remains
+out of scope.
 
 ## Workload Characterization
 
