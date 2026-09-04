@@ -1,6 +1,6 @@
 # Tau Physics Pool Performance Analysis And Optimization Roadmap
 
-Date: 2026-09-03
+Date: 2026-09-04
 
 Status: the deterministic benchmark and fixed-step correction are in place;
 the hashed manifold lookup, Phase 2 dynamic broad phase, Phase 4 sleeping and
@@ -18,8 +18,9 @@ on the representative mixed active, settled, and end-to-end gates. A first,
 behavior-preserving dense body-storage slice and a solver-hot/body-cold data
 split are implemented and measured. The split improves both the focused
 active-cube median and p95 while preserving byte-identical QA trajectories.
-The complete matrix is the next acceptance step. Solver iteration tuning
-remains deferred.
+The complete matrix confirms the gain without a greater-than-10% per-cell
+regression. Compact mutable velocity-constraint storage is selected before
+independent-island parallelism. Solver iteration tuning remains deferred.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -1040,11 +1041,54 @@ impulse-callback capture also remains byte-identical with hash
 0.03582168 m maximum Bullet/Tau position error, and a -0.00141478 m amplitude
 delta. Solver iterations remain three position and eight velocity passes.
 
-The next step is the complete active/settled body-count and shape matrix. If
-it confirms this result, the new attribution should choose between a further
-structure-of-arrays solver constraint pass and deterministic independent-island
-parallelism. Dense scene-sync lists remain independently available for the
-rendered settled path.
+The next step is the complete active/settled body-count and shape matrix. It is
+completed in the following milestone and selects a compact velocity-constraint
+working set before deterministic independent-island parallelism. Dense
+scene-sync lists remain independently available for the rendered settled path.
+
+### Seventeenth optimization result: hot/cold complete matrix
+
+The complete five-seed physics matrix was rerun after the dense ownership and
+hot/cold body-data stages. It preserves the existing protocol across 250, 500,
+1,000, 1,500, and 2,000 bodies; mixed, cube-only, and sphere-only populations;
+active and 600-step settled windows; 120 samples after 10 warm-up steps; and
+alternating backend order. A first partial attempt was rejected when an
+external process occupied a full CPU core. The accepted run followed a stable
+1,500-cube smoke and completed under a process-load guard.
+
+| Aggregate scope | 2026-09-03 median / p95 | Hot/cold median / p95 |
+|---|---:|---:|
+| complete 30-cell suite, equal-cell | 0.634x / 0.676x | 0.621x / 0.658x |
+| complete 30-cell suite, sum-time | 0.563x / 0.607x | 0.555x / 0.593x |
+| active 15-cell suite, equal-cell | 1.042x / 1.120x | 1.030x / 1.094x |
+| active 15-cell suite, sum-time | 0.974x / 0.996x | 0.973x / 0.980x |
+| settled 15-cell suite, sum-time | 0.223x / 0.235x | 0.209x / 0.222x |
+
+All aggregate views improve. The six median and seven p95 cells above 1.10x
+remain the same families: all active cube-only cells, 500-body active mixed,
+and additionally 250-body active mixed for p95. No Tau cell regresses by 10%
+in absolute median or p95. The representative 1,500-body mixed cell reaches
+0.888x/0.848x active and 0.194x/0.209x settled. The 1,500 active-cube cell
+improves from 1.418x/1.476x in the prior matrix to 1.395x/1.446x.
+
+The final active-cube attribution averages 15.67 ms per Tau step: 6.13 ms in
+velocity solving, 5.62 ms in contact construction, 3.26 ms in narrow phase
+inside contact construction, 3.06 ms in position solving, 1.76 ms in broad
+phase, 0.502 ms in proxy update, and 0.226 ms in island construction. This
+confirms that the remaining cube gap is in repeated constraint/contact work,
+not broad-phase scaling or island construction.
+
+The next bounded implementation slice should compact the mutable velocity
+constraint working set. The current eight velocity passes stream prepared
+records but repeatedly follow pointers into the larger source-contact array
+for body pointers, normals, coefficients, and accumulated impulses. A compact
+AoS/AoSoA or split-array representation should retain canonical contact order,
+perform the same arithmetic in the same order, and publish accumulated
+impulses back after the solve. Position constraints remain a separately
+measurable follow-up. Before island parallelism, add an island-size/work
+histogram: current topology indicates that the expensive pile belongs to one
+dominant component while many islands contain little solver work. Complete
+tables are archived in `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`.
 
 ## Workload Characterization
 
@@ -1495,7 +1539,7 @@ weakening Tau physics.
 - The number of scene transform writes tracks awake/changed bodies in the
   settled benchmark.
 
-Implementation status (2026-09-03): the body-local persistent anchors,
+Implementation status (2026-09-04): the body-local persistent anchors,
 world rotation/inverse-inertia/cuboid-axis caches, and compact prepared active
 velocity constraints are implemented and satisfy their focused tests and
 physics QA envelopes. The profiler no longer rebuilds inverse-inertia matrices,
@@ -1506,9 +1550,10 @@ generator. Coefficient fast paths and the guarded all-sleeping small-world
 shortcut are also implemented. The first ordered dense body-ownership and
 hashed lookup slice is implemented without changing traversal order. The
 follow-up hot/cold `TauNode` split improves the focused active-cube median and
-p95 while preserving exact QA trajectories. The complete matrix, dense
-scene-sync lists, and parallel independent islands remain open; solver
-iteration counts remain unchanged.
+p95 while preserving exact QA trajectories. The complete matrix accepts the
+split without a greater-than-10% per-cell regression and selects compact
+mutable velocity-constraint storage next. Dense scene-sync lists and parallel
+independent islands remain open; solver iteration counts remain unchanged.
 
 ## Phase 6: Parallelism And SIMD Stretch Work
 
@@ -1554,11 +1599,13 @@ render-only control already consumes most of Bullet's frame budget, the
 end-to-end FPS target must be interpreted through total frame milliseconds,
 not a VSync plateau.
 
-Acceptance status (2026-09-02): settled parity, active parity, and end-to-end
-parity pass. The stretch gate remains open because active cube-only workloads
-and the 250-cube settled fixed-overhead case exceed the per-cell 1.10x limit.
-See `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md` for the complete values
-and aggregation method.
+Acceptance status (2026-09-04): settled parity, active parity, and end-to-end
+parity pass. The all-sleeping fast path removed the former 250-cube settled
+outlier. The stretch gate remains open because all active cube-only workloads
+and the 500-body active mixed cell exceed the per-cell 1.10x median limit; the
+250-body active mixed cell additionally exceeds it by p95. See
+`SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md` for the complete values and
+aggregation method.
 
 ## No-Regression Matrix
 
@@ -1682,11 +1729,15 @@ the focused active-cube p95 by another 5.5%. Coefficient fast paths then reduce
 the focused active-cube median and p95 by another 1.2% without changing any
 measured QA trajectory. Fully sleeping small worlds now fall to 3.0 us at 250
 dynamic bodies and 7.6 us at 500, eliminating the previous fixed Tau floor.
-The updated complete matrix reaches 0.974x/0.996x active sum-time median/p95
-and selects dense body storage before parallel independent islands. The first
+The first updated complete matrix reached 0.974x/0.996x active sum-time
+median/p95 and selected dense body storage before parallel independent
+islands. The first
 ordered dense-ownership slice improves the focused 1,500-cube median by 1.4%
 but does not improve p95. The follow-up hot/cold split then improves Tau's
 focused absolute median/p95 by another 1.1%/2.0%, and the fresh normalized
 ratios reach 1.391x/1.444x. Exact chain and callback trajectories are
-preserved. The complete matrix and active cube-only per-cell stretch gates must
-pass before claiming that Tau beats Bullet without qualification.
+preserved. Its complete acceptance rerun improves active sum-time to
+0.973x/0.980x and active equal-cell to 1.030x/1.094x, without a
+greater-than-10% per-cell regression. Compact mutable velocity constraints are
+selected before island parallelism. The active cube-only per-cell stretch gates
+must pass before claiming that Tau beats Bullet without qualification.
