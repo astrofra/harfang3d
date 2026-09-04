@@ -514,13 +514,26 @@ void SceneBullet3Physics::NodeWake(NodeRef ref) const {
 
 //
 void SceneBullet3Physics::NodeSetDeactivation(NodeRef ref, bool enable) const {
-	if (auto body = GetNodeBody(ref, __func__))
-		body->setActivationState(enable ? ACTIVE_TAG : DISABLE_DEACTIVATION);
+	if (auto body = GetNodeBody(ref, __func__)) {
+		const int activation_state = body->getActivationState();
+		if (enable) {
+			// btCollisionObject::setActivationState deliberately refuses to leave
+			// DISABLE_DEACTIVATION. Force the transition when re-enabling sleep,
+			// while keeping an already sleeping/candidate body undisturbed.
+			if (activation_state == DISABLE_DEACTIVATION) {
+				body->forceActivationState(ACTIVE_TAG);
+				body->setDeactivationTime(0.f);
+			}
+		} else if (activation_state != DISABLE_SIMULATION) {
+			body->forceActivationState(DISABLE_DEACTIVATION);
+			body->setDeactivationTime(0.f);
+		}
+	}
 }
 
 bool SceneBullet3Physics::NodeGetDeactivation(NodeRef ref) const {
 	if (auto body = GetNodeBody(ref, __func__))
-		return body->getActivationState() == ACTIVE_TAG ? true : false;
+		return body->getActivationState() != DISABLE_DEACTIVATION;
 	return true;
 }
 

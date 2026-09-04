@@ -1149,6 +1149,34 @@ constraint path and adding the island-size/work histogram required before
 deterministic independent-island parallelism. Solver-iteration tuning remains
 out of scope.
 
+### Nineteenth optimization result: clean split-velocity acceptance matrix
+
+The complete five-seed active/settled matrix was rerun from revision
+`95b0f3503b84f5c1192066f68621c87bb7c9fe80` with profiling and contact
+diagnostics disabled. All 30 alternating Bullet/Tau processes passed their
+quiet-window and process-load guards on the first attempt, producing the
+expected 300 records. No `ollama`, Defender, or other non-orchestrator CPU
+load crossed the rejection threshold.
+
+No Tau cell regresses by 10% in absolute median or p95 against the hot/cold
+baseline. Tau's active sum time improves to 0.989x/0.991x of its previous
+median/p95, and the active cube-only sum improves to 0.991x/0.992x. The
+backend-relative active sum-time result is 0.986x by median and 1.001x by p95;
+the complete suite reaches 0.560x/0.600x. Six median cells and seven p95 cells
+remain above 1.10x, in the same active-cube and low-count mixed families as
+before. The split velocity working set is accepted.
+
+A clean three-repetition attribution of the 1,500-cube active workload reports
+15.5 ms for the full Tau step, 6.15 ms for velocity solving, 5.52 ms for
+contact construction, 3.21 ms for its nested narrow phase, 3.04 ms for
+position solving, and 0.221 ms for island construction. The next bounded slice
+is therefore a compact canonical-order position-constraint working set that
+preserves the existing three passes and arithmetic order, followed by final
+point/penetration publication to the source contacts. Island-size/work
+instrumentation remains the required following step before any deterministic
+parallel-island scheduler. Complete tables and load-guard details are archived
+in `SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_MATRIX.md`.
+
 ## Workload Characterization
 
 `physics_pool_of_objects.lua` creates:
@@ -1797,6 +1825,11 @@ focused absolute median/p95 by another 1.1%/2.0%, and the fresh normalized
 ratios reach 1.391x/1.444x. Exact chain and callback trajectories are
 preserved. Its complete acceptance rerun improves active sum-time to
 0.973x/0.980x and active equal-cell to 1.030x/1.094x, without a
-greater-than-10% per-cell regression. Compact mutable velocity constraints are
-selected before island parallelism. The active cube-only per-cell stretch gates
-must pass before claiming that Tau beats Bullet without qualification.
+greater-than-10% per-cell regression. Compact mutable velocity constraints
+then pass their clean complete acceptance matrix with no greater-than-10%
+absolute Tau regression: active Tau sum time improves by 1.1%/0.9% and active
+cube-only sum time by 0.9%/0.8% in median/p95. The current normalized active
+sum-time result is 0.986x/1.001x. Compact position constraints are selected as
+the next bounded optimization before island-size/work instrumentation and
+parallelism. The active cube-only per-cell stretch gates must pass before
+claiming that Tau beats Bullet without qualification.

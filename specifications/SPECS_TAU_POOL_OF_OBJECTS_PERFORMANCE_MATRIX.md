@@ -3,8 +3,8 @@
 Date: 2026-09-04
 
 Status: complete for the deterministic physics-only acceptance rerun after
-ordered dense ownership and hot/cold body-data separation. The 2026-09-02 and
-2026-09-03 matrices are retained below as historical baselines; the current
+the split velocity-constraint working set. The 2026-09-02, 2026-09-03, and
+hot/cold matrices are retained below as historical baselines; the current
 physics results and next-stage decision are in the final section. Controlled
 scene/render results were not rerun because this slice changes only Tau's
 internal physics storage.
@@ -18,19 +18,19 @@ Tau now beats Bullet on the roadmap's representative 1,500-body
 mixed-workload gates
 without reducing the solver's three position or eight velocity iterations:
 
-- active physics p95: 12.945 ms for Tau versus 15.264 ms for Bullet, or
-  **0.848x**;
-- settled physics p95: 3.280 ms for Tau versus 15.684 ms for Bullet, or
-  **0.209x**;
+- active physics p95: 12.811 ms for Tau versus 14.558 ms for Bullet, or
+  **0.880x**;
+- settled physics p95: 3.064 ms for Tau versus 14.911 ms for Bullet, or
+  **0.205x**;
 - rendered active p95: 24.616 ms for Tau versus 26.840 ms for Bullet, or
   **0.917x** in the retained 2026-09-03 control;
 - rendered settled p95: 16.829 ms for Tau versus 27.661 ms for Bullet, or
   **0.608x** in the retained 2026-09-03 control.
 
-Across all 30 physics cells, Tau's sum-time median ratio is **0.555x** and its
-equal-cell median ratio is **0.621x**. Active sum-time parity is retained at
-0.973x by median and 0.980x by p95. The remaining exception is active
-cube-only physics, which is 1.12x to 1.56x slower by median. The stretch goal
+Across all 30 physics cells, Tau's sum-time median ratio is **0.560x** and its
+equal-cell median ratio is **0.626x**. Active sum-time parity is retained at
+0.986x by median and 1.001x by p95. The remaining exception is active
+cube-only physics, which is 1.12x to 1.61x slower by median. The stretch goal
 therefore remains open because the same six median cells and seven p95 cells
 exceed 1.10x.
 
@@ -593,3 +593,112 @@ bodies. This is an inference from the current counters and workload topology;
 an island-size histogram should be added before committing to a parallel work
 scheduler. Solver iteration counts remain three position and eight velocity
 passes.
+
+## 2026-09-04 Split Velocity Working-Set Acceptance Rerun
+
+The complete physics-only matrix was rerun from revision
+`95b0f3503b84f5c1192066f68621c87bb7c9fe80`, whose physics implementation is
+the split velocity-constraint working set introduced by `5a96502`. The
+protocol is unchanged: five seeds, 120 samples after 10 warm-up steps, a
+600-step settling transition, five body counts, three shape populations, and
+alternating backend order. Profiling and Tau contact diagnostics were disabled.
+
+The accepted artifact directory is
+`build/tau-pool-matrix-20260904-velocity-working-set-clean-guarded`. It
+contains 30 comparative JSONL files and exactly 300 records. A quiet-window
+check preceded every process, and a process CPU-delta guard covered every
+complete run. The guard excludes only the Code/Codex launch infrastructure
+that is intrinsic to this measurement environment; it rejects general
+processes above 0.20 core, `ollama` above 0.02 core, and Windows Defender above
+0.10 core. All 30 runs passed on their first attempt: no comparative result
+was rejected or overwritten because of external load.
+
+### Split Velocity Active Window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.372 ms | 0.346 ms | 0.930x | 0.929 ms | 1.200 ms | 1.291x |
+| 250 | cube | 0.376 ms | 0.420 ms | 1.116x | 0.904 ms | 1.710 ms | 1.893x |
+| 250 | sphere | 0.325 ms | 0.280 ms | 0.862x | 0.801 ms | 0.621 ms | 0.775x |
+| 500 | mixed | 1.288 ms | 1.509 ms | 1.172x | 2.514 ms | 2.947 ms | 1.172x |
+| 500 | cube | 1.293 ms | 2.040 ms | 1.577x | 2.372 ms | 4.524 ms | 1.907x |
+| 500 | sphere | 1.067 ms | 0.901 ms | 0.845x | 2.110 ms | 1.606 ms | 0.761x |
+| 1,000 | mixed | 5.244 ms | 5.402 ms | 1.030x | 7.491 ms | 7.268 ms | 0.970x |
+| 1,000 | cube | 4.949 ms | 7.961 ms | 1.609x | 6.793 ms | 11.217 ms | 1.651x |
+| 1,000 | sphere | 4.330 ms | 3.147 ms | 0.727x | 6.485 ms | 4.117 ms | 0.635x |
+| 1,500 | mixed | 11.883 ms | 10.443 ms | 0.879x | 14.558 ms | 12.811 ms | 0.880x |
+| 1,500 | cube | 11.051 ms | 15.560 ms | 1.408x | 12.783 ms | 19.037 ms | 1.489x |
+| 1,500 | sphere | 10.084 ms | 6.219 ms | 0.617x | 12.853 ms | 7.333 ms | 0.571x |
+| 2,000 | mixed | 19.446 ms | 16.656 ms | 0.857x | 21.844 ms | 18.861 ms | 0.863x |
+| 2,000 | cube | 18.093 ms | 24.482 ms | 1.353x | 19.707 ms | 27.705 ms | 1.406x |
+| 2,000 | sphere | 17.317 ms | 10.260 ms | 0.592x | 20.474 ms | 11.732 ms | 0.573x |
+
+### Split Velocity Settled Window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.793 ms | 0.236 ms | 0.298x | 0.814 ms | 0.248 ms | 0.305x |
+| 250 | cube | 0.074 ms | 0.002 ms | 0.027x | 0.078 ms | 0.002 ms | 0.027x |
+| 250 | sphere | 0.642 ms | 0.242 ms | 0.378x | 0.661 ms | 0.267 ms | 0.404x |
+| 500 | mixed | 2.249 ms | 0.601 ms | 0.267x | 2.417 ms | 0.618 ms | 0.256x |
+| 500 | cube | 2.519 ms | 0.006 ms | 0.002x | 2.638 ms | 0.006 ms | 0.002x |
+| 500 | sphere | 1.514 ms | 0.443 ms | 0.293x | 1.565 ms | 0.493 ms | 0.315x |
+| 1,000 | mixed | 6.983 ms | 1.614 ms | 0.231x | 7.818 ms | 1.647 ms | 0.211x |
+| 1,000 | cube | 7.332 ms | 1.984 ms | 0.271x | 7.883 ms | 2.055 ms | 0.261x |
+| 1,000 | sphere | 4.990 ms | 1.057 ms | 0.212x | 5.661 ms | 1.091 ms | 0.193x |
+| 1,500 | mixed | 14.341 ms | 2.839 ms | 0.198x | 14.911 ms | 3.064 ms | 0.205x |
+| 1,500 | cube | 14.443 ms | 3.517 ms | 0.243x | 15.173 ms | 3.899 ms | 0.257x |
+| 1,500 | sphere | 11.460 ms | 2.050 ms | 0.179x | 12.134 ms | 2.151 ms | 0.177x |
+| 2,000 | mixed | 22.273 ms | 4.243 ms | 0.191x | 23.247 ms | 4.709 ms | 0.203x |
+| 2,000 | cube | 21.497 ms | 5.467 ms | 0.254x | 22.561 ms | 6.083 ms | 0.270x |
+| 2,000 | sphere | 19.614 ms | 3.188 ms | 0.163x | 20.570 ms | 3.520 ms | 0.171x |
+
+### Split Velocity Aggregate Views
+
+| Scope | Cells | Equal-cell median ratio | Equal-cell p95 ratio | Sum-time median ratio | Sum-time p95 ratio |
+|---|---:|---:|---:|---:|---:|
+| complete suite | 30 | 0.626x | 0.670x | 0.560x | 0.600x |
+| active | 15 | 1.038x | 1.123x | 0.986x | 1.001x |
+| settled | 15 | 0.214x | 0.217x | 0.210x | 0.216x |
+
+Against the pre-change hot/cold Tau measurements, complete Tau sum time is
+0.989x/0.982x by median/p95. The active suite is 0.989x/0.991x, and active
+cubes are 0.991x/0.992x. No Tau cell regresses by 10% in either absolute
+median or p95. The largest median increase is 5.4% in the settled 2,000-sphere
+cell while its p95 improves by 2.2%; the largest p95 increase is the 0.1 us
+change from 2.0 us to 2.1 us in the fully sleeping 250-cube cell. The six
+median and seven p95 backend-relative failures remain the same workload
+families as in the hot/cold matrix.
+
+### Split Velocity Attribution And Next Decision
+
+Three attribution-only 1,500-cube active repetitions, guarded by the same
+non-orchestrator process check, report these average phase times:
+
+| Tau scope | Average per step |
+|---|---:|
+| velocity solve | 6.15 ms |
+| contact construction | 5.52 ms |
+| narrow phase, included in contact construction | 3.21 ms |
+| position solve | 3.04 ms |
+| broad phase | 1.73 ms |
+| proxy update | 0.494 ms |
+| island construction | 0.221 ms |
+| complete Tau step | 15.5 ms |
+
+The split velocity working set is accepted. The clean complete matrix shows a
+small absolute improvement and no greater-than-10% regression, while exact
+QA trajectories and solver iteration counts were already preserved by the
+focused acceptance gates.
+
+The next bounded performance slice is the position-constraint working set.
+The three position passes still stream the full `TauContactConstraint`, repeat
+the active-contact branch, and update source-contact fields directly. A compact
+canonical-order position stream can retain the body pointers, anchors, normal,
+penetration state, point share, and source index required by the existing
+arithmetic, then publish the final point and penetration once before velocity
+preparation. This targets 3.04 ms per active cube step without changing the
+three-pass count. Island-size/work instrumentation remains required after that
+slice and before island parallelism, but its immediate measured scope is only
+0.221 ms and the known dominant pile component makes a parallel-speedup claim
+premature without the histogram.

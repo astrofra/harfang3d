@@ -701,6 +701,33 @@ static void test_PhysicDynamicVsStaticRigidBodyCollisionCallback() {
 	TEST_CHECK(collision_count > 0);
 }
 
+static void test_PhysicDeactivationCanBeDisabledAndReenabled() {
+	Scene scene;
+	auto cube = CreatePhysicCube(scene, {1, 1, 1}, TranslationMat4({0, 0.5f, 0}), {}, {}, 1.f);
+	CreatePhysicCube(scene, {10, 1, 10}, TranslationMat4({0, -0.5f, 0}), {}, {}, 0.f);
+
+	SceneBullet3Physics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	physics.NodeSetDeactivation(cube, false);
+	TEST_CHECK(!physics.NodeGetDeactivation(cube));
+
+	// Bullet's ordinary setActivationState cannot leave
+	// DISABLE_DEACTIVATION. Verify that the public API can and remains
+	// idempotent once deactivation has been restored.
+	physics.NodeSetDeactivation(cube, true);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	physics.NodeSetDeactivation(cube, true);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+
+	// Natural WANTS_DEACTIVATION/ISLAND_SLEEPING transitions must not make
+	// the getter report that deactivation itself was disabled.
+	for (int i = 0; i < 600; ++i)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+}
+
 static void test_PhysicKinematicRigidBodyCollideWorld() {
 	Scene scene;
 	auto sphere = CreatePhysicSphere(scene, 0.5, TranslationMat4({0, 0, 0}), {}, {}, 1.f);
@@ -813,6 +840,7 @@ void test_scene() {
 	test_PhysicDynamicRigidBodyFreefall();
 	test_PhysicKinematicRigidBodyNoFreefall();
 	test_PhysicDynamicVsStaticRigidBodyCollisionCallback();
+	test_PhysicDeactivationCanBeDisabledAndReenabled();
 	test_PhysicKinematicRigidBodyCollideWorld();
 	test_PhysicRaycastFirstHit();
 	test_PhysicRaycastFirstHitOutOfReach();
