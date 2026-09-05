@@ -39,4 +39,15 @@ if smoke.probe ~= "lua-nested" then
 	fail("unexpected module probe " .. tostring(smoke.probe))
 end
 
+if hg.GetScenePhysicsBackendName ~= nil then
+	if hg.SceneBullet3Physics == nil then
+		fail("legacy SceneBullet3Physics constructor is missing")
+	end
+
+	local physics = hg.SceneBullet3Physics()
+	local scene = hg.Scene()
+	local clocks = hg.SceneClocks()
+	hg.SceneUpdateSystems(scene, clocks, 0, physics, 16666666, 1)
+end
+
 print("launcher-regression-ok language=lua source=" .. LAUNCHER_ASSETS_SOURCE)

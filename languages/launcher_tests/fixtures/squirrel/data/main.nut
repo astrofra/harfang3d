@@ -41,4 +41,15 @@ if (::launcher_regression_probe != "squirrel-nested") {
 	fail("unexpected include probe " + ::launcher_regression_probe);
 }
 
+if ("GetScenePhysicsBackendName" in hg) {
+	if (!("SceneBullet3Physics" in hg)) {
+		fail("legacy SceneBullet3Physics constructor is missing");
+	}
+
+	local physics = hg.SceneBullet3Physics();
+	local scene = hg.Scene();
+	local clocks = hg.SceneClocks();
+	hg.SceneUpdateSystems(scene, clocks, 0, physics, 16666666, 1);
+}
+
 print("launcher-regression-ok language=squirrel source=" + LAUNCHER_ASSETS_SOURCE + "\n");

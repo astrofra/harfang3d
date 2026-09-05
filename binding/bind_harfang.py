@@ -1756,14 +1756,20 @@ def bind_scene_physics(gen):
 	lib.stl.bind_function_T(gen, 'std::function<void(hg::ScenePhysics&, hg::time_ns)>', 'ScenePhysicsPreTickCallback')
 	gen.bind_method(physics, 'SetPreTickCallback', 'void', ['const std::function<void(hg::ScenePhysics&, hg::time_ns)>& cbk'])
 	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS') and not gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
-		# The legacy factory must return the canonical Lua ScenePhysics type so that
-		# SceneUpdateSystems and other common API overloads accept the result.
+		# Keep the historical constructor available in every generated language.
+		# It must return the canonical ScenePhysics bound type so that
+		# SceneUpdateSystems and every other common API accept the result.
 		def own_scene_physics_result(gen, conv, expr, output, ownership):
 			return gen.rval_from_c_ptr(conv, output, expr, 'Owning')
 
 		physics.add_feature('rval_transform', own_scene_physics_result)
 		gen.insert_binding_code('''
 static hg::ScenePhysics *_CreateLegacySceneBullet3Physics(int thread_count = 1) {
+	static const bool warning_emitted = []() {
+		hg::warn("SceneBullet3Physics is a legacy compatibility name; this build uses Tau. Use ScenePhysics for backend-neutral code.");
+		return true;
+	}();
+	(void)warning_emitted;
 	return new hg::ScenePhysics(thread_count);
 }
 ''')
