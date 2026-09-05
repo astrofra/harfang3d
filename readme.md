@@ -127,9 +127,9 @@ https://dev.harfang3d.com/releases
     cd build
     ``` 
 
-1. Clone Fabgen.
+1. Clone Harfang's Fabgen fork.
     ```
-    git clone https://github.com/ejulien/FABGen.git
+    git clone https://github.com/astrofra/FABGen.git
     ```
 
 1. Download and install Autodesk FBX SDK.
@@ -151,7 +151,7 @@ https://dev.harfang3d.com/releases
 
     * `CMAKE_INSTALL_PREFIX` specifies the directory where the Harfang SDK will installed.
     * `PYTHON_EXECUTABLE` is the path the Python 3 interpreter.
-    * `FABGEN_PATH` is the path to Fabgen binding generator.
+    * `HG_FABGEN_PATH` is the path to the Fabgen binding generator.
     * `HG_FBX_SDK` is the path to Autodesk FBX SDK.
 
     &nbsp;    

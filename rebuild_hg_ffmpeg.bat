@@ -25,7 +25,7 @@ if not defined FFMPEG_ROOT if exist "%WORK_DIR%\ffmpeg\" set "FFMPEG_ROOT=%WORK_
 
 if not exist "%FABGEN_DIR%\" (
 	echo FABGen introuvable: "%FABGEN_DIR%"
-	echo Clone FABGen dans ce dossier ou adapte FABGEN_DIR dans ce script.
+	echo Clone https://github.com/astrofra/FABGen.git dans ce dossier ou adapte FABGEN_DIR dans ce script.
 	exit /b 1
 )
 

@@ -29,7 +29,7 @@ if /I "%~1"=="--open" (
 
 if not exist "%FABGEN_DIR%\" (
 	echo FABGen introuvable: "%FABGEN_DIR%"
-	echo Clone FABGen dans ce dossier ou adapte FABGEN_DIR dans ce script.
+	echo Clone https://github.com/astrofra/FABGen.git dans ce dossier ou adapte FABGEN_DIR dans ce script.
 	exit /b 1
 )
 

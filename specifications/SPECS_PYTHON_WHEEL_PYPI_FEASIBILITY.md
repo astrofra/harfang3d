@@ -126,7 +126,7 @@ Important behavior in `setup.py`:
 - It can build a binary package through `setup.py bdist_wheel`.
 - It writes `commit_id` into the source tree.
 - It initializes git submodules from the local repository metadata.
-- It clones `https://github.com/ejulien/FABGen.git` into `extern/fabgen` if
+- It clones `https://github.com/astrofra/FABGen.git` into `extern/fabgen` if
   the directory is missing.
 - It packages `assetc`, `assimp_converter`, `gltf_exporter`, and
   `gltf_importer` as exposed binaries.

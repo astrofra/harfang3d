@@ -20,7 +20,7 @@ fi
 
 if [[ -z "${FABGEN_DIR:-}" || ! -d "${FABGEN_DIR}" ]]; then
 	echo "FABGen introuvable: \"${FABGEN_DIR:-${WORK_DIR}/FABGen}\""
-	echo "Clone FABGen dans ce dossier ou adapte FABGEN_DIR dans ce script."
+	echo "Clone https://github.com/astrofra/FABGen.git dans ce dossier ou adapte FABGEN_DIR dans ce script."
 	exit 1
 fi
 

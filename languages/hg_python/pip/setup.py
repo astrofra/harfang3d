@@ -11,6 +11,9 @@ from subprocess import check_call
 
 from typing import Generator, List
 
+FABGEN_REPOSITORY = 'https://github.com/astrofra/FABGen.git'
+FABGEN_BRANCH = 'master'
+
 # Command line examples:
 #  - Create source package
 #         python3 -m build --sdist --outdir dist languages/hg_python/pip
@@ -170,7 +173,7 @@ if not path.exists(build_dir):
 # clone FABgen repository
 fabgen_path = path.join(source_dir, 'extern', 'fabgen')
 if not path.isdir(fabgen_path):
-	pygit2.clone_repository('https://github.com/ejulien/FABGen.git', fabgen_path, checkout_branch='master')
+	pygit2.clone_repository(FABGEN_REPOSITORY, fabgen_path, checkout_branch=FABGEN_BRANCH)
 
 # retrieve version
 with open(path.join(source_dir, 'harfang', 'version.txt'), encoding='utf-8') as f:
