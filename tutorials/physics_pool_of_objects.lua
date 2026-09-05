@@ -59,7 +59,7 @@ hg.CreatePhysicCube(scene, hg.Vec3(32, 11, 1), hg.TranslationMat4(hg.Vec3(0, -0.
 clocks = hg.SceneClocks()
 
 -- setup physics
-physics = hg.ScenePhysics()
+physics = hg.SceneBullet3Physics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_backend_name = hg.GetScenePhysicsBackendName()
 
@@ -77,7 +77,7 @@ text_render_state = hg.ComputeRenderState(hg.BM_Alpha, hg.DT_Always, hg.FC_Disab
 while hg.IsWindowOpen(win) do
 	state = hg.ReadKeyboard()
 
-	if state:Key(hg.K_S) and #physic_nodes < 1505 then
+	if state:Key(hg.K_S) then -- and #physic_nodes < 1505 then
 		for i = 1, 7 do
 			hg.SetMaterialValue(mat_objects, 'uDiffuseColor', hg.RandomVec4(0, 1))
 

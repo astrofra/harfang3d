@@ -254,11 +254,6 @@ if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 
 endif()
 
-# Tau legacy physics snapshot
-if(HG_ENABLE_TAU_SCENE_PHYSICS)
-	add_subdirectory(tau EXCLUDE_FROM_ALL)
-endif()
-
 # imgui
 add_library(imgui STATIC
 	imgui/misc/cpp/imgui_stdlib.cpp

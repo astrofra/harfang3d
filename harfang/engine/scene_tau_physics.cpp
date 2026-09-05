@@ -200,7 +200,7 @@ std::string ResolveTauCollisionResource(const std::string &resource) {
 	return resource;
 }
 
-enum class TauWorldWriteMode { Reset, CaptureSource, Solved };
+enum class TauWorldWriteMode { ResetHistory, PreserveHistory };
 
 struct TauBodyProxy {
 	NodeRef ref{};
@@ -350,7 +350,7 @@ struct TauContactDiagnostics {
 	size_t zero_restitution_constraints{0}, nonzero_restitution_constraints{0};
 	size_t zero_friction_constraints{0}, nonzero_friction_constraints{0};
 	size_t rolling_friction_pass_skips{0};
-	size_t tracked_contact_evaluations{0}, motion_updates{0};
+	size_t tracked_contact_evaluations{0};
 	size_t awake_bodies{0}, sleep_candidate_bodies{0}, sleeping_bodies{0};
 	size_t contact_islands{0}, sleeping_islands{0}, bodies_woken{0}, bodies_put_to_sleep{0}, sleeping_solver_contacts{0};
 	size_t support_wake_cohorts{0}, support_pose_wake_cohorts{0}, support_loss_wake_cohorts{0};
@@ -553,23 +553,13 @@ void SetTauNodeWorld(TauNode &node, const Mat4 &world, TauWorldWriteMode mode) {
 	node.orientation = Normalize(QuaternionFromMatrix3(rotation));
 	RefreshTauWorldPoseCache(node);
 
-	if (mode == TauWorldWriteMode::Reset) {
+	if (mode == TauWorldWriteMode::ResetHistory) {
 		node.cold->previous_position = node.position;
 		node.cold->previous_orientation = node.orientation;
-		node.cold->motion.Reset(world);
-	} else if (mode == TauWorldWriteMode::CaptureSource) {
-		node.cold->previous_position = previous_position;
-		node.cold->previous_orientation = previous_orientation;
-		node.cold->motion.CaptureSourceWorld(world);
 	} else {
 		node.cold->previous_position = previous_position;
 		node.cold->previous_orientation = previous_orientation;
-		node.cold->motion.WriteSolvedWorld(world);
 	}
-}
-
-void UpdateTauMotionFromState(TauNode &node) {
-	node.cold->motion.WriteSolvedWorld(ComposeTauWorld(node));
 }
 
 void IntegrateTauOrientation(TauNode &node, const Vec3 &angular_step) {
@@ -3830,13 +3820,12 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(reuse_stats.velocity_constraint_capacity)
 			 .arg(reuse_stats.island_body_capacity)
 			 .str();
-	message += format("solver(pos=%1 vel=%2 rolling=%3 contact_reallocs=%4) events=%5 motion=%6 stale=%7 ")
+	message += format("solver(pos=%1 vel=%2 rolling=%3 contact_reallocs=%4) events=%5 stale=%6 ")
 			 .arg(diagnostics.position_constraint_evaluations)
 			 .arg(diagnostics.velocity_constraint_evaluations)
 			 .arg(diagnostics.rolling_contact_evaluations)
 			 .arg(diagnostics.contact_reallocations)
 			 .arg(diagnostics.tracked_contact_evaluations)
-			 .arg(diagnostics.motion_updates)
 			 .arg(diagnostics.stale_discards)
 			 .str();
 	message += format("coeff(restitution=%1/%2 friction=%3/%4 rolling_skip=%5) ")
@@ -3959,16 +3948,6 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 		CollectTauTrackedContacts(contacts, tracking_modes, latest_contacts, diagnostics);
 	}
 
-	{
-		TauProfileSection motion_profile("Tau.MotionUpdate");
-		for (auto &entry : nodes) {
-			if (entry.second.body_type == RBT_Dynamic && entry.second.activation_state != TauActivationState::Sleeping) {
-				UpdateTauMotionFromState(entry.second);
-				entry.second.cold->transform_dirty = true;
-				++diagnostics.motion_updates;
-			}
-		}
-	}
 	{
 		TauProfileSection sleeping_profile("Tau.SleepUpdate");
 		UpdateTauIslandSleeping(nodes, islands, contacts, constraints, dt_sec, next_sleep_island_id, diagnostics, scratch);
@@ -4152,7 +4131,7 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	tau_node.cold->restitution = rigid_body.GetRestitution();
 	tau_node.cold->rolling_friction = rigid_body.GetRollingFriction();
 
-	SetTauNodeWorld(tau_node, GetNodeWorld(node), TauWorldWriteMode::Reset);
+	SetTauNodeWorld(tau_node, GetNodeWorld(node), TauWorldWriteMode::ResetHistory);
 	RefreshTauMassProperties(tau_node);
 
 	ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, node.ref);
@@ -4302,7 +4281,7 @@ void SceneTauPhysics::SyncTransformsFromScene(const Scene &scene) {
 				WakeTauSupportedIslands(nodes, entry.first);
 			}
 			requires_full_substep |= transform_changed;
-			SetTauNodeWorld(entry.second, world, TauWorldWriteMode::CaptureSource);
+			SetTauNodeWorld(entry.second, world, TauWorldWriteMode::PreserveHistory);
 			entry.second.cold->externally_moved |= transform_changed;
 			if (transform_changed || !entry.second.cold->world_proxy_cache_valid)
 				RefreshTauBroadphaseProxy(
@@ -4322,7 +4301,7 @@ void SceneTauPhysics::SyncTransformsToScene(Scene &scene) {
 		const bool publish_dynamic = entry.second.body_type == RBT_Dynamic &&
 			(entry.second.activation_state != TauActivationState::Sleeping || entry.second.cold->transform_dirty);
 		if (publish_dynamic) {
-			const Mat4 &world = entry.second.cold->motion.GetWorld();
+			const Mat4 world = ComposeTauWorld(entry.second);
 
 			// SetNodeWorldMatrix only overrides the scene's world-matrix cache for
 			// the current frame. ReadyWorldMatrices invalidates that cache on the
@@ -4459,7 +4438,7 @@ void SceneTauPhysics::NodeResetWorld(NodeRef ref, const Mat4 &world) {
 			WakeTauSupportedIslands(nodes, ref);
 		requires_full_substep = true;
 		ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
-		SetTauNodeWorld(*node, world, TauWorldWriteMode::Reset);
+		SetTauNodeWorld(*node, world, TauWorldWriteMode::ResetHistory);
 		RefreshTauMassProperties(*node);
 		ResetDynamicState(*node);
 		node->cold->transform_dirty = true;
@@ -4475,7 +4454,7 @@ void SceneTauPhysics::NodeTeleport(NodeRef ref, const Mat4 &world) {
 			WakeTauSupportedIslands(nodes, ref);
 		requires_full_substep = true;
 		ClearTauManifoldsForNode(contact_manifolds, contact_manifold_lookup, ref);
-		SetTauNodeWorld(*node, world, TauWorldWriteMode::Solved);
+		SetTauNodeWorld(*node, world, TauWorldWriteMode::PreserveHistory);
 		RefreshTauMassProperties(*node);
 		WakeTauNodeState(*node);
 		node->cold->transform_dirty = true;

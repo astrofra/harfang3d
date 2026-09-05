@@ -11,8 +11,6 @@
 #include "foundation/rw_interface.h"
 #include "foundation/time.h"
 
-#include "tau/compat/tau_harfang_runtime.h"
-
 #include <array>
 #include <functional>
 #include <map>
@@ -147,7 +145,6 @@ struct TauSleepSupportSnapshot {
 };
 
 struct TauNodeCold {
-	tau_compat::NodeMotionAdapter motion{};
 	std::vector<TauCollisionShape> shapes;
 	std::vector<TauWorldShape> world_shapes;
 	MinMax world_bounds;

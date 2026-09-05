@@ -2,6 +2,12 @@
 
 Date: 2026-08-31
 
+> Historical note (2026-09-05): this document records the original backend
+> integration plan. Its legacy-import and compatibility-adapter strategy has
+> since been superseded by the Harfang-native Tau runtime. See
+> `SPECS_TAU_LEGACY_CLEANUP.md` for the audited cleanup and retained
+> compatibility boundaries.
+
 Method: static source review of the current Harfang repository, the local Tau
 vendor snapshot at `S:\works\engine-neogs\vendor\tau`, and the related
 supporting legacy sources under `S:\works\engine-neogs\source`.
