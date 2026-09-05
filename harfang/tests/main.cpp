@@ -2,6 +2,8 @@
 #include "acutest.h"
 
 // foundation tests
+extern void test_bvh();
+extern void test_dynamic_aabb_tree();
 extern void test_cext();
 extern void test_pack_float();
 extern void test_math();
@@ -55,12 +57,18 @@ extern void test_meta();
 extern void test_picture();
 extern void test_video_stream();
 extern void test_scene();
+#if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
+extern void test_scene_tau_physics();
+extern void test_scene_tau_physics_contact();
+#endif
 
 // script tests
 extern void test_lua_vm();
 
 TEST_LIST = {
 	// foundation
+	{"foundation.bvh", test_bvh},
+	{"foundation.dynamic_aabb_tree", test_dynamic_aabb_tree},
 	{"foundation.cext", test_cext},
 	{"foundation.pack_float", test_pack_float},
 	{"foundation.math", test_math},
@@ -114,6 +122,10 @@ TEST_LIST = {
 	{"engine.picture", test_picture},
 	{"engine.video_stream", test_video_stream},
 	{"engine.scene", test_scene},
+#if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
+	{"engine.scene_tau_physics", test_scene_tau_physics},
+	{"engine.scene_tau_physics_contact", test_scene_tau_physics_contact},
+#endif
 
 	// script
 	{"script.lua_vm", test_lua_vm},

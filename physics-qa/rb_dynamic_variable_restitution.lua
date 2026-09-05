@@ -1,4 +1,5 @@
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 function CreatePhysicCubeEx(scene, size, mtx, model_ref, materials, rb_type, mass)
 	local rb_type = rb_type or hg.RBT_Dynamic
@@ -14,24 +15,6 @@ function CreatePhysicCubeEx(scene, size, mtx, model_ref, materials, rb_type, mas
 	col:SetSize(size)
 	col:SetMass(mass)
     -- set cube as collision shape
-	node:SetCollision(0, col)
-	return node, rb
-end
-
-function CreatePhysicSphereEx(scene, radius, mtx, model_ref, materials, rb_type, mass)
-	local rb_type = rb_type or hg.RBT_Dynamic
-	local mass = mass or 0
-	local node = hg.CreateObject(scene, mtx, model_ref, materials)
-	node:SetName("Physic Sphere")
-	local rb = scene:CreateRigidBody()
-	rb:SetType(rb_type)
-	node:SetRigidBody(rb)
-    -- create custom sphere collision
-	local col = scene:CreateCollision()
-	col:SetType(hg.CT_Sphere)
-	col:SetRadius(radius)
-	col:SetMass(mass)
-    -- set sphere as collision shape
 	node:SetCollision(0, col)
 	return node, rb
 end
@@ -63,10 +46,6 @@ vtx_layout = hg.VertexLayoutPosFloatNormUInt8()
 cube_size =  hg.Vec3(1, 0.25, 1)
 cube_ref = res:AddModel('cube', hg.CreateCubeModel(vtx_layout, cube_size.x, cube_size.y, cube_size.z))
 
--- sphere
-sphere_radius = 0.5
-sphere_ref = res:AddModel('sphere', hg.CreateSphereModel(vtx_layout, sphere_radius, 8, 8))
-
 -- ground
 ground_size = hg.Vec3(15, 0.05, 15)
 ground_ref = res:AddModel('ground', hg.CreateCubeModel(vtx_layout, ground_size.x, ground_size.y, ground_size.z))
@@ -84,43 +63,47 @@ scene:SetCurrentCamera(cam)
 
 lgt = hg.CreateLinearLight(scene, hg.TransformationMat4(hg.Vec3(0, 0, 0), hg.Vec3(hg.Deg(30), hg.Deg(30), 0)), hg.Color(1, 1, 1), hg.Color(1, 1, 1), 10, hg.LST_Map, 0.00025, hg.Vec4(10, 15, 20, 25))
 
-sphere_list = {}
+cube_list = {}
 for i = 1, 5 do
-    sphere_node, sphere_rb = CreatePhysicSphereEx(scene, sphere_radius, hg.TranslationMat4(hg.Vec3(2 * i - 8, 5.0, 2.5)), sphere_ref, {mat_grey}, hg.RBT_Dynamic, 1.0)
+    cube_node, cube_rb = CreatePhysicCubeEx(scene, cube_size, hg.TranslationMat4(hg.Vec3(2 * i - 8, 5.0, 2.5)), cube_ref, {mat_grey}, hg.RBT_Dynamic, 1.0)
     restitution = (i - 1) / 4.0
     -- print("restitution = " .. restitution)
-    sphere_rb:SetRestitution(restitution)
-    sphere_rb:SetLinearDamping(0.0)
-    table.insert(sphere_list, sphere_node)
+    cube_rb:SetRestitution(restitution)
+    cube_rb:SetFriction(0.0)
+    cube_rb:SetLinearDamping(0.0)
+    table.insert(cube_list, cube_node)
 end
 
 floor, rb_floor = CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.Vec3(-2, -0.005, 0)), ground_ref, {mat_grey}, hg.RBT_Static, 0)
 rb_floor:SetRestitution(1)
+rb_floor:SetFriction(0.0)
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()
+dump = qa_dump.Create("rb_dynamic_variable_restitution", physics_step, cube_list)
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
-print(">>> Description:\n>>> Drop N spheres with a restitution factor from 0.0 (left) to 1.0 (right).")
+print(">>> Description:\n>>> Drop N cuboids with a restitution factor from 0.0 (left) to 1.0 (right).")
 
 -- main loop
 keyboard = hg.Keyboard()
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
     keyboard:Update()
 
-    for i=1,#sphere_list do
-        physics:NodeWake(sphere_list[i])
+    for i=1,#cube_list do
+        physics:NodeWake(cube_list[i])
     end
 
     view_id = 0
     hg.SceneUpdateSystems(scene, clocks, dt_frame_step, physics, physics_step, 3)
+    qa_dump.Capture(dump, physics)
     view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
 
     -- Debug physics display
@@ -128,11 +111,15 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     hg.SetViewRect(view_id, 0, 0, res_x, res_y)
     hg.SetViewTransform(view_id, view_matrix, projection_matrix)
     rs = hg.ComputeRenderState(hg.BM_Opaque, hg.DT_Disabled, hg.FC_Disabled)
-    physics:RenderCollision(view_id, vtx_line_layout, line_shader, rs, 0)
+    if physics.RenderCollision then
+        physics:RenderCollision(view_id, vtx_line_layout, line_shader, rs, 0)
+    end
 
     hg.Frame()
     hg.UpdateWindow(win)
 end
+
+qa_dump.Close(dump)
 
 scene:Clear()
 scene:GarbageCollect()

@@ -16,6 +16,9 @@
 #include "engine/forward_pipeline.h"
 #include "engine/scene_forward_pipeline.h"
 #include "engine/scene_lua_vm.h"
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+#include "engine/scene_physics.h"
+#endif
 #include "engine/scene_systems.h"
 #if HG_ENABLE_BULLET3_SCENE_PHYSICS
 #include "engine/scene_bullet3_physics.h"
@@ -27,6 +30,16 @@
 #include "foundation/math.h"
 
 using namespace hg;
+
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+static void test_ScenePhysicsBackendName() {
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS
+	TEST_CHECK(strcmp(GetScenePhysicsBackendName(), "Bullet Physics") == 0);
+#elif HG_ENABLE_TAU_SCENE_PHYSICS
+	TEST_CHECK(strcmp(GetScenePhysicsBackendName(), "Tau") == 0);
+#endif
+}
+#endif
 
 static void test_ComponentGarbageCollection() {
 	Scene scene;
@@ -195,6 +208,50 @@ static void test_LoadSaveEmptySceneBinary() {
 		LoadSceneContext ctx;
 		TEST_CHECK(LoadSceneBinaryFromData(data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx) == true);
 		TEST_CHECK(scene.GetAllNodeCount() == 0);
+	}
+}
+
+static void test_LoadSaveRigidBodyContinuousCollisionDetection() {
+	PipelineResources resources;
+
+	Data json_data;
+	{
+		Scene scene;
+		auto node = scene.CreateNode();
+		auto rigid_body = scene.CreateRigidBody();
+		rigid_body.SetContinuousCollisionDetection(true);
+		node.SetRigidBody(rigid_body);
+		TEST_CHECK(SaveSceneJsonToData(json_data, scene, resources));
+	}
+	json_data.Rewind();
+	{
+		Scene scene;
+		LoadSceneContext ctx;
+		TEST_CHECK(LoadSceneJsonFromData(
+			json_data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx));
+		const auto nodes = scene.GetAllNodes();
+		TEST_CHECK(nodes.size() == 1);
+		TEST_CHECK(nodes[0].GetRigidBody().GetContinuousCollisionDetection());
+	}
+
+	Data binary_data;
+	{
+		Scene scene;
+		auto node = scene.CreateNode();
+		auto rigid_body = scene.CreateRigidBody();
+		rigid_body.SetContinuousCollisionDetection(true);
+		node.SetRigidBody(rigid_body);
+		TEST_CHECK(SaveSceneBinaryToData(binary_data, scene, resources));
+	}
+	binary_data.Rewind();
+	{
+		Scene scene;
+		LoadSceneContext ctx;
+		TEST_CHECK(LoadSceneBinaryFromData(
+			binary_data, "data", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx));
+		const auto nodes = scene.GetAllNodes();
+		TEST_CHECK(nodes.size() == 1);
+		TEST_CHECK(nodes[0].GetRigidBody().GetContinuousCollisionDetection());
 	}
 }
 
@@ -688,6 +745,35 @@ static void test_PhysicDynamicVsStaticRigidBodyCollisionCallback() {
 	TEST_CHECK(collision_count > 0);
 }
 
+static void test_PhysicDeactivationCanBeDisabledAndReenabled() {
+	Scene scene;
+	auto cube = CreatePhysicCube(scene, {1, 1, 1}, TranslationMat4({0, 0.5f, 0}), {}, {}, 1.f);
+	CreatePhysicCube(scene, {10, 1, 10}, TranslationMat4({0, -0.5f, 0}), {}, {}, 0.f);
+
+	SceneBullet3Physics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	TEST_CHECK(!physics.NodeIsSleeping(cube));
+	physics.NodeSetDeactivation(cube, false);
+	TEST_CHECK(!physics.NodeGetDeactivation(cube));
+
+	// Bullet's ordinary setActivationState cannot leave
+	// DISABLE_DEACTIVATION. Verify that the public API can and remains
+	// idempotent once deactivation has been restored.
+	physics.NodeSetDeactivation(cube, true);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	physics.NodeSetDeactivation(cube, true);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+
+	// Natural WANTS_DEACTIVATION/ISLAND_SLEEPING transitions must not make
+	// the getter report that deactivation itself was disabled.
+	for (int i = 0; i < 600; ++i)
+		physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	TEST_CHECK(physics.NodeGetDeactivation(cube));
+	TEST_CHECK(physics.NodeIsSleeping(cube));
+}
+
 static void test_PhysicKinematicRigidBodyCollideWorld() {
 	Scene scene;
 	auto sphere = CreatePhysicSphere(scene, 0.5, TranslationMat4({0, 0, 0}), {}, {}, 1.f);
@@ -769,6 +855,9 @@ static void test_PhysicRaycastAllHitsOutOfReach() {
 #endif // HG_ENABLE_BULLET3_SCENE_PHYSICS
 
 void test_scene() {
+#if HG_ENABLE_BULLET3_SCENE_PHYSICS || HG_ENABLE_TAU_SCENE_PHYSICS
+	test_ScenePhysicsBackendName();
+#endif
 	test_ComponentGarbageCollection();
 	test_DuplicateNodes();
 	test_WalkHierarchy();
@@ -776,6 +865,7 @@ void test_scene() {
 	test_DisableObjectNodes();
 	test_LoadSaveEmptyScene();
 	test_LoadSaveEmptySceneBinary();
+	test_LoadSaveRigidBodyContinuousCollisionDetection();
 	test_PlayNodeSceneAnimWithoutSceneAnimTrack();
 	test_LoadSaveObject();
 	test_LoadSaveObjectBinary();
@@ -797,6 +887,7 @@ void test_scene() {
 	test_PhysicDynamicRigidBodyFreefall();
 	test_PhysicKinematicRigidBodyNoFreefall();
 	test_PhysicDynamicVsStaticRigidBodyCollisionCallback();
+	test_PhysicDeactivationCanBeDisabledAndReenabled();
 	test_PhysicKinematicRigidBodyCollideWorld();
 	test_PhysicRaycastFirstHit();
 	test_PhysicRaycastFirstHitOutOfReach();

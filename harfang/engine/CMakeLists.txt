@@ -6,6 +6,7 @@ set(HDRS
 	audio_stream.h
 	audio_stream_interface.h
 	bloom.h
+	collision_geometry.h
 	create_geometry.h
 	cubemap.h
 	dear_imgui.h
@@ -36,6 +37,7 @@ set(HDRS
 	scene_forward_pipeline.h
 	scene.h
 	scene_lua_vm.h
+	scene_physics.h
 	scene_systems.h
 	scene_to_obj.h
 	script_param.h
@@ -63,6 +65,7 @@ set(SRCS
 	audio.cpp
 	audio_stream.cpp
 	bloom.cpp
+	collision_geometry.cpp
 	component.cpp
 	create_geometry.cpp
 	cubemap.cpp
@@ -89,6 +92,7 @@ set(SRCS
 	render_pipeline.cpp
 	sao.cpp
 	scene.cpp
+	scene_physics.cpp
 	scene_systems.cpp
 	scene_forward_pipeline.cpp
 	scene_load_binary.cpp
@@ -116,6 +120,10 @@ endif()
 if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 	list(APPEND SRCS scene_bullet3_physics.cpp)
 	list(APPEND HDRS scene_bullet3_physics.h)
+endif()
+if(HG_ENABLE_TAU_SCENE_PHYSICS)
+	list(APPEND SRCS scene_tau_physics.cpp)
+	list(APPEND HDRS scene_tau_physics.h scene_tau_physics_contact.h)
 endif()
 
 add_library(engine STATIC ${SRCS} ${HDRS})
@@ -147,7 +155,6 @@ endif()
 if(HG_ENABLE_BULLET3_SCENE_PHYSICS)
 	target_link_libraries(engine PRIVATE BulletDynamics BulletWorldImporter)
 endif()
-
 if(MSVC)
 	target_compile_options(engine PRIVATE "$<$<CONFIG:Release>:/Zi>")
 	target_link_options(engine PRIVATE "$<$<CONFIG:Release>:/DEBUG>")

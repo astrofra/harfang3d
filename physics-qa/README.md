@@ -85,13 +85,111 @@ Run the whole suite:
 run-all.bat
 ```
 
+## Deterministic Physics Dumps
+
+Several scenarios support a fixed-step JSON Lines capture for backend
+comparisons. The capture records each body's world matrix, linear velocity,
+and angular velocity after every physics update.
+
+Capture the Bullet reference and Tau candidate:
+
+```bat
+dump-one.bat bullet rb_dynamic_variable_friction.lua
+dump-one.bat tau rb_dynamic_variable_friction.lua
+python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
+python plot_physics_trajectories.py qa_dumps\bullet\rb_dynamic_variable_friction.jsonl qa_dumps\tau\rb_dynamic_variable_friction.jsonl
+```
+
+The impulse-callback scenario additionally verifies that its pre-tick callback
+is invoked once per fixed physics sub-step and that the callback-driven cube
+tracks the render-loop-driven cube. It samples both positions before entering
+`SceneUpdateSystems`, because the world-matrix cache is intentionally invalid
+during a pre-tick callback. It captures both cubes in the same run:
+
+```bat
+dump-one.bat bullet rb_dynamic_impulse_callback.lua
+dump-one.bat tau rb_dynamic_impulse_callback.lua
+python compare_physics_dumps.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl
+python analyze_impulse_callback_amplitude.py qa_dumps\bullet\rb_dynamic_impulse_callback.jsonl qa_dumps\tau\rb_dynamic_impulse_callback.jsonl
+```
+
+The amplitude analysis writes
+`qa_dumps/rb_dynamic_impulse_callback_amplitude.png`. In addition to position
+and velocity, it plots the Tau-minus-Bullet residual and a display-only
+half-step interpolation proposal; it does not alter either captured solver
+trajectory.
+
+The cuboid-chain scenario has a dedicated bounded-envelope check. It requires
+600 fixed samples, keeps every Tau ring center within 5 m vertically of
+Bullet, checks the static top ring and rejects non-finite or excessive speeds
+(20 m/s by default, just above the Bullet reference peak):
+
+```bat
+dump-one.bat bullet rb_rings_chain.lua
+dump-one.bat tau rb_rings_chain.lua
+python validate_tau_rings_chain.py qa_dumps\bullet\rb_rings_chain.jsonl qa_dumps\tau\rb_rings_chain.jsonl
+```
+
+Pass a second Tau capture with `--repeat <path>` to require byte-identical
+deterministic output.
+
+The captures are written to `qa_dumps/<backend>/<scenario>.jsonl`. The default
+run records 600 ticks at 60 Hz and exits automatically. Set
+`HG_PHYSICS_QA_DUMP_SAMPLES` or `HG_PHYSICS_QA_DUMP_EVERY` to change the
+capture duration or sampling interval.
+
+The various-collision-shapes raycast sample also has a one-frame check that
+requires every analytic primitive (sphere, cube, capsule, cone and cylinder)
+to be hit at least once, then exits cleanly:
+
+```bat
+set HG_PHYSICS_QA_MODE=raycast_check
+set HG_LUA_DIR=..\..\install\tau\hg_lua
+run-one.bat rb_raycast_various_collshapes.lua
+```
+
+This check does not run `assetc`: these five collision shapes are constructed
+and raycast analytically at runtime.
+
+`rb_capsule_collision_pairs.lua` is a headless, asset-free check for physical
+capsule contacts. It requires contacts for capsule/sphere, capsule/cuboid and
+capsule/capsule, and can be run against either Bullet or Tau with `run-one.bat`.
+
+The mesh-collider raycast sample uses the same one-frame mode, but requires its
+assets to be rebuilt first. `assetc` cooks `Plan_38.physics_triangles` beside
+the existing Bullet-specific blob; the Lua sample references the logical
+`Plan_38.physics` manifest and each backend resolves its own companion.
+
+The triangle companion contains backend-neutral BVHs built offline for the
+triangles and open-boundary edges. Tau loads those indices directly and does
+not rebuild or scan the complete mesh during a raycast. Rebuild and run with:
+
+```bat
+build-assets.bat
+set HG_PHYSICS_QA_MODE=raycast_check
+run-one.bat rb_mesh_collider_raycast.lua
+```
+
+The same mode on `rb_mesh_collider_raycast_mesh_terrain.lua` exercises 3,751
+rays against the 651k-triangle Island Chain asset and reports the raycast-only
+CPU time. This is the large-mesh regression check for the serialized BVH.
+
+`rb_mesh_collider_raycast_mesh_terrain_rotating.lua` exercises the same mesh
+through a kinematic body. In `raycast_check` mode it synchronizes a fixed 90
+degree rotation before casting and requires the Bullet/Tau reference result of
+403 hits and 3,348 misses. Its interactive mode keeps rotating the terrain.
+
+`plot_physics_trajectories.py` writes `qa_dumps/trajectory_comparison.png` by
+default. It renders Bullet trajectories in blue and Tau trajectories in red on
+a black 3D plot. Use `--elevation` and `--azimuth` to change the view.
+
 ## Notes
 
 - This is still an upstream Lua QA suite, not yet a fully automated pass/fail
   test harness.
 - Most scenarios open an interactive window and rely on visual inspection or
   manual exit.
-- The scripts currently target `SceneBullet3Physics` directly. If Harfang grows
-  a backend-neutral physics layer later, this suite should be adapted to select
-  the backend through a small indirection layer rather than editing each test
-  repeatedly.
+- Most scripts still target `SceneBullet3Physics` directly today.
+- `rb_dynamic_chair_multi_colbox.lua` already uses the compile-time
+  `ScenePhysics` alias so the same Lua script can run against the selected
+  backend without adding runtime selection logic.

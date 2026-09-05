@@ -1383,6 +1383,21 @@ void RigidBody::SetRollingFriction(float rolling_friction) {
 		warn("Orphaned rigidBody component");
 }
 
+bool RigidBody::GetContinuousCollisionDetection() const {
+	if (scene_ref && scene_ref->scene)
+		return scene_ref->scene->GetRigidBodyContinuousCollisionDetection(ref);
+
+	warn("Orphaned rigidBody component");
+	return false;
+}
+
+void RigidBody::SetContinuousCollisionDetection(bool enable) {
+	if (scene_ref && scene_ref->scene)
+		scene_ref->scene->SetRigidBodyContinuousCollisionDetection(ref, enable);
+	else
+		warn("Orphaned rigidBody component");
+}
+
 //
 bool Collision::IsValid() const { return scene_ref && scene_ref->scene ? scene_ref->scene->IsValidCollisionRef(ref) : false; }
 
@@ -1519,6 +1534,20 @@ void Collision::SetCollisionResource(const std::string &path) {
 		scene_ref->scene->SetCollisionResource(ref, path);
 	else
 		warn("Orphaned collision component");
+}
+
+float Collision::GetRestitution() const { return 0.f; }
+
+void Collision::SetRestitution(float restitution) {
+	static_cast<void>(restitution);
+	warn("Collision restitution is not stored in Scene");
+}
+
+float Collision::GetFriction() const { return 0.f; }
+
+void Collision::SetFriction(float friction) {
+	static_cast<void>(friction);
+	warn("Collision friction is not stored in Scene");
 }
 
 //

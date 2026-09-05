@@ -26,6 +26,17 @@
 
 namespace hg {
 
+namespace {
+
+std::string ResolveBulletCollisionResource(const std::string &resource) {
+	static const std::string logical_suffix = ".physics";
+	if (resource.size() >= logical_suffix.size() && resource.compare(resource.size() - logical_suffix.size(), logical_suffix.size(), logical_suffix) == 0)
+		return resource + "_bullet";
+	return resource;
+}
+
+} // namespace
+
 btRigidBody *SceneBullet3Physics::GetNodeBody(NodeRef ref, const char *func) const {
 	const auto i = nodes.find(ref);
 
@@ -264,12 +275,15 @@ void SceneBullet3Physics::NodeCreatePhysics(const Node &node, const Reader &ir, 
 		} else if (type == CT_Cylinder) {
 			shapes.push_back(new btCylinderShape(btVector3(size.x, size.y * 0.5f, size.z)));
 		} else if (type == CT_Mesh) {
-			if (auto tree = LoadCollisionTree(ir, ip, col.GetCollisionResource().c_str()))
+			const auto resource = ResolveBulletCollisionResource(col.GetCollisionResource());
+			if (auto tree = LoadCollisionTree(ir, ip, resource.c_str()))
 				shapes.push_back(tree);
 		} else {
 			error(format("Collision Type not implemented: %1").arg(type));
 		}
 
+		if (shapes.size() != idx + 1)
+			return;
 		shapes.back()->setUserIndex(node.ref.idx); // ref back to node
 		total_mass += col.GetMass();
 	}
@@ -305,6 +319,14 @@ void SceneBullet3Physics::NodeCreatePhysics(const Node &node, const Reader &ir, 
 
 		_node.body->setCollisionShape(root_shape);
 		_node.body->setUserIndex(node.ref.idx); // ref back to node
+		if (rb.GetContinuousCollisionDetection()) {
+			btVector3 center;
+			btScalar radius;
+			root_shape->getBoundingSphere(center, radius);
+			const btScalar swept_radius = btMax(radius * btScalar(0.2), btScalar(0.001));
+			_node.body->setCcdMotionThreshold(swept_radius);
+			_node.body->setCcdSweptSphereRadius(swept_radius);
+		}
 
 		// configure
 		const auto type = rb.GetType();
@@ -500,14 +522,33 @@ void SceneBullet3Physics::NodeWake(NodeRef ref) const {
 
 //
 void SceneBullet3Physics::NodeSetDeactivation(NodeRef ref, bool enable) const {
-	if (auto body = GetNodeBody(ref, __func__))
-		body->setActivationState(enable ? ACTIVE_TAG : DISABLE_DEACTIVATION);
+	if (auto body = GetNodeBody(ref, __func__)) {
+		const int activation_state = body->getActivationState();
+		if (enable) {
+			// btCollisionObject::setActivationState deliberately refuses to leave
+			// DISABLE_DEACTIVATION. Force the transition when re-enabling sleep,
+			// while keeping an already sleeping/candidate body undisturbed.
+			if (activation_state == DISABLE_DEACTIVATION) {
+				body->forceActivationState(ACTIVE_TAG);
+				body->setDeactivationTime(0.f);
+			}
+		} else if (activation_state != DISABLE_SIMULATION) {
+			body->forceActivationState(DISABLE_DEACTIVATION);
+			body->setDeactivationTime(0.f);
+		}
+	}
 }
 
 bool SceneBullet3Physics::NodeGetDeactivation(NodeRef ref) const {
 	if (auto body = GetNodeBody(ref, __func__))
-		return body->getActivationState() == ACTIVE_TAG ? true : false;
+		return body->getActivationState() != DISABLE_DEACTIVATION;
 	return true;
+}
+
+bool SceneBullet3Physics::NodeIsSleeping(NodeRef ref) const {
+	if (auto body = GetNodeBody(ref, __func__))
+		return body->getActivationState() == ISLAND_SLEEPING;
+	return false;
 }
 
 //

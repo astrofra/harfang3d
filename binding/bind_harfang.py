@@ -1091,6 +1091,8 @@ def bind_scene(gen):
 	gen.bind_method(rigid_body, 'SetFriction', 'void', ['float friction'])
 	gen.bind_method(rigid_body, 'GetRollingFriction', 'float', [])
 	gen.bind_method(rigid_body, 'SetRollingFriction', 'void', ['float rolling_friction'])
+	gen.bind_method(rigid_body, 'GetContinuousCollisionDetection', 'bool', [])
+	gen.bind_method(rigid_body, 'SetContinuousCollisionDetection', 'void', ['bool enable'])
 
 	gen.end_class(rigid_body)
 
@@ -1648,91 +1650,133 @@ static std::vector<hg::ForwardPipelineLight> _GetSceneForwardPipelineLights(cons
 	gen.bind_function('hg::DebugSceneExplorer', 'void', ['hg::Scene &scene', 'const char *name'])
 
 
-def bind_bullet3_physics(gen):
-	gen.add_include('engine/scene_bullet3_physics.h')
+def bind_physics_contacts(gen):
+	gen.add_include('engine/physics.h')
 
 	node_node_contacts = gen.begin_class('hg::NodePairContacts')
 	gen.end_class(node_node_contacts)
+
+	gen.bind_function('GetNodesInContact', 'std::vector<hg::Node>', ['const hg::Scene &scene', 'const hg::Node with', 'const hg::NodePairContacts &node_pair_contacts'])
+	gen.bind_function('GetNodePairContacts', 'std::vector<hg::Contact>', ['const hg::Node &first', 'const hg::Node &second', 'const hg::NodePairContacts &node_pair_contacts'])
+
+
+def bind_scene_physics_common_methods(gen, physics):
+	gen.bind_method(physics, 'SceneCreatePhysicsFromFile', 'void', ['const hg::Scene &scene'])
+	gen.bind_method(physics, 'SceneCreatePhysicsFromAssets', 'void', ['const hg::Scene &scene'])
+
+	gen.bind_method(physics, 'NodeCreatePhysicsFromFile', 'void', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeCreatePhysicsFromAssets', 'void', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'NodeStartTrackingCollisionEvents', 'void', ['const hg::Node &node', '?hg::CollisionEventTrackingMode mode'])
+	gen.bind_method(physics, 'NodeStopTrackingCollisionEvents', 'void', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'NodeDestroyPhysics', 'void', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'NodeHasBody', 'bool', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'StepSimulation', 'void', ['hg::time_ns display_dt', '?hg::time_ns step_dt', '?int max_step'])
+
+	gen.bind_method(physics, 'CollectCollisionEvents', 'void', ['const hg::Scene &scene', 'hg::NodePairContacts &node_pair_contacts'], {'arg_out': ['node_pair_contacts']})
+
+	gen.bind_method(physics, 'SyncTransformsFromScene', 'void', ['const hg::Scene &scene'])
+	gen.bind_method(physics, 'SyncTransformsToScene', 'void', ['hg::Scene &scene'])
+
+	gen.bind_method(physics, 'GarbageCollect', 'size_t', ['const hg::Scene &scene'])
+	gen.bind_method(physics, 'GarbageCollectResources', 'size_t', [])
+
+	gen.bind_method(physics, 'ClearNodes', 'void', [])
+	gen.bind_method(physics, 'Clear', 'void', [])
+
+	gen.bind_method(physics, 'NodeWake', 'void', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'NodeSetDeactivation', 'void', ['const hg::Node &node', 'bool enable'])
+	gen.bind_method(physics, 'NodeGetDeactivation', 'bool', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeIsSleeping', 'bool', ['const hg::Node &node'])
+
+	gen.bind_method(physics, 'NodeResetWorld', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])
+	gen.bind_method(physics, 'NodeTeleport', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])
+
+	gen.bind_method(physics, 'NodeAddForce', 'void', ['const hg::Node &node', 'const hg::Vec3 &F', '?const hg::Vec3 &world_pos'])
+	gen.bind_method(physics, 'NodeAddImpulse', 'void', ['const hg::Node &node', 'const hg::Vec3 &dt_velocity', '?const hg::Vec3 &world_pos'])
+	gen.bind_method(physics, 'NodeAddTorque', 'void', ['const hg::Node &node', 'const hg::Vec3 &T'])
+	gen.bind_method(physics, 'NodeAddTorqueImpulse', 'void', ['const hg::Node &node', 'const hg::Vec3 &dt_angular_velocity'])
+	gen.bind_method(physics, 'NodeGetPointVelocity', 'hg::Vec3', ['const hg::Node &node', 'const hg::Vec3 &world_pos'])
+
+	gen.bind_method(physics, 'NodeGetLinearVelocity', 'hg::Vec3', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeSetLinearVelocity', 'void', ['const hg::Node &node', 'const hg::Vec3 &V'])
+	gen.bind_method(physics, 'NodeGetAngularVelocity', 'hg::Vec3', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeSetAngularVelocity', 'void', ['const hg::Node &node', 'const hg::Vec3 &W'])
+
+	gen.bind_method(physics, 'NodeGetLinearFactor', 'hg::Vec3', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeSetLinearFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
+	gen.bind_method(physics, 'NodeGetAngularFactor', 'hg::Vec3', ['const hg::Node &node'])
+	gen.bind_method(physics, 'NodeSetAngularFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
+
+	gen.bind_method(physics, 'RaycastFirstHit', 'hg::RaycastOut', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
+	gen.bind_method(physics, 'RaycastAllHits', 'std::vector<hg::RaycastOut>', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
+	gen.bind_method(physics, 'RenderCollision', 'void', ['bgfx::ViewId view_id', 'const bgfx::VertexLayout &vtx_layout', 'bgfx::ProgramHandle prg', 'hg::RenderState render_state', 'uint32_t depth'])
+
+
+def bind_bullet3_physics(gen):
+	gen.add_include('engine/scene_bullet3_physics.h')
 
 	constraint_6_dof = gen.begin_class('btGeneric6DofConstraint', noncopyable=True)
 	gen.end_class(constraint_6_dof)
 
 	bullet = gen.begin_class('hg::SceneBullet3Physics', noncopyable=True)
-
 	gen.bind_constructor(bullet, ['?int thread_count'])
-
-	gen.bind_method(bullet, 'SceneCreatePhysicsFromFile', 'void', ['const hg::Scene &scene'])
-	gen.bind_method(bullet, 'SceneCreatePhysicsFromAssets', 'void', ['const hg::Scene &scene'])
-
-	gen.bind_method(bullet, 'NodeCreatePhysicsFromFile', 'void', ['const hg::Node &node'])
-	gen.bind_method(bullet, 'NodeCreatePhysicsFromAssets', 'void', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'NodeStartTrackingCollisionEvents', 'void', ['const hg::Node &node', '?hg::CollisionEventTrackingMode mode'])
-	gen.bind_method(bullet, 'NodeStopTrackingCollisionEvents', 'void', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'NodeDestroyPhysics', 'void', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'NodeHasBody', 'bool', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'StepSimulation', 'void', ['hg::time_ns display_dt', '?hg::time_ns step_dt', '?int max_step'])
-
-	gen.bind_method(bullet, 'CollectCollisionEvents', 'void', ['const hg::Scene &scene', 'hg::NodePairContacts &node_pair_contacts'], {'arg_out': ['node_pair_contacts']})
-
-	gen.bind_method(bullet, 'SyncTransformsFromScene', 'void', ['const hg::Scene &scene'])
-	gen.bind_method(bullet, 'SyncTransformsToScene', 'void', ['hg::Scene &scene'])
-
-	gen.bind_method(bullet, 'GarbageCollect', 'size_t', ['const hg::Scene &scene'])
-	gen.bind_method(bullet, 'GarbageCollectResources', 'size_t', [])
-
-	gen.bind_method(bullet, 'ClearNodes', 'void', [])
-	gen.bind_method(bullet, 'Clear', 'void', [])
-
-	#
-	gen.bind_method(bullet, 'NodeWake', 'void', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'NodeSetDeactivation', 'void', ['const hg::Node &node', 'bool enable'])
-	gen.bind_method(bullet, 'NodeGetDeactivation', 'bool', ['const hg::Node &node'])
-
-	gen.bind_method(bullet, 'NodeResetWorld', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])
-	gen.bind_method(bullet, 'NodeTeleport', 'void', ['const hg::Node &node', 'const hg::Mat4 &world'])
-
-	gen.bind_method(bullet, 'NodeAddForce', 'void', ['const hg::Node &node', 'const hg::Vec3 &F', '?const hg::Vec3 &world_pos'])
-	gen.bind_method(bullet, 'NodeAddImpulse', 'void', ['const hg::Node &node', 'const hg::Vec3 &dt_velocity', '?const hg::Vec3 &world_pos'])
-	gen.bind_method(bullet, 'NodeAddTorque', 'void', ['const hg::Node &node', 'const hg::Vec3 &T'])
-	gen.bind_method(bullet, 'NodeAddTorqueImpulse', 'void', ['const hg::Node &node', 'const hg::Vec3 &dt_angular_velocity'])
-	gen.bind_method(bullet, 'NodeGetPointVelocity', 'hg::Vec3', ['const hg::Node &node', 'const hg::Vec3 &world_pos'])
-
-	gen.bind_method(bullet, 'NodeGetLinearVelocity', 'hg::Vec3', ['const hg::Node &node'])
-	gen.bind_method(bullet, 'NodeSetLinearVelocity', 'void', ['const hg::Node &node', 'const hg::Vec3 &V'])
-	gen.bind_method(bullet, 'NodeGetAngularVelocity', 'hg::Vec3', ['const hg::Node &node'])
-	gen.bind_method(bullet, 'NodeSetAngularVelocity', 'void', ['const hg::Node &node', 'const hg::Vec3 &W'])
-
-	gen.bind_method(bullet, 'NodeGetLinearFactor', 'hg::Vec3', ['const hg::Node &node'])
-	gen.bind_method(bullet, 'NodeSetLinearFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
-	gen.bind_method(bullet, 'NodeGetAngularFactor', 'hg::Vec3', ['const hg::Node &node'])
-	gen.bind_method(bullet, 'NodeSetAngularFactor', 'void', ['const hg::Node &node', 'const hg::Vec3 &k'])
+	bind_scene_physics_common_methods(gen, bullet)
 
 	gen.bind_method(bullet, 'Add6DofConstraint', 'btGeneric6DofConstraint*', ['const hg::Node &nodeA', 'const hg::Node &nodeB', 'const hg::Mat4 &anchorALocal', 'const hg::Mat4 &anchorBInLocalSpaceA'])
 	gen.bind_method(bullet, 'Remove6DofConstraint', 'void', ['btGeneric6DofConstraint* constraint6Dof'])
-	
-	#
 	gen.bind_method(bullet, 'NodeCollideWorld', 'hg::NodePairContacts', ['const hg::Node &node', 'const hg::Mat4 &world', '?int max_contact'])
-
-	gen.bind_function('GetNodesInContact', 'std::vector<hg::Node>', ['const hg::Scene &scene', 'const hg::Node with', 'const hg::NodePairContacts &node_pair_contacts'])
-	gen.bind_function('GetNodePairContacts', 'std::vector<hg::Contact>', ['const hg::Node &first', 'const hg::Node &second', 'const hg::NodePairContacts &node_pair_contacts'])
-
-	#
-	gen.bind_method(bullet, 'RaycastFirstHit', 'hg::RaycastOut', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
-	gen.bind_method(bullet, 'RaycastAllHits', 'std::vector<hg::RaycastOut>', ['const hg::Scene &scene', 'const hg::Vec3 &p0', 'const hg::Vec3 &p1'])
-
-	#
-	gen.bind_method(bullet, 'RenderCollision', 'void', ['bgfx::ViewId view_id', 'const bgfx::VertexLayout &vtx_layout', 'bgfx::ProgramHandle prg', 'hg::RenderState render_state', 'uint32_t depth'])
-
-	#
 	lib.stl.bind_function_T(gen, 'std::function<void(hg::SceneBullet3Physics&, hg::time_ns)>', 'SceneBullet3PhysicsPreTickCallback')
 	gen.bind_method(bullet, 'SetPreTickCallback', 'void', ['const std::function<void(hg::SceneBullet3Physics&, hg::time_ns)>& cbk'])
-	
+
 	gen.end_class(bullet)
+
+
+def bind_tau_physics(gen):
+	gen.add_include('engine/scene_tau_physics.h')
+
+	tau = gen.begin_class('hg::SceneTauPhysics', noncopyable=True)
+	gen.bind_constructor(tau, ['?int thread_count'])
+	bind_scene_physics_common_methods(gen, tau)
+	lib.stl.bind_function_T(gen, 'std::function<void(hg::SceneTauPhysics&, hg::time_ns)>', 'SceneTauPhysicsPreTickCallback')
+	gen.bind_method(tau, 'SetPreTickCallback', 'void', ['const std::function<void(hg::SceneTauPhysics&, hg::time_ns)>& cbk'])
+	gen.end_class(tau)
+
+
+def bind_scene_physics(gen):
+	gen.add_include('engine/scene_physics.h')
+	gen.bind_function('hg::GetScenePhysicsBackendName', 'const char *', [])
+
+	physics = gen.begin_class('hg::ScenePhysics', noncopyable=True)
+	gen.bind_constructor(physics, ['?int thread_count'])
+	bind_scene_physics_common_methods(gen, physics)
+	gen.bind_method(physics, 'Add6DofConstraint', 'void', ['const hg::Node &nodeA', 'const hg::Node &nodeB', 'const hg::Mat4 &anchorALocal', 'const hg::Mat4 &anchorBInLocalSpaceA'])
+	lib.stl.bind_function_T(gen, 'std::function<void(hg::ScenePhysics&, hg::time_ns)>', 'ScenePhysicsPreTickCallback')
+	gen.bind_method(physics, 'SetPreTickCallback', 'void', ['const std::function<void(hg::ScenePhysics&, hg::time_ns)>& cbk'])
+	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS') and not gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
+		# Keep the historical constructor available in every generated language.
+		# It must return the canonical ScenePhysics bound type so that
+		# SceneUpdateSystems and every other common API accept the result.
+		def own_scene_physics_result(gen, conv, expr, output, ownership):
+			return gen.rval_from_c_ptr(conv, output, expr, 'Owning')
+
+		physics.add_feature('rval_transform', own_scene_physics_result)
+		gen.insert_binding_code('''
+static hg::ScenePhysics *_CreateLegacySceneBullet3Physics(int thread_count = 1) {
+	static const bool warning_emitted = []() {
+		hg::warn("SceneBullet3Physics is a legacy compatibility name; this build uses Tau. Use ScenePhysics for backend-neutral code.");
+		return true;
+	}();
+	(void)warning_emitted;
+	return new hg::ScenePhysics(thread_count);
+}
+''')
+		gen.bind_function('_CreateLegacySceneBullet3Physics', 'hg::ScenePhysics *', ['?int thread_count'], bound_name='SceneBullet3Physics')
+	gen.end_class(physics)
 
 
 def bind_lua_scene_vm(gen):
@@ -2064,6 +2108,30 @@ def bind_scene_systems(gen):
 		('void', ['hg::Scene &scene', 'hg::SceneLuaVM &vm'], []),
 	]
 
+	if gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS') or gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS'):
+		scene_sync_to_systems_from_file_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_sync_to_systems_from_assets_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_update_systems_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::ScenePhysics &physics', 'hg::time_ns step', 'int max_physics_step'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::ScenePhysics &physics', 'hg::time_ns step', 'int max_physics_step', 'hg::SceneLuaVM &vm'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::ScenePhysics &physics', 'hg::NodePairContacts &contacts', 'hg::time_ns step', 'int max_physics_step'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::ScenePhysics &physics', 'hg::NodePairContacts &contacts', 'hg::time_ns step', 'int max_physics_step', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_garbage_collect_systems_protos.extend([
+			('size_t', ['hg::Scene &scene', 'hg::ScenePhysics &physics'], []),
+			('size_t', ['hg::Scene &scene', 'hg::ScenePhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_clear_systems_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::ScenePhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+
 	if gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
 		scene_sync_to_systems_from_file_protos.extend([
 			('void', ['hg::Scene &scene', 'hg::SceneBullet3Physics &physics'], []),
@@ -2086,6 +2154,29 @@ def bind_scene_systems(gen):
 		scene_clear_systems_protos.extend([
 			('void', ['hg::Scene &scene', 'hg::SceneBullet3Physics &physics'], []),
 			('void', ['hg::Scene &scene', 'hg::SceneBullet3Physics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+	if gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS'):
+		scene_sync_to_systems_from_file_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_sync_to_systems_from_assets_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_update_systems_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::SceneTauPhysics &physics', 'hg::time_ns step', 'int max_physics_step'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::SceneTauPhysics &physics', 'hg::time_ns step', 'int max_physics_step', 'hg::SceneLuaVM &vm'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::SceneTauPhysics &physics', 'hg::NodePairContacts &contacts', 'hg::time_ns step', 'int max_physics_step'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneClocks &clocks', 'hg::time_ns dt', 'hg::SceneTauPhysics &physics', 'hg::NodePairContacts &contacts', 'hg::time_ns step', 'int max_physics_step', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_garbage_collect_systems_protos.extend([
+			('size_t', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics'], []),
+			('size_t', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics', 'hg::SceneLuaVM &vm'], []),
+		])
+		scene_clear_systems_protos.extend([
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics'], []),
+			('void', ['hg::Scene &scene', 'hg::SceneTauPhysics &physics', 'hg::SceneLuaVM &vm'], []),
 		])
 
 	gen.bind_function_overloads('hg::SceneSyncToSystemsFromFile', scene_sync_to_systems_from_file_protos)
@@ -4668,8 +4759,14 @@ def bind(gen):
 	bind_meta(gen)
 	bind_LuaObject(gen)
 	bind_scene(gen)
+	if gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS') or gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS'):
+		bind_physics_contacts(gen)
 	if gen.defined('HG_ENABLE_BULLET3_SCENE_PHYSICS'):
 		bind_bullet3_physics(gen)
+		bind_scene_physics(gen)
+	elif gen.defined('HG_ENABLE_TAU_SCENE_PHYSICS'):
+		bind_tau_physics(gen)
+		bind_scene_physics(gen)
 	bind_lua_scene_vm(gen)
 	bind_scene_systems(gen)
 	bind_input(gen)

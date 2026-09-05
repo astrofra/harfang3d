@@ -1,6 +1,13 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
+set /a HG_BATCH_PAUSE_DEPTH+=1
 
+call :main %*
+set "EXITCODE=%ERRORLEVEL%"
+if !HG_BATCH_PAUSE_DEPTH! LEQ 1 if not defined HG_BATCH_NO_PAUSE pause
+exit /b %EXITCODE%
+
+:main
 set "CONFIG=%~1"
 if "%CONFIG%"=="" set "CONFIG=Release"
 
@@ -55,3 +62,4 @@ if errorlevel 1 exit /b !errorlevel!
 echo.
 echo HG Lua + AssetC rebuild ok.
 echo Install: "%INSTALL_DIR%\hg_lua"
+exit /b 0

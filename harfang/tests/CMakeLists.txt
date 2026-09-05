@@ -28,6 +28,8 @@ install(TARGETS DummyAudioStream
 )
 
 set(TEST_FOUNDATION_SRCS
+	foundation/bvh.cpp
+	foundation/dynamic_aabb_tree.cpp
 	foundation/cext.cpp
 	foundation/curve.cpp
 	foundation/pack_float.cpp
@@ -80,6 +82,10 @@ set(TEST_ENGINE_SRCS
 	engine/video_stream.cpp
 	engine/scene.cpp
 )
+
+if(HG_ENABLE_TAU_SCENE_PHYSICS)
+	list(APPEND TEST_ENGINE_SRCS engine/scene_tau_physics.cpp engine/scene_tau_physics_contact.cpp)
+endif()
 
 set(TEST_SCRIPT_SRCS
 	script/lua_vm.cpp

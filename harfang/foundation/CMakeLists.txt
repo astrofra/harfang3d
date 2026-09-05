@@ -34,6 +34,8 @@ set(HDRS
 	axis.h
 	bit.h
 	build_info.h
+	bvh.h
+	dynamic_aabb_tree.h
 	byte_sort.h
 	cext.h
 	clock.h
@@ -107,6 +109,8 @@ set(SRCS
 	assert.cpp
 	bit.cpp
 	build_info.cpp
+	bvh.cpp
+	dynamic_aabb_tree.cpp
 	clock.cpp
 	cmd_line.cpp
 	color.cpp

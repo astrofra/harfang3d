@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <deque>
+#include <exception>
 #include <future>
 #include <iostream>
 #include <map>
@@ -29,10 +30,12 @@
 #include <foundation/xxhash.h>
 
 #include <engine/forward_pipeline.h>
+#include <engine/collision_geometry.h>
 #include <engine/geometry.h>
 #include <engine/meta.h>
 #include <engine/render_pipeline.h>
 #include <engine/scene.h>
+#include <engine/to_json.h>
 
 #include <platform/filesystem_watcher.h>
 #include <platform/process.h>
@@ -1488,31 +1491,177 @@ static void SquirrelScript(std::map<std::string, Hash> &hashes, const std::strin
 }
 
 //
+static std::set<std::string> GetPhysicsDependencies(const json &js, const std::string &path) {
+	std::set<std::string> dependencies = {path};
+	const auto collision = js.find("collision");
+	if (collision == std::end(js) || !collision->is_object())
+		return dependencies;
+	const auto inputs = collision->find("input");
+	if (inputs == std::end(*collision) || !inputs->is_array())
+		return dependencies;
+	for (const auto &input : *inputs) {
+		if (!input.is_object())
+			continue;
+		const auto geometry = input.find("geometry");
+		if (geometry != std::end(input) && geometry->is_string())
+			dependencies.insert(geometry->get<std::string>());
+	}
+	return dependencies;
+}
+
+static bool CompileCollisionGeometry(const json &js, const std::string &output) {
+	const auto collision = js.find("collision");
+	if (collision == std::end(js) || !collision->is_object()) {
+		error("Invalid physics resource: missing collision directive");
+		return false;
+	}
+
+	const std::string collision_type = collision->value("type", "tree");
+	if (collision_type != "tree") {
+		error(format("Unsupported collision output type '%1'").arg(collision_type));
+		return false;
+	}
+
+	const auto inputs = collision->find("input");
+	if (inputs == std::end(*collision) || !inputs->is_array()) {
+		error("Invalid physics resource: missing collision input array");
+		return false;
+	}
+
+	CollisionGeometry cooked;
+	for (const auto &input : *inputs) {
+		if (!input.is_object()) {
+			error("Invalid collision source: expected an object");
+			return false;
+		}
+		const auto geometry_path = input.find("geometry");
+		if (geometry_path == std::end(input) || !geometry_path->is_string()) {
+			error("Invalid collision source: expected a geometry path");
+			return false;
+		}
+
+		const std::string input_type = input.value("type", "triangle");
+		if (input_type != "triangle" && input_type != "convex") {
+			error(format("Unsupported collision input type '%1'").arg(input_type));
+			return false;
+		}
+
+		Mat4 transform = Mat4::Identity;
+		const auto matrix = input.find("matrix");
+		if (matrix != std::end(input))
+			transform = matrix->get<Mat4>();
+
+		const std::string geometry_name = geometry_path->get<std::string>();
+		const std::string geometry_file = IsPathAbsolute(geometry_name) ? geometry_name : FullInputPath(geometry_name);
+		log(format("    Cooking collision geometry '%1'").arg(geometry_name));
+		const hg::Geometry source_geometry = LoadGeometryFromFile(geometry_file.c_str());
+		if (source_geometry.vtx.empty() || source_geometry.pol.empty()) {
+			error(format("Failed to load collision geometry '%1'").arg(geometry_name));
+			return false;
+		}
+
+		size_t binding_offset = 0;
+		std::vector<Vec3> face;
+		for (const auto &polygon : source_geometry.pol) {
+			if (binding_offset + polygon.vtx_count > source_geometry.binding.size()) {
+				error(format("Invalid collision geometry binding table '%1'").arg(geometry_name));
+				return false;
+			}
+
+			face.resize(polygon.vtx_count);
+			for (size_t i = 0; i < polygon.vtx_count; ++i) {
+				const uint32_t vertex_index = source_geometry.binding[binding_offset + i];
+				if (vertex_index >= source_geometry.vtx.size()) {
+					error(format("Invalid collision geometry vertex index '%1'").arg(geometry_name));
+					return false;
+				}
+				face[i] = transform * source_geometry.vtx[vertex_index];
+			}
+
+			// Match bulletc's polygon fan and winding exactly so both cooked
+			// resources describe the same surface.
+			for (size_t i = 1; i + 1 < polygon.vtx_count; ++i)
+				cooked.triangles.push_back({face[0], face[i + 1], face[i]});
+			binding_offset += polygon.vtx_count;
+		}
+	}
+
+	if (cooked.triangles.empty()) {
+		error("Physics resource produced no collision triangles");
+		return false;
+	}
+	if (!PrepareCollisionGeometry(cooked)) {
+		error("Failed to build collision geometry acceleration structures");
+		return false;
+	}
+	log(format("    Built collision BVH: %1 triangles, %2 nodes, %3 boundary edges")
+			.arg(cooked.triangles.size())
+			.arg(cooked.triangle_bvh.nodes.size())
+			.arg(cooked.boundary_edges.size()));
+	return SaveCollisionGeometryToFile(output.c_str(), cooked);
+}
+
 static void Physics(std::map<std::string, Hash> &hashes, const std::string &path) {
 	ProfilerPerfSection perf("Command/Physics");
 
 	log(format("  Physics resource '%1'").arg(path));
 
-	if (toolchain.bulletc.empty()) {
-		debug("    Skipping, no compiler found for physics bullet resource");
-	} else {
-		if (NeedsCompilation(hashes, {path}, {path}, {})) {
-			const auto cwd = GetCurrentWorkingDirectory();
-			const auto src = FullInputPath(path), dst = FullOutputPath(path);
-
-			if (!CopyFile(src.c_str(), dst.c_str())) {
-				ReportFailedInput(src);
-				const json json_err = {{"type", "FailedToCopyInput"}, {"src", src}, {"dst", dst}};
-				log_error(json_err);
-			}
-
-			const auto cmd = format("\"%1\" \"%2\" \"%3_bullet\" -root \"%4\"").arg(toolchain.bulletc).arg(src).arg(dst).arg(input_dir);
-			PushAsyncProcessTask(path, cmd, cwd);
-		} else {
-			debug("  [O] Physics resource up to date");
-		}
+	const auto src = FullInputPath(path);
+	bool loaded = false;
+	const json js = LoadJsonFromFile(src.c_str(), &loaded);
+	if (!loaded || js.empty()) {
+		ReportFailedInput(src);
+		const json json_err = {{"type", "FailedToLoadPhysicsResource"}, {"src", src}};
+		log_error(json_err);
+		return;
 	}
 
+	const std::string triangle_path = path + "_triangles";
+	std::set<std::string> outputs = {path, triangle_path};
+	if (!toolchain.bulletc.empty())
+		outputs.insert(path + "_bullet");
+
+	Data build_context;
+	Write(build_context, std::string(get_version_string()));
+	Write(build_context, GetCollisionGeometryBinaryFormatVersion());
+	Write(build_context, !toolchain.bulletc.empty());
+
+	const auto dependencies = GetPhysicsDependencies(js, path);
+	if (!NeedsCompilation(hashes, dependencies, outputs, build_context)) {
+		debug("  [O] Physics resource up to date");
+		return;
+	}
+
+	const auto dst = FullOutputPath(path);
+	MkOutputTree(path);
+	CleanOutputs(outputs);
+
+	if (!CopyFile(src.c_str(), dst.c_str())) {
+		ReportFailedInput(src);
+		const json json_err = {{"type", "FailedToCopyInput"}, {"src", src}, {"dst", dst}};
+		log_error(json_err);
+		return;
+	}
+
+	bool collision_compiled = false;
+	try {
+		collision_compiled = CompileCollisionGeometry(js, FullOutputPath(triangle_path));
+	} catch (const std::exception &exception) {
+		error(format("Invalid physics resource '%1': %2").arg(path).arg(exception.what()));
+	}
+	if (!collision_compiled) {
+		ReportFailedInput(src);
+		const json json_err = {{"type", "FailedToCompileCollisionGeometry"}, {"src", src}, {"dst", FullOutputPath(triangle_path)}};
+		log_error(json_err);
+		return;
+	}
+
+	if (!toolchain.bulletc.empty()) {
+		const auto cmd = format("\"%1\" \"%2\" \"%3_bullet\" -root \"%4\"").arg(toolchain.bulletc).arg(src).arg(dst).arg(input_dir);
+		PushAsyncProcessTask(path, cmd, GetCurrentWorkingDirectory());
+	} else {
+		debug("    Skipping Bullet companion, no bulletc compiler found");
+	}
 }
 
 static void PathFinding(std::map<std::string, Hash> &hashes, const std::string &path) {

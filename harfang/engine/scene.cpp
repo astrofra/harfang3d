@@ -988,6 +988,21 @@ void Scene::SetRigidBodyRollingFriction(ComponentRef ref, float rolling_friction
 		warn("Invalid rigid body");
 }
 
+bool Scene::GetRigidBodyContinuousCollisionDetection(ComponentRef ref) const {
+	if (const auto rb = GetComponent_(rigid_bodies, ref))
+		return rb->continuous_collision_detection != 0;
+
+	warn("Invalid rigid body");
+	return false;
+}
+
+void Scene::SetRigidBodyContinuousCollisionDetection(ComponentRef ref, bool enable) {
+	if (auto rb = GetComponent_(rigid_bodies, ref))
+		rb->continuous_collision_detection = enable ? 1 : 0;
+	else
+		warn("Invalid rigid body");
+}
+
 //
 Collision Scene::CreateCollision() { return {scene_ref, collisions.add_ref({})}; }
 void Scene::DestroyCollision(ComponentRef ref) { collisions.remove_ref(ref); }

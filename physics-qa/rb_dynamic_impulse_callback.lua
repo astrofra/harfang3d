@@ -1,6 +1,7 @@
 -- Physics Impulse
 
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 -- import harfang as hg
 -- from time import sleep
@@ -54,9 +55,15 @@ ground_node = hg.CreatePhysicCube(scene, hg.Vec3(100, 0.02, 100), hg.Translation
 clocks = hg.SceneClocks()
 
 -- scene physics
+scene:ReadyWorldMatrices()
+scene:ComputeWorldMatrices()
 physics = hg.SceneBullet3Physics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
+dump = qa_dump.Create("rb_dynamic_impulse_callback", physics_step, {cube_node_render, cube_node_callback})
+if dump.enabled then
+	math.randomseed(1729)
+end
 
 -- main loop
 keyboard = hg.Keyboard()
@@ -77,27 +84,44 @@ function sleep(n)
 	if n > 0 then os.execute("ping -n " .. tonumber(n+1) .. " localhost > NUL") end
   end
 
-function impulse(ph, node, dt, target_pos) 
+function impulse(ph, node, dt, target_pos, current_pos)
 	cur_velocity = ph:NodeGetLinearVelocity(node)
-	vel_to_target = target_pos - hg.GetT(node:GetTransform():GetWorld())
+	-- Pre-tick callbacks run while SceneUpdateSystems has invalidated the
+	-- cached world matrices. Both paths therefore use the same position
+	-- sampled immediately before the systems update.
+	vel_to_target = target_pos - current_pos
 	vel_to_target = vel_to_target - cur_velocity
 	ph:NodeAddImpulse(node, vel_to_target)
 	ph:NodeWake(node)
 end
 
-function foo(ph, dt) 
-	impulse(ph, cube_node_callback, dt, cube_node_callback_pos)
+callback_count = 0
+
+function foo(ph, dt)
+	callback_count = callback_count + 1
+	impulse(ph, cube_node_callback, dt, cube_node_callback_pos, cube_node_callback_world_pos)
+end
+
+function check_impulse_parity(ph)
+	render_error = hg.GetT(cube_node_render:GetTransform():GetWorld()) - cube_node_render_pos
+	callback_error = hg.GetT(cube_node_callback:GetTransform():GetWorld()) - cube_node_callback_pos
+	position_error = hg.Len(render_error - callback_error)
+	velocity_error = hg.Len(ph:NodeGetLinearVelocity(cube_node_render) - ph:NodeGetLinearVelocity(cube_node_callback))
+	if position_error > 0.0001 or velocity_error > 0.0001 then
+		error(string.format("Pre-tick impulse mismatch: position %.9g, velocity %.9g", position_error, velocity_error))
+	end
 end
 
 physics:SetPreTickCallback(foo)
 
 _ofs = 0.75
 pos_timer = hg.time_from_sec_f(0.0)
+physics_frame_count = 0
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
 	keyboard:Update()
 
-	dt = hg.TickClock()
+	dt = dump.enabled and physics_step or hg.TickClock()
 	view_id = 0
 	lines = {}
 
@@ -109,6 +133,9 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 		cube_node_callback_pos.y = cube_node_render_pos.y
 	end
 
+	cube_node_render_world_pos = hg.GetT(cube_node_render:GetTransform():GetWorld())
+	cube_node_callback_world_pos = hg.GetT(cube_node_callback:GetTransform():GetWorld())
+
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(_ofs,0,0), cube_node_render_pos - hg.Vec3(_ofs,0,0), hg.Color.Red})
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(0,_ofs,0), cube_node_render_pos - hg.Vec3(0,_ofs,0), hg.Color.Red})
 	table.insert(lines, {cube_node_render_pos + hg.Vec3(0,0,_ofs), cube_node_render_pos - hg.Vec3(0,0,_ofs), hg.Color.Red})
@@ -117,9 +144,14 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 	table.insert(lines, {cube_node_callback_pos + hg.Vec3(0,_ofs,0), cube_node_callback_pos - hg.Vec3(0,_ofs,0), hg.Color.Red})
 	table.insert(lines, {cube_node_callback_pos + hg.Vec3(0,0,_ofs), cube_node_callback_pos - hg.Vec3(0,0,_ofs), hg.Color.Red})
 
-	impulse(physics, cube_node_render, dt, cube_node_render_pos)
+	impulse(physics, cube_node_render, dt, cube_node_render_pos, cube_node_render_world_pos)
 
 	hg.SceneUpdateSystems(scene, clocks, dt, physics, physics_step, 8)
+	physics_frame_count = physics_frame_count + 1
+	if dump.enabled then
+		check_impulse_parity(physics)
+	end
+	qa_dump.Capture(dump, physics)
 	view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
 
 	-- debug draw lines
@@ -138,7 +170,14 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 	hg.Frame()
 	hg.UpdateWindow(win)
 
-	sleep(randomFloat(0.0, 0.05))
+	if not dump.enabled then
+		sleep(randomFloat(0.0, 0.05))
+	end
+end
+
+qa_dump.Close(dump)
+if dump.enabled and callback_count ~= physics_frame_count then
+	error(string.format("Pre-tick callback count mismatch: got %d calls for %d physics frames", callback_count, physics_frame_count))
 end
 
 hg.RenderShutdown()

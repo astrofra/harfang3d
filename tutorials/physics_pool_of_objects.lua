@@ -61,6 +61,7 @@ clocks = hg.SceneClocks()
 -- setup physics
 physics = hg.SceneBullet3Physics()
 physics:SceneCreatePhysicsFromAssets(scene)
+physics_backend_name = hg.GetScenePhysicsBackendName()
 
 physic_nodes = {}  -- keep track of dynamically created physic nodes
 
@@ -69,13 +70,14 @@ font = hg.LoadFontFromAssets('font/default.ttf', 32)
 font_program = hg.LoadProgramFromAssets('core/shader/font.vsb', 'core/shader/font.fsb')
 
 text_uniform_values = {hg.MakeUniformSetValue('u_color', hg.Vec4(1, 1, 0.5))}
+physics_name_uniform_values = {hg.MakeUniformSetValue('u_color', hg.Vec4(1, 1, 0, 1))}
 text_render_state = hg.ComputeRenderState(hg.BM_Alpha, hg.DT_Always, hg.FC_Disabled)
 
 -- main loop
 while hg.IsWindowOpen(win) do
 	state = hg.ReadKeyboard()
 
-	if state:Key(hg.K_S) then
+	if state:Key(hg.K_S) then -- and #physic_nodes < 1505 then
 		for i = 1, 7 do
 			hg.SetMaterialValue(mat_objects, 'uDiffuseColor', hg.RandomVec4(0, 1))
 
@@ -115,6 +117,7 @@ while hg.IsWindowOpen(win) do
 
 	-- on-screen usage text
 	hg.SetView2D(view_id, 0, 0, res_x, res_y, -1, 1, hg.CF_Depth, hg.Color.Black, 1, 0)
+	hg.DrawText(view_id, font, physics_backend_name, font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(40, res_y - 60, 0), hg.DTHA_Left, hg.DTVA_Bottom, physics_name_uniform_values, {}, text_render_state)
 	hg.DrawText(view_id, font, 'S: Add object - D: Destruct object', font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(460, res_y - 60, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, {}, text_render_state)
 	hg.DrawText(view_id, font, string.format('%d Object', #physic_nodes), font_program, 'u_tex', 0, hg.Mat4.Identity, hg.Vec3(res_x - 200, res_y - 60, 0), hg.DTHA_Left, hg.DTVA_Bottom, text_uniform_values, {}, text_render_state)
 

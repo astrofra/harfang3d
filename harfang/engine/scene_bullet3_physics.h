@@ -72,10 +72,15 @@ public:
 	void NodeWake(NodeRef ref) const;
 	void NodeWake(const Node &node) const { NodeWake(node.ref); }
 
+	/// Enable or disable Bullet's automatic body deactivation (sleeping).
 	void NodeSetDeactivation(NodeRef ref, bool enable) const;
 	void NodeSetDeactivation(const Node &node, bool enable) const { NodeSetDeactivation(node.ref, enable); }
+	/// Return whether automatic body deactivation is enabled.
 	bool NodeGetDeactivation(NodeRef ref) const;
 	bool NodeGetDeactivation(const Node &node) const { return NodeGetDeactivation(node.ref); }
+	/// Return whether the body is currently sleeping.
+	bool NodeIsSleeping(NodeRef ref) const;
+	bool NodeIsSleeping(const Node &node) const { return NodeIsSleeping(node.ref); }
 
 	void NodeResetWorld(NodeRef ref, const Mat4 &world) const;
 	void NodeResetWorld(const Node &node, const Mat4 &world) const { NodeResetWorld(node.ref, world); }

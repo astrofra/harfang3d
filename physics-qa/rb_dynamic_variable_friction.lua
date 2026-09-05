@@ -1,4 +1,5 @@
 hg = require("harfang")
+qa_dump = require("physics_qa_dump")
 
 function CreatePhysicCubeEx(scene, size, mtx, model_ref, materials, rb_type, mass)
 	local rb_type = rb_type or hg.RBT_Dynamic
@@ -76,12 +77,13 @@ CreatePhysicCubeEx(scene, ground_size, hg.TranslationMat4(hg.Vec3(-2, -0.005, 0)
 CreatePhysicCubeEx(scene, ground_size, hg.TransformationMat4(hg.Vec3(4.5, 2.85, 0), hg.Vec3(0, 0, math.pi/4)), ground_ref, {mat_grey}, hg.RBT_Static, 0)
 
 -- scene physics
-physics = hg.SceneBullet3Physics()
+physics = hg.ScenePhysics()
 physics:SceneCreatePhysicsFromAssets(scene)
 physics_step = hg.time_from_sec_f(1 / 60)
 dt_frame_step = hg.time_from_sec_f(1 / 60)
 
 clocks = hg.SceneClocks()
+dump = qa_dump.Create("rb_dynamic_variable_friction", physics_step, cube_list)
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
@@ -90,7 +92,7 @@ print(">>> Description:\n>>> Drop N bricks with a friction from 0.0 (near) to 1.
 -- main loop
 keyboard = hg.Keyboard()
 
-while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
+while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) and not dump.complete do
     keyboard:Update()
 
     for i=1,#cube_list do
@@ -99,6 +101,7 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
 
     view_id = 0
     hg.SceneUpdateSystems(scene, clocks, dt_frame_step, physics, physics_step, 3)
+    qa_dump.Capture(dump, physics)
     view_id, pass_id = hg.SubmitSceneToPipeline(view_id, scene, hg.IntRect(0, 0, res_x, res_y), true, pipeline, res)
 
     -- Debug physics display
@@ -106,11 +109,15 @@ while not keyboard:Down(hg.K_Escape) and hg.IsWindowOpen(win) do
     hg.SetViewRect(view_id, 0, 0, res_x, res_y)
     hg.SetViewTransform(view_id, view_matrix, projection_matrix)
     rs = hg.ComputeRenderState(hg.BM_Opaque, hg.DT_Disabled, hg.FC_Disabled)
-    physics:RenderCollision(view_id, vtx_line_layout, line_shader, rs, 0)
+    if physics.RenderCollision then
+        physics:RenderCollision(view_id, vtx_line_layout, line_shader, rs, 0)
+    end
 
     hg.Frame()
     hg.UpdateWindow(win)
 end
+
+qa_dump.Close(dump)
 
 scene:Clear()
 scene:GarbageCollect()

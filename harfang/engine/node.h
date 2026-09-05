@@ -197,6 +197,8 @@ struct RigidBody { // 16B on 64 bit
 	void SetFriction(float friction);
 	float GetRollingFriction() const;
 	void SetRollingFriction(float rolling_friction);
+	bool GetContinuousCollisionDetection() const;
+	void SetContinuousCollisionDetection(bool enable);
 
 	intrusive_shared_ptr_st<SceneRef> scene_ref;
 	ComponentRef ref;

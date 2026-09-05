@@ -49,4 +49,3 @@ endif()
 if(HG_BUILD_LEGACY_ARCHIVE)
 	install(TARGETS legacy_archive RUNTIME DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)
 endif()
-
