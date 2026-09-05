@@ -22,9 +22,16 @@ behavior-preserving dense body-storage slice and a solver-hot/body-cold data
 split are implemented and measured. The split improves both the focused
 active-cube median and p95 while preserving byte-identical QA trajectories.
 The complete matrix confirms the gain without a greater-than-10% per-cell
-regression. Compact mutable velocity-constraint storage is implemented and
-accepted. Compact position-constraint storage is selected before
-independent-island parallelism. Solver iteration tuning remains deferred.
+regression. Compact mutable velocity-constraint storage and the compact
+position-constraint working set are implemented and accepted. The final
+position-slice matrix contains 30 guarded Bullet/Tau runs and 300 records,
+with no rejected load window and no Tau cell regressing by 10% against the
+preceding clean matrix. The active sum-time ratio is now 0.959x/0.969x by
+median/p95. Direct attribution shows that position compaction reduces the
+focused position solve by about 1.6% on cuboids and mixed bodies; its main
+near-term value is the cache-friendly per-island input it provides for later
+scheduling. Independent-island parallelism still requires island-size/work
+instrumentation first. Solver iteration tuning remains deferred.
 
 Scope: Harfang's Tau rigid-body backend under
 `harfang/engine/scene_tau_physics.cpp`, using
@@ -1864,12 +1871,81 @@ about +5.0%/+1.7%; cube-only is 15.995/19.587 ms, about +2.8%/+2.9%. Because
 this is a focused same-machine check rather than a new alternating complete
 matrix, the preceding complete matrix remains the formal active comparison.
 
-The scalable all-sleeping slice is accepted. The next bounded performance
-slice remains compact position-constraint storage. Sleep-eligibility triage
+The scalable all-sleeping slice is accepted. Compact position-constraint
+storage is implemented and awaiting a clean timed acceptance. Sleep-eligibility triage
 and benchmark containment form a separate correctness/measurement lane that
 must close before making a five-seed strict all-sleeping claim. Island
 size/work instrumentation still follows position compaction and precedes any
 parallel scheduler.
+
+## 2026-09-04 Compact Position Working-Set Acceptance
+
+Tau now prepares solver-active position constraints in canonical contact
+order before the unchanged three-pass position solve. Hot state occupies one
+aligned 64-byte record: the two body pointers, persistent body-local anchors
+or transient world point, contact normal, penetration, manifold point count,
+and persistence flag. Source-contact indices remain in a cold side stream.
+The iterative loop therefore avoids the larger authoritative contact record
+and the repeated active-contact branch, then publishes final point/depth state
+once before velocity preparation.
+
+Both streams live in `TauStepScratch`, retain their high-water capacity,
+and participate in scratch-growth diagnostics. The scratch-reuse test covers
+initial allocation, stable capacity on subsequent full substeps, and release
+by `ClearNodes`. Manifold share is intentionally evaluated at its historical
+point in the loop. This preserves the exact floating-point evaluation order
+on sensitive piles while retaining the compact layout. Contact equations,
+canonical constraint order, three position iterations, and eight velocity
+iterations are unchanged.
+
+The Release build and all 54 C++ test groups pass. Two fresh 600-sample ring
+chain captures are byte-identical to each other and to the accepted trajectory
+at SHA-256
+`619CC48B2BE46D91E7B4961DDAE9705DEE0CA151F25104CE9DEF7BA3735A557E`;
+the 4.64718 m vertical envelope, 16.4712 m/s peak speed, and zero static drift
+remain unchanged. The impulse-callback capture also retains SHA-256
+`928E478D3CABE1DE0135CFE16D0AAABF8D67288BE76BB22671A7DB51223296E9`,
+0.03582168 m maximum position error, and -0.00141478 m amplitude delta. The
+capsule/sphere, capsule/cuboid, and capsule/capsule contact check passes.
+
+Direct captures from the archived immediately preceding runtime and the new
+runtime are byte-identical for the variable-restitution and 200-chair
+scenarios, with current-script hashes
+`7ACCE6ADE2B2C7D42B845E996A541CC0149794EB2C41E6902166066AC327C69F` and
+`BD95207B09C317063398231C57BA63AE9D03B7D93FCA7E31F9842388B53A1F86`.
+Variable friction and rolling friction retain their established hashes
+`AB3F3F8A17619DD176D3113014985B65F6FCF2C083E6B8BD55A411938F14C310` and
+`3F64B896281FD4DB2A2F6B854C8DB641276D6CCD882026FBE3DA81EE4D1B5561`.
+For the especially sensitive 1,500-mixed seed 5,521,750, all 13 normalized
+60-step diagnostic snapshots are exactly equal to the archived pre-change
+runtime, and the fixed-cooldown measurement returns to the 0.2 us all-sleeping
+timer floor.
+
+The final guarded matrix is archived under
+`build/tau-position-matrix-20260904-final-clean-guarded`. It contains 30
+canonical Bullet/Tau files and 300 measurements. All runs passed on their
+first attempt; no load window was rejected, and no Ollama CPU use was
+observed. Against Bullet, the complete sum-time ratio is 0.503x/0.539x and
+the active sum-time ratio is 0.959x/0.969x by median/p95. Against the preceding
+clean Tau matrix, active sum time changes by +2.7%/+2.7%; no individual Tau
+cell reaches the 10% regression threshold. Much of the settled improvement
+comes from the already accepted scalable all-sleeping path and must not be
+attributed to position storage alone.
+
+A direct attribution-only profile compares the preserved pre-change runtime
+at `install/tau-position-baseline-20260904/hg_lua` with the final runtime. At
+1,500 active cuboids, median `Tau.PositionSolve` changes from approximately
+3.10 ms to 3.05 ms. At 1,500 active mixed bodies it changes from approximately
+1.83 ms to 1.80 ms. Both are about 1.6% improvements, while complete profiled
+step medians remain within about 1%. The compact slice is therefore accepted
+as behavior-safe and a small local improvement rather than claimed as a
+standalone FPS win.
+
+The next stage is island-size/work instrumentation. It should record body,
+contact, constraint, and solver-evaluation distributions per active island,
+plus the fraction of work in the largest island. Those measurements must
+precede any independent-island parallel scheduler and will show whether the
+remaining active cuboid deficit can actually benefit from parallelism.
 
 ## Expected Outcome
 
@@ -1910,8 +1986,11 @@ preserved. Its complete acceptance rerun improves active sum-time to
 greater-than-10% per-cell regression. Compact mutable velocity constraints
 then pass their clean complete acceptance matrix with no greater-than-10%
 absolute Tau regression: active Tau sum time improves by 1.1%/0.9% and active
-cube-only sum time by 0.9%/0.8% in median/p95. The current normalized active
-sum-time result is 0.986x/1.001x. Compact position constraints are selected as
-the next bounded optimization before island-size/work instrumentation and
-parallelism. The active cube-only per-cell stretch gates must pass before
-claiming that Tau beats Bullet without qualification.
+cube-only sum time by 0.9%/0.8% in median/p95. The subsequent compact position
+working set preserves exact sensitive-pile diagnostics and passes its own
+30-run clean matrix without a 10% Tau regression. The current normalized
+active sum-time result is 0.959x/0.969x, while direct position-solve attribution
+improves by about 1.6% on both cuboids and the mixed workload. The next
+bounded step is island-size/work instrumentation before parallelism. The
+active cube-only per-cell stretch gates must pass before claiming that Tau
+beats Bullet without qualification.

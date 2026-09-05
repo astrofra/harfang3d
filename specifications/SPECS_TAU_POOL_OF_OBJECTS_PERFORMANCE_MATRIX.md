@@ -3,12 +3,13 @@
 Date: 2026-09-04
 
 Status: complete for the deterministic physics-only acceptance rerun after
-the split velocity-constraint working set, followed by a focused acceptance
-of the scalable all-sleeping fast path. The 2026-09-02, 2026-09-03, and
-hot/cold matrices are retained below as historical baselines; the current
-physics results and next-stage decision are in the final sections. Controlled
-scene/render results were not rerun because these slices change only Tau's
-internal physics storage and idle-step eligibility.
+the compact position-constraint working set. The final run contains 30
+guarded Bullet/Tau processes and 300 measurements with no load rejection and
+no Tau cell regressing by 10% against the preceding clean matrix. The
+2026-09-02, 2026-09-03, hot/cold, velocity-working-set, and all-sleeping
+results are retained below as historical baselines. Controlled scene/render
+results were not rerun because this slice changes only Tau's internal physics
+storage.
 
 Related roadmap:
 `specifications/SPECS_TAU_POOL_OF_OBJECTS_PERFORMANCE_ROADMAP.md`.
@@ -19,21 +20,20 @@ Tau now beats Bullet on the roadmap's representative 1,500-body
 mixed-workload gates
 without reducing the solver's three position or eight velocity iterations:
 
-- active physics p95: 12.811 ms for Tau versus 14.558 ms for Bullet, or
-  **0.880x**;
-- settled physics p95: 3.064 ms for Tau versus 14.911 ms for Bullet, or
-  **0.205x**;
+- active physics p95: 13.063 ms for Tau versus 15.157 ms for Bullet, or
+  **0.862x**;
+- settled physics p95: 3.168 ms for Tau versus 16.386 ms for Bullet, or
+  **0.193x**;
 - rendered active p95: 24.616 ms for Tau versus 26.840 ms for Bullet, or
   **0.917x** in the retained 2026-09-03 control;
 - rendered settled p95: 16.829 ms for Tau versus 27.661 ms for Bullet, or
   **0.608x** in the retained 2026-09-03 control.
 
-Across all 30 physics cells, Tau's sum-time median ratio is **0.560x** and its
-equal-cell median ratio is **0.626x**. Active sum-time parity is retained at
-0.986x by median and 1.001x by p95. The remaining exception is active
-cube-only physics, which is 1.12x to 1.61x slower by median. The stretch goal
-therefore remains open because the same six median cells and seven p95 cells
-exceed 1.10x.
+Across all 30 physics cells, Tau's sum-time median ratio is **0.503x** and its
+equal-cell median ratio is **0.588x**. Active sum-time is **0.959x** by median
+and **0.969x** by p95. The remaining exception is active cube-only physics,
+which is 1.11x to 1.55x slower by median. The stretch goal therefore remains
+open because six median cells and seven p95 cells exceed 1.10x.
 
 All historical `settled` rows use a fixed 600-step cooldown. They are useful
 and reproducible hot/cold workload samples, but the label does not prove that
@@ -777,3 +777,103 @@ sleep/contact diagnostics, and benchmark containment must classify or prevent
 escaped bodies before a five-seed strict all-sleeping acceptance can be
 claimed. Island work-size instrumentation remains next after position
 compaction and before parallelism.
+
+## 2026-09-04 Compact Position Working-Set Acceptance Rerun
+
+The final position working set packs all hot state into one aligned 64-byte
+record per solver-active contact. Source-contact indices are cold, scratch
+capacity is retained, and final state is published once before velocity
+preparation. Manifold share remains evaluated inside the loop at its historical
+location. Solver order, equations, three position passes, and eight velocity
+passes are unchanged.
+
+The artifact directory is
+`build/tau-position-matrix-20260904-final-clean-guarded`. The protocol remains
+five seeds, 120 samples after 10 warm-up steps, a fixed 600-step cooldown, five
+body counts, three shape populations, and alternating backend order. Every one
+of the 30 canonical runs passed on attempt one. The process-delta guard saw no
+Ollama activity and rejected no run. The directory contains 300 canonical
+records; profiling and contact diagnostics were disabled for this comparison.
+
+### Compact Position Active Window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.363 ms | 0.349 ms | 0.961x | 0.958 ms | 1.218 ms | 1.272x |
+| 250 | cube | 0.380 ms | 0.423 ms | 1.114x | 0.915 ms | 1.794 ms | 1.959x |
+| 250 | sphere | 0.329 ms | 0.280 ms | 0.850x | 0.811 ms | 0.615 ms | 0.759x |
+| 500 | mixed | 1.264 ms | 1.538 ms | 1.217x | 2.583 ms | 2.962 ms | 1.147x |
+| 500 | cube | 1.347 ms | 2.023 ms | 1.502x | 2.503 ms | 4.556 ms | 1.820x |
+| 500 | sphere | 1.073 ms | 0.899 ms | 0.838x | 2.151 ms | 1.603 ms | 0.745x |
+| 1,000 | mixed | 5.606 ms | 5.520 ms | 0.985x | 8.049 ms | 7.427 ms | 0.923x |
+| 1,000 | cube | 5.281 ms | 8.178 ms | 1.549x | 7.470 ms | 11.795 ms | 1.579x |
+| 1,000 | sphere | 4.671 ms | 3.183 ms | 0.682x | 7.301 ms | 4.079 ms | 0.559x |
+| 1,500 | mixed | 12.470 ms | 10.844 ms | 0.870x | 15.157 ms | 13.063 ms | 0.862x |
+| 1,500 | cube | 11.593 ms | 16.193 ms | 1.397x | 13.250 ms | 19.648 ms | 1.483x |
+| 1,500 | sphere | 10.905 ms | 6.416 ms | 0.588x | 13.506 ms | 7.654 ms | 0.567x |
+| 2,000 | mixed | 21.784 ms | 17.166 ms | 0.788x | 25.160 ms | 19.638 ms | 0.781x |
+| 2,000 | cube | 18.471 ms | 25.277 ms | 1.368x | 20.446 ms | 28.683 ms | 1.403x |
+| 2,000 | sphere | 17.579 ms | 10.217 ms | 0.581x | 20.359 ms | 11.592 ms | 0.569x |
+
+### Compact Position Settled Window
+
+| Bodies | Shapes | Bullet median | Tau median | Tau/Bullet | Bullet p95 | Tau p95 | Tau/Bullet p95 |
+|---:|---|---:|---:|---:|---:|---:|---:|
+| 250 | mixed | 0.792 ms | 0.235 ms | 0.297x | 0.820 ms | 0.247 ms | 0.302x |
+| 250 | cube | 0.073 ms | 0.0002 ms | 0.003x | 0.077 ms | 0.0003 ms | 0.004x |
+| 250 | sphere | 0.638 ms | 0.242 ms | 0.380x | 0.666 ms | 0.260 ms | 0.390x |
+| 500 | mixed | 2.274 ms | 0.598 ms | 0.263x | 2.574 ms | 0.620 ms | 0.241x |
+| 500 | cube | 2.545 ms | 0.0002 ms | 0.000x | 2.867 ms | 0.0003 ms | 0.000x |
+| 500 | sphere | 1.518 ms | 0.442 ms | 0.291x | 1.658 ms | 0.490 ms | 0.296x |
+| 1,000 | mixed | 7.610 ms | 1.593 ms | 0.209x | 8.312 ms | 1.706 ms | 0.205x |
+| 1,000 | cube | 7.935 ms | 1.942 ms | 0.245x | 8.569 ms | 2.098 ms | 0.245x |
+| 1,000 | sphere | 5.718 ms | 0.0002 ms | 0.000x | 6.573 ms | 0.0003 ms | 0.000x |
+| 1,500 | mixed | 15.296 ms | 2.782 ms | 0.182x | 16.386 ms | 3.168 ms | 0.193x |
+| 1,500 | cube | 15.039 ms | 3.513 ms | 0.234x | 15.790 ms | 3.995 ms | 0.253x |
+| 1,500 | sphere | 12.076 ms | 0.0002 ms | 0.000x | 12.601 ms | 0.0003 ms | 0.000x |
+| 2,000 | mixed | 22.988 ms | 0.0002 ms | 0.000x | 27.312 ms | 0.0003 ms | 0.000x |
+| 2,000 | cube | 22.282 ms | 5.636 ms | 0.253x | 23.334 ms | 6.446 ms | 0.276x |
+| 2,000 | sphere | 19.345 ms | 0.0002 ms | 0.000x | 20.289 ms | 0.0003 ms | 0.000x |
+
+The sub-microsecond entries are the median of seeds that reached the cached
+all-sleeping path during the fixed cooldown. As elsewhere in this document,
+`settled` is still a fixed-duration phase; individual repetitions can remain
+active, so these rows are not a five-seed strict-sleep claim.
+
+### Compact Position Aggregate Views
+
+| Scope | Cells | Equal-cell median ratio | Equal-cell p95 ratio | Sum-time median ratio | Sum-time p95 ratio |
+|---|---:|---:|---:|---:|---:|
+| complete suite | 30 | 0.588x | 0.628x | 0.503x | 0.539x |
+| active | 15 | 1.019x | 1.095x | 0.959x | 0.969x |
+| settled | 15 | 0.157x | 0.160x | 0.125x | 0.129x |
+
+Against the preceding clean split-velocity Tau matrix, active sum time changes
+by +2.7%/+2.7% in median/p95. The largest individual active changes are +4.1%
+median and +5.2% p95; no active or settled Tau cell reaches the 10% rejection
+threshold. Settled aggregate improvement includes the scalable all-sleeping
+fast path implemented after the preceding full matrix and is not an isolated
+effect of position compaction.
+
+### Compact Position Attribution And Decision
+
+The preserved pre-position runtime and final runtime were profiled directly at
+1,500 active bodies, with three repetitions and the same seeds:
+
+| Tau workload | Position solve before | Position solve after | Result |
+|---|---:|---:|---:|
+| cube | about 3.10 ms | about 3.05 ms | about 1.6% faster |
+| mixed | about 1.83 ms | about 1.80 ms | about 1.6% faster |
+
+Complete profiled step medians remain within about 1%. This slice is
+accepted because it preserves behavior, keeps every matrix cell inside the
+regression budget, and provides a compact sequential input for future
+per-island work partitioning. It is not claimed as a standalone frame-rate
+win.
+
+The next bounded task is island-size/work instrumentation: per-active-island
+body, contact, position-constraint, velocity-constraint, and evaluation counts,
+plus largest-island work share and distributions. Parallel independent-island
+execution should be designed only after those measurements show enough work
+outside the largest dense-pile island. Active cube-only performance remains
+the principal stretch gate.

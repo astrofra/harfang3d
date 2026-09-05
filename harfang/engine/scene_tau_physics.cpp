@@ -283,6 +283,21 @@ struct TauContactConstraint {
 	bool persistent{false};
 };
 
+// Position solving only needs a subset of the source contact. Pack that hot
+// state into one cache line and keep the source index in a cold side stream.
+// Persistent contacts store two body-local anchors; transient contacts store
+// their fixed world point in local_point_or_world_point_a.
+struct alignas(64) TauPositionConstraint {
+	TauNode *node_a{nullptr};
+	TauNode *node_b{nullptr};
+	Vec3 local_point_or_world_point_a{Vec3::Zero};
+	Vec3 local_point_b{Vec3::Zero};
+	Vec3 normal{Vec3::Up};
+	float penetration{0.f};
+	uint8_t manifold_point_count{1};
+	bool persistent{false};
+};
+
 // Position solving is complete before this cache is prepared. Keep immutable
 // velocity data in a compact sequential record and isolate the fields dirtied
 // by every solver pass in a second stream. The larger source contact is reached
@@ -302,9 +317,11 @@ struct alignas(16) TauVelocityImpulse {
 	float normal{0.f};
 };
 
+static_assert(sizeof(TauPositionConstraint) == 64, "Tau position constraint must occupy one cache line");
 static_assert(sizeof(TauVelocityConstraint) == 64, "Tau immutable velocity constraint must occupy one cache line");
 static_assert(sizeof(TauVelocityImpulse) == 16, "Tau mutable velocity impulse must occupy one quarter cache line");
 
+using TauPositionConstraintStream = std::vector<TauPositionConstraint, TauAlignedAllocator<TauPositionConstraint, 64>>;
 using TauVelocityConstraintStream = std::vector<TauVelocityConstraint, TauAlignedAllocator<TauVelocityConstraint, 64>>;
 using TauVelocityImpulseStream = std::vector<TauVelocityImpulse, TauAlignedAllocator<TauVelocityImpulse, 16>>;
 
@@ -2152,11 +2169,6 @@ float ComputeTauAngularMassTerm(const TauNode &node, const Vec3 &arm, const Vec3
 	return Dot(axis, Cross(GetTauInverseInertiaWorld(node) * Cross(arm, axis), arm));
 }
 
-float ComputeTauConstraintMass(const TauContactConstraint &contact, const Vec3 &arm_a, const Vec3 &arm_b, const Vec3 &axis) {
-	const float inverse_mass = GetTauInverseMass(*contact.node_a) + GetTauInverseMass(*contact.node_b);
-	return inverse_mass + ComputeTauAngularMassTerm(*contact.node_a, arm_a, axis) + ComputeTauAngularMassTerm(*contact.node_b, arm_b, axis);
-}
-
 float ComputeTauConstraintMass(
 	const TauNode &node_a, const Vec3 &arm_a, const TauNode &node_b, const Vec3 &arm_b, const Vec3 &axis) {
 	const float inverse_mass = GetTauInverseMass(node_a) + GetTauInverseMass(node_b);
@@ -2221,6 +2233,8 @@ struct TauStepScratch {
 	std::vector<TauBodyProxy> bodies;
 	std::vector<MinMax> body_bounds;
 	std::vector<TauContactConstraint> contacts;
+	TauPositionConstraintStream position_constraints;
+	std::vector<size_t> position_contact_indices;
 	TauVelocityConstraintStream velocity_constraints;
 	TauVelocityImpulseStream velocity_impulses;
 	std::vector<float> velocity_restitution_velocities;
@@ -2239,8 +2253,9 @@ struct TauStepScratch {
 	std::unordered_set<uint32_t> sleeping_island_ids;
 	bool has_nonzero_rolling_friction{false};
 
-	std::array<size_t, 25> GetCapacitySnapshot() const {
-		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), velocity_constraints.capacity(), velocity_impulses.capacity(),
+	std::array<size_t, 27> GetCapacitySnapshot() const {
+		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), position_constraints.capacity(),
+			position_contact_indices.capacity(), velocity_constraints.capacity(), velocity_impulses.capacity(),
 			velocity_restitution_velocities.capacity(), velocity_contact_indices.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
 			islands.bodies.capacity(), islands.refs.capacity(), islands.parents.capacity(), islands.ranks.capacity(), wake_roots.capacity(),
 			wake_cohorts.bucket_count(), ready_islands.bodies.capacity(), ready_islands.refs.capacity(), ready_islands.parents.capacity(),
@@ -2255,6 +2270,7 @@ void StoreTauScratchCapacityStats(const TauStepScratch &scratch, tau_internal::T
 	reuse_stats.body_proxy_capacity = scratch.bodies.capacity();
 	reuse_stats.candidate_capacity = scratch.body_pairs.capacity();
 	reuse_stats.contact_capacity = scratch.contacts.capacity();
+	reuse_stats.position_constraint_capacity = scratch.position_constraints.capacity();
 	reuse_stats.velocity_constraint_capacity = scratch.velocity_constraints.capacity();
 	reuse_stats.island_body_capacity = scratch.islands.bodies.capacity();
 }
@@ -2681,35 +2697,79 @@ void UpdateTauIslandSleeping(TauNodeStore &nodes, TauIslandGraph &graph, const s
 	diagnostics.sleeping_islands = sleeping_island_ids.size();
 }
 
-void SolveTauPositionConstraints(std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics) {
+Vec3 RefreshTauPositionConstraintPoint(TauPositionConstraint &constraint) {
+	if (!constraint.persistent)
+		return constraint.local_point_or_world_point_a;
+	const Vec3 anchor_a = TauBodyLocalAnchorToWorld(*constraint.node_a, constraint.local_point_or_world_point_a);
+	const Vec3 anchor_b = TauBodyLocalAnchorToWorld(*constraint.node_b, constraint.local_point_b);
+	const Vec3 point = (anchor_a + anchor_b) * 0.5f;
+	constraint.penetration = std::max(-Dot(anchor_b - anchor_a, constraint.normal), 0.f);
+	return point;
+}
+
+void PrepareTauPositionConstraints(const std::vector<TauContactConstraint> &contacts,
+	TauPositionConstraintStream &position_constraints, std::vector<size_t> &position_contact_indices) {
+	position_constraints.clear();
+	position_contact_indices.clear();
+	position_constraints.reserve(contacts.size());
+	position_contact_indices.reserve(contacts.size());
+	for (size_t contact_index = 0; contact_index < contacts.size(); ++contact_index) {
+		const auto &contact = contacts[contact_index];
+		if (!IsTauContactSolverActive(contact))
+			continue;
+
+		TauPositionConstraint prepared;
+		prepared.node_a = contact.node_a;
+		prepared.node_b = contact.node_b;
+		prepared.local_point_or_world_point_a = contact.persistent ? contact.local_point_a : contact.point;
+		prepared.local_point_b = contact.local_point_b;
+		prepared.normal = contact.normal;
+		prepared.penetration = contact.penetration;
+		prepared.manifold_point_count = contact.manifold_point_count;
+		prepared.persistent = contact.persistent;
+		position_constraints.push_back(prepared);
+		position_contact_indices.push_back(contact_index);
+	}
+}
+
+void SolveTauPositionConstraints(std::vector<TauContactConstraint> &contacts, TauContactDiagnostics &diagnostics,
+	TauPositionConstraintStream &position_constraints, std::vector<size_t> &position_contact_indices) {
+	PrepareTauPositionConstraints(contacts, position_constraints, position_contact_indices);
+	diagnostics.position_constraint_evaluations += position_constraints.size() * k_tau_position_iterations;
 	for (int iteration = 0; iteration < k_tau_position_iterations; ++iteration) {
-		for (auto &contact : contacts) {
-			if (!IsTauContactSolverActive(contact))
-				continue;
-			++diagnostics.position_constraint_evaluations;
-			RefreshTauConstraintPoint(contact);
-			const float depth = std::max(contact.penetration - k_tau_position_slop, 0.f);
+		for (auto &constraint : position_constraints) {
+			const Vec3 point = RefreshTauPositionConstraintPoint(constraint);
+			const float depth = std::max(constraint.penetration - k_tau_position_slop, 0.f);
 			if (depth <= 0.f)
 				continue;
 
-			const Vec3 arm_a = contact.point - contact.node_a->position;
-			const Vec3 arm_b = contact.point - contact.node_b->position;
-			const float constraint_mass = ComputeTauConstraintMass(contact, arm_a, arm_b, contact.normal);
+			const Vec3 arm_a = point - constraint.node_a->position;
+			const Vec3 arm_b = point - constraint.node_b->position;
+			const float constraint_mass =
+				ComputeTauConstraintMass(*constraint.node_a, arm_a, *constraint.node_b, arm_b, constraint.normal);
 			if (constraint_mass <= k_tau_collision_epsilon)
 				continue;
 
-			const float share = 1.f / float(std::max<uint8_t>(contact.manifold_point_count, 1));
+			const float share = 1.f / float(std::max<uint8_t>(constraint.manifold_point_count, 1));
 			const float correction_magnitude = k_tau_position_correction * depth * share / constraint_mass;
-			const Vec3 correction_impulse = contact.normal * correction_magnitude;
-			ApplyTauPositionImpulse(*contact.node_a, -correction_impulse, arm_a);
-			ApplyTauPositionImpulse(*contact.node_b, correction_impulse, arm_b);
-			if (!contact.persistent)
-				contact.penetration = std::max(0.f, contact.penetration - depth * k_tau_position_correction * share);
+			const Vec3 correction_impulse = constraint.normal * correction_magnitude;
+			ApplyTauPositionImpulse(*constraint.node_a, -correction_impulse, arm_a);
+			ApplyTauPositionImpulse(*constraint.node_b, correction_impulse, arm_b);
+			if (!constraint.persistent)
+				constraint.penetration =
+					std::max(0.f, constraint.penetration - depth * k_tau_position_correction * share);
 		}
 	}
 
+	for (size_t i = 0; i < position_constraints.size(); ++i) {
+		auto &constraint = position_constraints[i];
+		auto &contact = contacts[position_contact_indices[i]];
+		contact.point = RefreshTauPositionConstraintPoint(constraint);
+		contact.penetration = constraint.penetration;
+	}
 	for (auto &contact : contacts) {
-		RefreshTauConstraintPoint(contact);
+		if (!IsTauContactSolverActive(contact))
+			RefreshTauConstraintPoint(contact);
 		diagnostics.max_post_solve_penetration = std::max(diagnostics.max_post_solve_penetration, contact.penetration);
 	}
 }
@@ -3519,11 +3579,12 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.cuboid_coherent_points_reused)
 			 .arg(diagnostics.cuboid_coherent_fallbacks)
 			 .str();
-	message += format("scratch(growths=%1 cap=%2/%3/%4/%5/%6) ")
+	message += format("scratch(growths=%1 cap=%2/%3/%4/%5/%6/%7) ")
 			 .arg(reuse_stats.scratch_growths)
 			 .arg(reuse_stats.body_proxy_capacity)
 			 .arg(reuse_stats.candidate_capacity)
 			 .arg(reuse_stats.contact_capacity)
+			 .arg(reuse_stats.position_constraint_capacity)
 			 .arg(reuse_stats.velocity_constraint_capacity)
 			 .arg(reuse_stats.island_body_capacity)
 			 .str();
@@ -3624,7 +3685,8 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	}
 	{
 		TauProfileSection position_profile("Tau.PositionSolve");
-		SolveTauPositionConstraints(contacts, diagnostics);
+		SolveTauPositionConstraints(
+			contacts, diagnostics, scratch.position_constraints, scratch.position_contact_indices);
 	}
 	{
 		TauProfileSection velocity_profile("Tau.VelocitySolve");

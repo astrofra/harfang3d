@@ -53,6 +53,7 @@ struct TauStepReuseStats {
 	size_t body_proxy_capacity{0};
 	size_t candidate_capacity{0};
 	size_t contact_capacity{0};
+	size_t position_constraint_capacity{0};
 	size_t velocity_constraint_capacity{0};
 	size_t island_body_capacity{0};
 };
