@@ -49,6 +49,10 @@ struct TauStepReuseStats {
 	size_t rolling_friction_contact_evaluations{0};
 	size_t all_sleeping_substeps_skipped{0};
 	size_t all_sleeping_body_checks{0};
+	size_t ccd_body_sweeps{0};
+	size_t ccd_shape_sweeps{0};
+	size_t ccd_triangle_tests{0};
+	size_t ccd_impacts{0};
 	size_t scratch_growths{0};
 	size_t body_proxy_capacity{0};
 	size_t candidate_capacity{0};
@@ -164,6 +168,7 @@ struct TauNodeCold {
 	float friction{0.f};
 	float restitution{0.f};
 	float rolling_friction{0.f};
+	bool continuous_collision_detection{false};
 	float sleep_timer{0.f};
 	uint32_t sleep_island_id{0};
 	uint32_t island_index{0xffffffff};

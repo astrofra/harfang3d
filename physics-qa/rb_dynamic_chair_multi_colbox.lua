@@ -75,6 +75,7 @@ all_nodes = scene:GetAllNodes()
 for i = 0, all_nodes:size() - 1 do
     node = all_nodes:at(i)
     if node:HasRigidBody() and node:GetRigidBody():GetType() == hg.RBT_Dynamic then
+        node:GetRigidBody():SetContinuousCollisionDetection(true)
         table.insert(chair_nodes, node)
     end
 end
@@ -90,7 +91,7 @@ dump = qa_dump.Create("rb_dynamic_chair_multi_colbox", physics_step, chair_nodes
 
 -- description
 hg.SetLogLevel(hg.LL_Normal)
-print(">>> Description:\n>>> Drop vertically 200 chairs, made of 6 collision boxes each")
+print(">>> Description:\n>>> Drop vertically 200 CCD-enabled chairs, made of 6 collision boxes each")
 
 -- main loop
 keyboard = hg.Keyboard()

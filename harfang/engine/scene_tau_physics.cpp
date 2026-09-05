@@ -156,6 +156,8 @@ static constexpr float k_tau_wake_support_translation = 0.02f;
 // Quaternion dot is cos(half-angle): cos(1 degree) detects a 2-degree rotation.
 static constexpr float k_tau_wake_support_orientation_dot = 0.999847695f;
 static constexpr uint8_t k_tau_wake_unsupported_steps = 2;
+static constexpr uint8_t k_tau_ccd_max_impacts = 8;
+static constexpr float k_tau_ccd_separation = 0.0005f;
 
 bool TauProfilingEnabled() {
 	static const bool enabled = [] {
@@ -351,6 +353,7 @@ struct TauContactDiagnostics {
 	size_t zero_friction_constraints{0}, nonzero_friction_constraints{0};
 	size_t rolling_friction_pass_skips{0};
 	size_t tracked_contact_evaluations{0};
+	size_t ccd_body_sweeps{0}, ccd_shape_sweeps{0}, ccd_triangle_tests{0}, ccd_impacts{0};
 	size_t awake_bodies{0}, sleep_candidate_bodies{0}, sleeping_bodies{0};
 	size_t contact_islands{0}, sleeping_islands{0}, bodies_woken{0}, bodies_put_to_sleep{0}, sleeping_solver_contacts{0};
 	size_t support_wake_cohorts{0}, support_pose_wake_cohorts{0}, support_loss_wake_cohorts{0};
@@ -1232,6 +1235,143 @@ Vec3 GetTauFaceCenter(const OBB &obb, const Vec3 &direction) {
 
 	return obb.pos + axis_x * face_offset(Dot(direction, axis_x), half_extents.x) + axis_y * face_offset(Dot(direction, axis_y), half_extents.y) +
 		axis_z * face_offset(Dot(direction, axis_z), half_extents.z);
+}
+
+float GetTauObbProjectionRadius(const OBB &obb, const Vec3 &axis) {
+	const Vec3 half_extents = Abs(obb.scl) * 0.5f;
+	return half_extents.x * Abs(Dot(GetTauObbAxis(obb, 0), axis)) + half_extents.y * Abs(Dot(GetTauObbAxis(obb, 1), axis)) +
+		half_extents.z * Abs(Dot(GetTauObbAxis(obb, 2), axis));
+}
+
+struct TauLinearSweepInterval {
+	float enter{-std::numeric_limits<float>::max()};
+	float exit{1.f};
+	float greatest_initial_separation{-std::numeric_limits<float>::max()};
+	Vec3 enter_axis{Vec3::Zero};
+};
+
+bool UpdateTauLinearSweepInterval(const OBB &moving, const Vec3 &displacement, float target_min, float target_max, Vec3 axis,
+	TauLinearSweepInterval &interval) {
+	const float axis_len2 = Len2(axis);
+	if (axis_len2 <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+		return true;
+	axis /= Sqrt(axis_len2);
+
+	const float moving_center = Dot(moving.pos, axis);
+	const float moving_radius = GetTauObbProjectionRadius(moving, axis);
+	const float moving_min = moving_center - moving_radius;
+	const float moving_max = moving_center + moving_radius;
+	const float initial_separation = std::max(target_min - moving_max, moving_min - target_max);
+	interval.greatest_initial_separation = std::max(interval.greatest_initial_separation, initial_separation);
+
+	const float speed = Dot(displacement, axis);
+	if (Abs(speed) <= k_tau_collision_epsilon)
+		return initial_separation <= k_tau_collision_epsilon;
+
+	float axis_enter = (target_min - moving_max) / speed;
+	float axis_exit = (target_max - moving_min) / speed;
+	if (axis_enter > axis_exit)
+		std::swap(axis_enter, axis_exit);
+	if (axis_enter > interval.enter) {
+		interval.enter = axis_enter;
+		interval.enter_axis = axis;
+	}
+	interval.exit = std::min(interval.exit, axis_exit);
+	return interval.enter <= interval.exit + k_tau_collision_epsilon && interval.exit >= -k_tau_collision_epsilon;
+}
+
+bool FinalizeTauLinearSweep(const OBB &moving, const Vec3 &displacement, const Vec3 &target_center, float max_toi,
+	const TauLinearSweepInterval &interval, float &toi, Vec3 &normal) {
+	if (interval.enter > max_toi + k_tau_collision_epsilon || interval.exit < -k_tau_collision_epsilon ||
+		Len2(interval.enter_axis) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+		return false;
+	// Existing penetrations belong to the discrete position solver. CCD accepts
+	// initial contact within the regular slop so gravity cannot step through a
+	// zero-thickness triangle on the next frame.
+	if (interval.enter < 0.f && interval.greatest_initial_separation < -k_tau_position_slop)
+		return false;
+
+	toi = Clamp(interval.enter, 0.f, max_toi);
+	normal = interval.enter_axis;
+	const Vec3 moving_center = moving.pos + displacement * toi;
+	if (Dot(target_center - moving_center, normal) < 0.f)
+		normal = -normal;
+	return true;
+}
+
+bool ComputeTauLinearObbObbSweep(
+	const OBB &moving_, const Vec3 &displacement, const OBB &target_, float max_toi, float &toi, Vec3 &normal) {
+	const OBB moving = NormalizeTauObb(moving_);
+	const OBB target = NormalizeTauObb(target_);
+	TauLinearSweepInterval interval;
+	interval.exit = max_toi;
+
+	std::array<Vec3, 15> axes;
+	for (int i = 0; i < 3; ++i) {
+		axes[i] = GetTauObbAxis(moving, i);
+		axes[3 + i] = GetTauObbAxis(target, i);
+	}
+	int axis_index = 6;
+	for (int i = 0; i < 3; ++i)
+		for (int j = 0; j < 3; ++j)
+			axes[axis_index++] = Cross(GetTauObbAxis(moving, i), GetTauObbAxis(target, j));
+
+	for (const Vec3 &axis_ : axes) {
+		const float axis_len2 = Len2(axis_);
+		if (axis_len2 <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+			continue;
+		const Vec3 axis = axis_ / Sqrt(axis_len2);
+		const float target_center = Dot(target.pos, axis);
+		const float target_radius = GetTauObbProjectionRadius(target, axis);
+		if (!UpdateTauLinearSweepInterval(
+				moving, displacement, target_center - target_radius, target_center + target_radius, axis, interval))
+			return false;
+	}
+	if (!FinalizeTauLinearSweep(moving, displacement, target.pos, max_toi, interval, toi, normal))
+		return false;
+	return true;
+}
+
+bool ComputeTauLinearObbTriangleSweep(const OBB &moving_, const Vec3 &displacement, const CollisionTriangle &triangle, float max_toi,
+	float &toi, Vec3 &normal) {
+	const OBB moving = NormalizeTauObb(moving_);
+	const Vec3 edge_ab = triangle.b - triangle.a;
+	const Vec3 edge_bc = triangle.c - triangle.b;
+	const Vec3 edge_ca = triangle.a - triangle.c;
+	const Vec3 triangle_normal = Cross(edge_ab, triangle.c - triangle.a);
+	if (Len2(triangle_normal) <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+		return false;
+
+	std::array<Vec3, 13> axes;
+	for (int i = 0; i < 3; ++i)
+		axes[i] = GetTauObbAxis(moving, i);
+	axes[3] = triangle_normal;
+	int axis_index = 4;
+	for (int i = 0; i < 3; ++i) {
+		const Vec3 obb_axis = GetTauObbAxis(moving, i);
+		axes[axis_index++] = Cross(obb_axis, edge_ab);
+		axes[axis_index++] = Cross(obb_axis, edge_bc);
+		axes[axis_index++] = Cross(obb_axis, edge_ca);
+	}
+
+	TauLinearSweepInterval interval;
+	interval.exit = max_toi;
+	for (const Vec3 &axis_ : axes) {
+		const float axis_len2 = Len2(axis_);
+		if (axis_len2 <= k_tau_collision_epsilon * k_tau_collision_epsilon)
+			continue;
+		const Vec3 axis = axis_ / Sqrt(axis_len2);
+		const float projection_a = Dot(triangle.a, axis);
+		const float projection_b = Dot(triangle.b, axis);
+		const float projection_c = Dot(triangle.c, axis);
+		if (!UpdateTauLinearSweepInterval(moving, displacement, std::min({projection_a, projection_b, projection_c}),
+				std::max({projection_a, projection_b, projection_c}), axis, interval))
+			return false;
+	}
+	const Vec3 triangle_center = (triangle.a + triangle.b + triangle.c) / 3.f;
+	if (!FinalizeTauLinearSweep(moving, displacement, triangle_center, max_toi, interval, toi, normal))
+		return false;
+	return true;
 }
 
 Vec3 WorldToTauObbLocal(const OBB &obb, const Vec3 &point) {
@@ -2166,6 +2306,138 @@ float ComputeTauConstraintMass(
 	return inverse_mass + ComputeTauAngularMassTerm(node_a, arm_a, axis) + ComputeTauAngularMassTerm(node_b, arm_b, axis);
 }
 
+struct TauContinuousHit {
+	const TauCollisionShape *moving_shape{nullptr};
+	const TauNode *target_node{nullptr};
+	const TauCollisionShape *target_shape{nullptr};
+	float toi{1.f};
+	Vec3 normal{Vec3::Zero}; // moving body toward static target
+	bool valid{false};
+};
+
+void ConsiderTauContinuousHit(const TauCollisionShape &moving_shape, const TauNode &target_node, const TauCollisionShape &target_shape,
+	const Vec3 &moving_velocity, float toi, const Vec3 &normal, TauContinuousHit &hit) {
+	// A body resting on one surface must still be swept against the other
+	// surfaces it can reach during the remainder of the substep.
+	if (Dot(moving_velocity, normal) <= k_tau_collision_epsilon)
+		return;
+	if (hit.valid && toi >= hit.toi - k_tau_collision_epsilon)
+		return;
+	hit.moving_shape = &moving_shape;
+	hit.target_node = &target_node;
+	hit.target_shape = &target_shape;
+	hit.toi = toi;
+	hit.normal = normal;
+	hit.valid = true;
+}
+
+bool FindTauEarliestContinuousHit(const TauNode &moving_node, const std::vector<const TauNode *> &static_targets, const Vec3 &displacement,
+	TauContinuousHit &hit, TauContactDiagnostics &diagnostics) {
+	for (const TauCollisionShape &moving_shape : moving_node.cold->shapes) {
+		if (moving_shape.type != CT_Cube)
+			continue;
+		++diagnostics.ccd_shape_sweeps;
+		const OBB moving_obb = BuildTauWorldOBB(moving_node, moving_shape);
+		const OBB moved_obb(moving_obb.pos + displacement, moving_obb.scl, moving_obb.rot);
+		const MinMax swept_bounds = Union(MinMaxFromOBB(moving_obb), MinMaxFromOBB(moved_obb));
+
+		for (const TauNode *target : static_targets) {
+			const TauNode &target_node = *target;
+			for (const TauCollisionShape &target_shape : target_node.cold->shapes) {
+				if (target_shape.type == CT_Cube) {
+					const OBB target_obb = BuildTauWorldOBB(target_node, target_shape);
+					if (!Overlap(swept_bounds, MinMaxFromOBB(target_obb)))
+						continue;
+					float toi;
+					Vec3 normal;
+					if (ComputeTauLinearObbObbSweep(moving_obb, displacement, target_obb, hit.toi, toi, normal))
+						ConsiderTauContinuousHit(moving_shape, target_node, target_shape, moving_node.linear_velocity, toi, normal, hit);
+				} else if (target_shape.type == CT_Mesh && target_shape.collision_geometry) {
+					const Mat4 local_to_world = ComposeTauWorld(target_node) * target_shape.local_transform;
+					const MinMax mesh_world_bounds = local_to_world * target_shape.collision_geometry->bounds;
+					if (!Overlap(swept_bounds, mesh_world_bounds))
+						continue;
+					Mat4 world_to_local;
+					if (!Inverse(local_to_world, world_to_local))
+						continue;
+					const MinMax local_swept_bounds = world_to_local * swept_bounds;
+					TraverseBVH(target_shape.collision_geometry->triangle_bvh, local_swept_bounds, [&](uint32_t triangle_index) {
+						++diagnostics.ccd_triangle_tests;
+						const CollisionTriangle &local_triangle = target_shape.collision_geometry->triangles[triangle_index];
+						const CollisionTriangle world_triangle{
+							local_to_world * local_triangle.a, local_to_world * local_triangle.b, local_to_world * local_triangle.c};
+						float toi;
+						Vec3 normal;
+						if (ComputeTauLinearObbTriangleSweep(moving_obb, displacement, world_triangle, hit.toi, toi, normal))
+							ConsiderTauContinuousHit(
+								moving_shape, target_node, target_shape, moving_node.linear_velocity, toi, normal, hit);
+						return true;
+					});
+				}
+			}
+		}
+	}
+	return hit.valid;
+}
+
+void AdvanceTauBody(TauNode &node, float duration) {
+	if (duration <= 0.f)
+		return;
+	node.position += node.linear_velocity * duration;
+	IntegrateTauOrientation(node, node.angular_velocity * duration);
+}
+
+bool ResolveTauContinuousHit(TauNode &node, const TauContinuousHit &hit) {
+	const float closing_speed = Dot(node.linear_velocity, hit.normal);
+	if (closing_speed <= k_tau_collision_epsilon)
+		return false;
+
+	const float restitution = CombineTauRestitution(node, *hit.moving_shape, *hit.target_node, *hit.target_shape);
+	const float restitution_scale = closing_speed > k_tau_restitution_threshold ? 1.f + restitution : 1.f;
+	node.linear_velocity -= hit.normal * (restitution_scale * closing_speed);
+
+	const Vec3 tangent_velocity = node.linear_velocity - hit.normal * Dot(node.linear_velocity, hit.normal);
+	const float tangent_speed = Len(tangent_velocity);
+	if (tangent_speed > k_tau_collision_epsilon) {
+		const float friction = CombineTauFriction(node, *hit.moving_shape, *hit.target_node, *hit.target_shape);
+		const float tangent_speed_reduction = std::min(tangent_speed, friction * restitution_scale * closing_speed);
+		node.linear_velocity -= tangent_velocity * (tangent_speed_reduction / tangent_speed);
+	}
+	return true;
+}
+
+void IntegrateTauBodyContinuous(
+	TauNode &node, const std::vector<const TauNode *> &static_targets, float dt_sec, TauContactDiagnostics &diagnostics) {
+	++diagnostics.ccd_body_sweeps;
+	float remaining = dt_sec;
+	for (uint8_t impact = 0; impact < k_tau_ccd_max_impacts && remaining > k_tau_collision_epsilon; ++impact) {
+		const Vec3 displacement = node.linear_velocity * remaining;
+		if (Len2(displacement) <= k_tau_collision_epsilon * k_tau_collision_epsilon) {
+			AdvanceTauBody(node, remaining);
+			return;
+		}
+
+		TauContinuousHit hit;
+		if (!FindTauEarliestContinuousHit(node, static_targets, displacement, hit, diagnostics)) {
+			AdvanceTauBody(node, remaining);
+			return;
+		}
+
+		const float elapsed = remaining * hit.toi;
+		AdvanceTauBody(node, elapsed);
+		remaining -= elapsed;
+		if (!ResolveTauContinuousHit(node, hit)) {
+			AdvanceTauBody(node, remaining);
+			return;
+		}
+		// Keep the terminal pose inside the regular contact slop so the discrete
+		// manifold owns resting support, sleeping and contact events immediately.
+		node.position += hit.normal * k_tau_ccd_separation;
+		++diagnostics.ccd_impacts;
+	}
+	AdvanceTauBody(node, remaining);
+}
+
 Vec3 GetTauConstraintAnchorA(const TauContactConstraint &contact) {
 	if (!contact.persistent || contact.shape_a >= contact.node_a->cold->shapes.size())
 		return contact.point;
@@ -2259,9 +2531,10 @@ struct TauStepScratch {
 	std::vector<uint32_t> assigned_island_sizes;
 	std::unordered_set<uint32_t> sleeping_island_ids;
 	std::vector<TauIslandWorkload> island_workloads;
+	std::vector<const TauNode *> ccd_static_targets;
 	bool has_nonzero_rolling_friction{false};
 
-	std::array<size_t, 28> GetCapacitySnapshot() const {
+	std::array<size_t, 29> GetCapacitySnapshot() const {
 		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), position_constraints.capacity(),
 			position_contact_indices.capacity(), velocity_constraints.capacity(), velocity_impulses.capacity(),
 			velocity_restitution_velocities.capacity(), velocity_contact_indices.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
@@ -2269,7 +2542,7 @@ struct TauStepScratch {
 			wake_cohorts.bucket_count(), ready_islands.bodies.capacity(), ready_islands.refs.capacity(), ready_islands.parents.capacity(),
 			ready_islands.ranks.capacity(), body_stable.capacity(), body_hard_unstable.capacity(), ready.capacity(),
 			assigned_island_ids.capacity(), assigned_island_sizes.capacity(), sleeping_island_ids.bucket_count(),
-			island_workloads.capacity()}};
+			island_workloads.capacity(), ccd_static_targets.capacity()}};
 	}
 };
 
@@ -3835,6 +4108,12 @@ void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &dia
 			 .arg(diagnostics.nonzero_friction_constraints)
 			 .arg(diagnostics.rolling_friction_pass_skips)
 			 .str();
+	message += format("ccd(bodies=%1 shapes=%2 triangles=%3 impacts=%4) ")
+			 .arg(diagnostics.ccd_body_sweeps)
+			 .arg(diagnostics.ccd_shape_sweeps)
+			 .arg(diagnostics.ccd_triangle_tests)
+			 .arg(diagnostics.ccd_impacts)
+			 .str();
 	message += format("sleep(awake=%1 candidate=%2 sleeping=%3 islands=%4/%5 wake=%6 sleep=%7 skipped=%8) ")
 			 .arg(diagnostics.awake_bodies)
 			 .arg(diagnostics.sleep_candidate_bodies)
@@ -3881,6 +4160,21 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	TauContactDiagnostics diagnostics;
 	diagnostics.enabled = TauContactDiagnosticsEnabled();
 	diagnostics.total_bodies = nodes.size();
+	scratch.ccd_static_targets.clear();
+	const bool has_awake_ccd_body = std::any_of(std::begin(nodes), std::end(nodes), [](const auto &entry) {
+		return IsDynamicTauNode(entry.second) && !IsTauSleeping(entry.second) && entry.second.cold->continuous_collision_detection;
+	});
+	if (has_awake_ccd_body) {
+		for (const auto &entry : nodes) {
+			const TauNode &target = entry.second;
+			if (IsDynamicTauNode(target) || target.body_type == RBT_Kinematic)
+				continue;
+			const bool has_supported_shape = std::any_of(std::begin(target.cold->shapes), std::end(target.cold->shapes),
+				[](const TauCollisionShape &shape) { return shape.type == CT_Cube || (shape.type == CT_Mesh && shape.collision_geometry); });
+			if (has_supported_shape)
+				scratch.ccd_static_targets.push_back(&target);
+		}
+	}
 	{
 		TauProfileSection integration_profile("Tau.Integrate");
 		for (auto &entry : nodes) {
@@ -3901,8 +4195,12 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 			node.angular_velocity *= std::max(0.f, 1.f - node.cold->angular_damping * dt_sec);
 			node.angular_velocity = node.angular_velocity * node.angular_factor;
 
-			node.position += node.linear_velocity * dt_sec;
-			IntegrateTauOrientation(node, node.angular_velocity * dt_sec);
+			if (node.cold->continuous_collision_detection)
+				IntegrateTauBodyContinuous(node, scratch.ccd_static_targets, dt_sec, diagnostics);
+			else {
+				node.position += node.linear_velocity * dt_sec;
+				IntegrateTauOrientation(node, node.angular_velocity * dt_sec);
+			}
 			node.cold->transform_dirty = true;
 		}
 	}
@@ -3973,6 +4271,10 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	reuse_stats.rolling_friction_contact_evaluations = diagnostics.rolling_contact_evaluations;
 	reuse_stats.all_sleeping_substeps_skipped = 0;
 	reuse_stats.all_sleeping_body_checks = 0;
+	reuse_stats.ccd_body_sweeps = diagnostics.ccd_body_sweeps;
+	reuse_stats.ccd_shape_sweeps = diagnostics.ccd_shape_sweeps;
+	reuse_stats.ccd_triangle_tests = diagnostics.ccd_triangle_tests;
+	reuse_stats.ccd_impacts = diagnostics.ccd_impacts;
 	const auto final_scratch_capacity = scratch.GetCapacitySnapshot();
 	reuse_stats.scratch_growths = 0;
 	for (size_t i = 0; i < initial_scratch_capacity.size(); ++i)
@@ -4130,6 +4432,7 @@ void SceneTauPhysics::NodeCreatePhysics(const Node &node, const Reader &ir, cons
 	tau_node.cold->friction = rigid_body.GetFriction();
 	tau_node.cold->restitution = rigid_body.GetRestitution();
 	tau_node.cold->rolling_friction = rigid_body.GetRollingFriction();
+	tau_node.cold->continuous_collision_detection = rigid_body.GetContinuousCollisionDetection();
 
 	SetTauNodeWorld(tau_node, GetNodeWorld(node), TauWorldWriteMode::ResetHistory);
 	RefreshTauMassProperties(tau_node);

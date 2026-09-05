@@ -319,6 +319,14 @@ void SceneBullet3Physics::NodeCreatePhysics(const Node &node, const Reader &ir, 
 
 		_node.body->setCollisionShape(root_shape);
 		_node.body->setUserIndex(node.ref.idx); // ref back to node
+		if (rb.GetContinuousCollisionDetection()) {
+			btVector3 center;
+			btScalar radius;
+			root_shape->getBoundingSphere(center, radius);
+			const btScalar swept_radius = btMax(radius * btScalar(0.2), btScalar(0.001));
+			_node.body->setCcdMotionThreshold(swept_radius);
+			_node.body->setCcdSweptSphereRadius(swept_radius);
+		}
 
 		// configure
 		const auto type = rb.GetType();

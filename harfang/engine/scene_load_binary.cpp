@@ -66,6 +66,7 @@ void SaveComponent(const Scene::RigidBody_ *data_, const Writer &iw, const Handl
 	Write(iw, h, data_->restitution);
 	Write(iw, h, data_->friction);
 	Write(iw, h, data_->rolling_friction);
+	Write(iw, h, data_->continuous_collision_detection);
 }
 
 void SaveComponent(const Scene::Collision_ *data_, const Writer &iw, const Handle &h) {
@@ -171,6 +172,7 @@ void LoadComponent(Scene::RigidBody_ *data_, const Reader &ir, const Handle &h) 
 	Read(ir, h, data_->restitution);
 	Read(ir, h, data_->friction);
 	Read(ir, h, data_->rolling_friction);
+	Read(ir, h, data_->continuous_collision_detection);
 }
 
 void LoadComponent(Scene::Collision_ *data_, const Reader &ir, const Handle &h) {
@@ -236,7 +238,7 @@ static void SkipProbe(const Reader &ir, const Handle &h) {
 }
 
 //
-uint32_t GetSceneBinaryFormatVersion() { return 10; }
+uint32_t GetSceneBinaryFormatVersion() { return 11; }
 
 bool Scene::Save_binary(
 	const Writer &iw, const Handle &h, const PipelineResources &resources, uint32_t save_flags, const std::vector<NodeRef> *nodes_to_save) const {
@@ -258,6 +260,7 @@ bool Scene::Save_binary(
 		version 8: save collision properties
 		version 9: save environment probe
 		version 10: save light shadow near/far
+		version 11: save rigid body continuous collision detection
 	*/
 	const auto version = GetSceneBinaryFormatVersion();
 	Write<uint32_t>(iw, h, version);

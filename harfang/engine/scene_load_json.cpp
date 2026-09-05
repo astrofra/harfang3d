@@ -80,6 +80,7 @@ void SaveComponent(const Scene::RigidBody_ *data_, json &js) {
 	js["restitution"] = unpack_float(data_->restitution);
 	js["friction"] = unpack_float(data_->friction);
 	js["rolling_friction"] = unpack_float(data_->rolling_friction);
+	js["continuous_collision_detection"] = data_->continuous_collision_detection != 0;
 }
 
 void SaveComponent(const Scene::Collision_ *data_, json &js) {
@@ -217,6 +218,8 @@ void LoadComponent(Scene::RigidBody_ *data_, const json &js) {
 		data_->friction = pack_float<uint8_t>(js.at("friction").get<float>());
 	if (js.find("rolling_friction") != std::end(js))
 		data_->rolling_friction = pack_float<uint8_t>(js.at("rolling_friction").get<float>());
+	if (js.find("continuous_collision_detection") != std::end(js))
+		data_->continuous_collision_detection = js.at("continuous_collision_detection").get<bool>() ? 1 : 0;
 }
 
 void LoadComponent(Scene::Collision_ *data_, const json &js) {

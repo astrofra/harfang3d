@@ -1091,6 +1091,8 @@ def bind_scene(gen):
 	gen.bind_method(rigid_body, 'SetFriction', 'void', ['float friction'])
 	gen.bind_method(rigid_body, 'GetRollingFriction', 'float', [])
 	gen.bind_method(rigid_body, 'SetRollingFriction', 'void', ['float rolling_friction'])
+	gen.bind_method(rigid_body, 'GetContinuousCollisionDetection', 'bool', [])
+	gen.bind_method(rigid_body, 'SetContinuousCollisionDetection', 'void', ['bool enable'])
 
 	gen.end_class(rigid_body)
 

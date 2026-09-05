@@ -1013,6 +1013,154 @@ void TestNonzeroCoefficientSolverPaths() {
 	TEST_CHECK(physics.NodeGetLinearVelocity(dynamic).y > 0.f);
 }
 
+void TestRigidBodyContinuousCollisionDetectionProperty() {
+	Scene scene;
+	auto rigid_body = scene.CreateRigidBody();
+	TEST_CHECK(!rigid_body.GetContinuousCollisionDetection());
+	rigid_body.SetContinuousCollisionDetection(true);
+	TEST_CHECK(rigid_body.GetContinuousCollisionDetection());
+	rigid_body.SetContinuousCollisionDetection(false);
+	TEST_CHECK(!rigid_body.GetContinuousCollisionDetection());
+}
+
+void TestContinuousCuboidAgainstStaticCuboid() {
+	Scene scene;
+	Node discrete = CreateTauContactPrimitive(scene, CT_Cube, Vec3(-2.f, 5.f, 0.f), RBT_Dynamic, 1.f);
+	Node continuous = CreateTauContactPrimitive(scene, CT_Cube, Vec3(2.f, 5.f, 0.f), RBT_Dynamic, 1.f);
+	continuous.GetRigidBody().SetContinuousCollisionDetection(true);
+	CreatePhysicCube(scene, Vec3(10.f, 0.1f, 10.f), TranslationMat4(Vec3(0.f, -0.05f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(discrete, false);
+	physics.NodeSetDeactivation(continuous, false);
+	physics.NodeSetLinearVelocity(discrete, Vec3(0.f, -100.f, 0.f));
+	physics.NodeSetLinearVelocity(continuous, Vec3(0.f, -100.f, 0.f));
+	physics.StepSimulation(time_from_ms(100), time_from_ms(100), 1);
+	physics.SyncTransformsToScene(scene);
+	scene.ComputeWorldMatrices();
+
+	const float discrete_y = GetT(discrete.GetWorld()).y;
+	const float continuous_y = GetT(continuous.GetWorld()).y;
+	TEST_CHECK_(discrete_y < -4.f, "expected discrete tunneling, got y=%.6f", discrete_y);
+	TEST_CHECK_(continuous_y > 0.45f, "continuous cuboid tunneled to y=%.6f", continuous_y);
+	TEST_CHECK(physics.NodeGetLinearVelocity(continuous).y > -1.f);
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.ccd_body_sweeps == 1);
+	TEST_CHECK(stats.ccd_shape_sweeps >= 1);
+	TEST_CHECK(stats.ccd_impacts >= 1);
+}
+
+void TestContinuousCompoundCuboidsAgainstStaticCuboid() {
+	Scene scene;
+	Node compound = scene.CreateNode();
+	compound.SetTransform(scene.CreateTransform(TranslationMat4(Vec3(0.f, 5.f, 0.f))));
+	auto rigid_body = scene.CreateRigidBody();
+	rigid_body.SetType(RBT_Dynamic);
+	rigid_body.SetContinuousCollisionDetection(true);
+	compound.SetRigidBody(rigid_body);
+	for (size_t i = 0; i < 2; ++i) {
+		auto collision = scene.CreateCollision();
+		collision.SetType(CT_Cube);
+		collision.SetSize(Vec3::One);
+		collision.SetMass(0.5f);
+		collision.SetLocalTransform(TranslationMat4(Vec3(i == 0 ? -1.f : 1.f, 0.f, 0.f)));
+		compound.SetCollision(i, collision);
+	}
+	CreatePhysicCube(scene, Vec3(10.f, 0.1f, 10.f), TranslationMat4(Vec3(0.f, -0.05f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(compound, false);
+	physics.NodeSetLinearVelocity(compound, Vec3(0.f, -100.f, 0.f));
+	physics.StepSimulation(time_from_ms(100), time_from_ms(100), 1);
+	physics.SyncTransformsToScene(scene);
+	scene.ComputeWorldMatrices();
+
+	const float continuous_y = GetT(compound.GetWorld()).y;
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	const float velocity_y = physics.NodeGetLinearVelocity(compound).y;
+	TEST_CHECK_(continuous_y > 0.4f, "continuous compound crossed floor to y=%.6f (vy=%.6f, impacts=%zu)", continuous_y, velocity_y,
+		stats.ccd_impacts);
+	TEST_CHECK_(velocity_y > -1.f, "continuous compound retained vy=%.6f after %zu impacts", velocity_y, stats.ccd_impacts);
+	TEST_CHECK(stats.ccd_shape_sweeps >= 2);
+	TEST_CHECK(stats.ccd_impacts >= 1);
+}
+
+void TestContinuousCuboidResolvesMultipleImpactsInSubstep() {
+	Scene scene;
+	Node continuous = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 2.f, 0.f), RBT_Dynamic, 1.f);
+	continuous.GetRigidBody().SetContinuousCollisionDetection(true);
+	CreatePhysicCube(scene, Vec3(10.f, 0.1f, 10.f), TranslationMat4(Vec3(0.f, -0.05f, 0.f)), InvalidModelRef, {}, 0.f);
+	CreatePhysicCube(scene, Vec3(0.1f, 10.f, 10.f), TranslationMat4(Vec3(4.5f, 5.f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	physics.NodeSetDeactivation(continuous, false);
+	physics.NodeSetLinearVelocity(continuous, Vec3(50.f, -20.f, 0.f));
+	physics.StepSimulation(time_from_ms(100), time_from_ms(100), 1);
+	physics.SyncTransformsToScene(scene);
+	scene.ComputeWorldMatrices();
+
+	const Vec3 position = GetT(continuous.GetWorld());
+	const Vec3 velocity = physics.NodeGetLinearVelocity(continuous);
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK_(position.y > 0.45f, "continuous cuboid crossed floor to y=%.6f", position.y);
+	TEST_CHECK_(position.x < 4.05f, "continuous cuboid crossed wall to x=%.6f", position.x);
+	TEST_CHECK_(velocity.x < 1.f && velocity.y > -1.f, "continuous cuboid retained velocity (%.6f, %.6f)", velocity.x, velocity.y);
+	TEST_CHECK_(stats.ccd_impacts >= 2, "expected two CCD impacts, got %zu", stats.ccd_impacts);
+}
+
+void TestContinuousCuboidAgainstStaticMesh() {
+	CollisionGeometry source;
+	source.triangles = {
+		{Vec3(-5.f, 0.f, -5.f), Vec3(5.f, 0.f, 5.f), Vec3(5.f, 0.f, -5.f)},
+		{Vec3(-5.f, 0.f, -5.f), Vec3(-5.f, 0.f, 5.f), Vec3(5.f, 0.f, 5.f)},
+	};
+
+	const std::string temporary = test::CreateTempFilepath();
+	Unlink(temporary.c_str());
+	const std::string logical_resource = temporary + ".physics";
+	const std::string cooked_resource = logical_resource + "_triangles";
+	TEST_ASSERT(SaveCollisionGeometryToFile(cooked_resource.c_str(), source));
+
+	Scene scene;
+	Node continuous = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 5.f, 0.f), RBT_Dynamic, 1.f);
+	continuous.GetRigidBody().SetContinuousCollisionDetection(true);
+	Node mesh = scene.CreateNode();
+	mesh.SetTransform(scene.CreateTransform(TranslationMat4(Vec3(0.f, 1.f, 0.f))));
+	auto rigid_body = scene.CreateRigidBody();
+	rigid_body.SetType(RBT_Static);
+	mesh.SetRigidBody(rigid_body);
+	auto collision = scene.CreateCollision();
+	collision.SetType(CT_Mesh);
+	collision.SetCollisionResource(logical_resource);
+	collision.SetMass(0.f);
+	mesh.SetCollision(0, collision);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromFile(scene);
+	physics.NodeSetDeactivation(continuous, false);
+	physics.NodeSetLinearVelocity(continuous, Vec3(0.f, -100.f, 0.f));
+	physics.StepSimulation(time_from_ms(100), time_from_ms(100), 1);
+	physics.SyncTransformsToScene(scene);
+	scene.ComputeWorldMatrices();
+
+	const float continuous_y = GetT(continuous.GetWorld()).y;
+	TEST_CHECK_(continuous_y > 1.45f, "continuous cuboid crossed transformed mesh to y=%.6f", continuous_y);
+	TEST_CHECK(physics.NodeGetLinearVelocity(continuous).y > -1.f);
+	const tau_internal::TauStepReuseStats stats = tau_internal::GetLastStepReuseStats(physics);
+	TEST_CHECK(stats.ccd_triangle_tests >= 1);
+	TEST_CHECK(stats.ccd_impacts >= 1);
+
+	physics.ClearNodes();
+	Unlink(cooked_resource.c_str());
+}
+
 void TestRaycastAllHitsAreStableAndBounded() {
 	Scene scene;
 	const Node near_node = CreatePhysicCube(scene, Vec3::One, TranslationMat4(Vec3(0.f, 0.f, -2.f)), InvalidModelRef, {}, 0.f);
@@ -1150,6 +1298,11 @@ void test_scene_tau_physics() {
 	TestActiveCuboidCoherenceRejectsLargeMotion();
 	TestZeroCoefficientSolverFastPaths();
 	TestNonzeroCoefficientSolverPaths();
+	TestRigidBodyContinuousCollisionDetectionProperty();
+	TestContinuousCuboidAgainstStaticCuboid();
+	TestContinuousCompoundCuboidsAgainstStaticCuboid();
+	TestContinuousCuboidResolvesMultipleImpactsInSubstep();
+	TestContinuousCuboidAgainstStaticMesh();
 	TestRaycastAllHitsAreStableAndBounded();
 	TestMeshColliderRaycast();
 }

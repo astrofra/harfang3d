@@ -452,6 +452,8 @@ public:
 	void SetRigidBodyFriction(ComponentRef ref, float friction);
 	float GetRigidBodyRollingFriction(ComponentRef ref) const;
 	void SetRigidBodyRollingFriction(ComponentRef ref, float rolling_friction);
+	bool GetRigidBodyContinuousCollisionDetection(ComponentRef ref) const;
+	void SetRigidBodyContinuousCollisionDetection(ComponentRef ref, bool enable);
 
 	// collision component
 	Collision CreateCollision();
@@ -779,7 +781,7 @@ private:
 		float shadow_far{100.f};
 	};
 
-	struct RigidBody_ { // 6B
+	struct RigidBody_ { // 7B
 		RigidBodyType type{RBT_Dynamic};
 
 		uint8_t linear_damping{pack_float<uint8_t>(0.f)};
@@ -788,6 +790,7 @@ private:
 		uint8_t restitution{pack_float<uint8_t>(0.f)};
 		uint8_t friction{pack_float<uint8_t>(0.5f)};
 		uint8_t rolling_friction{pack_float<uint8_t>(0.f)};
+		uint8_t continuous_collision_detection{0};
 	};
 
 	generational_vector_list<Transform_> transforms;

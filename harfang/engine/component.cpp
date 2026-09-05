@@ -1383,6 +1383,21 @@ void RigidBody::SetRollingFriction(float rolling_friction) {
 		warn("Orphaned rigidBody component");
 }
 
+bool RigidBody::GetContinuousCollisionDetection() const {
+	if (scene_ref && scene_ref->scene)
+		return scene_ref->scene->GetRigidBodyContinuousCollisionDetection(ref);
+
+	warn("Orphaned rigidBody component");
+	return false;
+}
+
+void RigidBody::SetContinuousCollisionDetection(bool enable) {
+	if (scene_ref && scene_ref->scene)
+		scene_ref->scene->SetRigidBodyContinuousCollisionDetection(ref, enable);
+	else
+		warn("Orphaned rigidBody component");
+}
+
 //
 bool Collision::IsValid() const { return scene_ref && scene_ref->scene ? scene_ref->scene->IsValidCollisionRef(ref) : false; }
 
