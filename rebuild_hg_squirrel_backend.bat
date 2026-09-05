@@ -8,29 +8,50 @@ if !HG_BATCH_PAUSE_DEPTH! LEQ 1 if not defined HG_BATCH_NO_PAUSE pause
 exit /b %EXITCODE%
 
 :main
-set "CONFIG=%~1"
+set "BACKEND=%~1"
+set "CONFIG=%~2"
+
+if "%BACKEND%"=="" (
+	echo Usage: %~nx0 ^<bullet^|tau^> [Config]
+	exit /b 1
+)
+
 if "%CONFIG%"=="" set "CONFIG=Release"
+
+if /I "%BACKEND%"=="bullet" (
+	set "BACKEND=bullet"
+	set "BUILD_DIR_NAME=squirrel-cmake-bullet"
+	set "INSTALL_DIR_NAME=squirrel-bullet"
+) else if /I "%BACKEND%"=="tau" (
+	set "BACKEND=tau"
+	set "BUILD_DIR_NAME=squirrel-cmake-tau"
+	set "INSTALL_DIR_NAME=squirrel-tau"
+) else (
+	echo Backend invalide: "%BACKEND%"
+	echo Valeurs attendues: bullet ou tau
+	exit /b 1
+)
 
 for %%I in ("%~dp0.") do set "REPO_DIR=%%~fI"
 for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 
-if not defined BUILD_DIR set "BUILD_DIR=%WORK_DIR%\build\squirrel-cmake"
-if not defined INSTALL_DIR set "INSTALL_DIR=%WORK_DIR%\install\squirrel"
+if not defined BUILD_DIR set "BUILD_DIR=%WORK_DIR%\build\%BUILD_DIR_NAME%"
+if not defined INSTALL_DIR set "INSTALL_DIR=%WORK_DIR%\install\%INSTALL_DIR_NAME%"
 if not defined FABGEN_DIR set "FABGEN_DIR=%WORK_DIR%\FABGen"
 if not defined SQUIRREL_DIR set "SQUIRREL_DIR=%REPO_DIR%\extern\squirrel"
-set "GENERATOR=Visual Studio 17 2022"
-set "PLATFORM=x64"
+if not defined GENERATOR set "GENERATOR=Visual Studio 17 2022"
+if not defined PLATFORM set "PLATFORM=x64"
 set "CMAKE_PLATFORM_ARG=-A %PLATFORM%"
 
-if not exist "%FABGEN_DIR%\" (
+if not exist "%FABGEN_DIR%\bind.py" (
 	echo FABGen introuvable: "%FABGEN_DIR%"
-	echo Clone https://github.com/astrofra/FABGen.git dans ce dossier ou adapte FABGEN_DIR dans ce script.
+	echo Clone https://github.com/astrofra/FABGen.git dans ce dossier ou definis FABGEN_DIR.
 	exit /b 1
 )
 
 if not exist "%SQUIRREL_DIR%\include\squirrel.h" (
 	echo Squirrel introuvable: "%SQUIRREL_DIR%"
-	echo Vendorise Squirrel dans ce dossier, definis SQUIRREL_DIR, ou adapte ce script.
+	echo Vendorise Squirrel dans ce dossier ou definis SQUIRREL_DIR.
 	exit /b 1
 )
 
@@ -46,6 +67,7 @@ if not defined PYTHON_EXE (
 )
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 if exist "%BUILD_DIR%\CMakeCache.txt" (
 	set "CACHED_GENERATOR_PLATFORM="
@@ -57,7 +79,11 @@ if exist "%BUILD_DIR%\CMakeCache.txt" (
 	)
 )
 
-echo [1/2] Configuration CMake...
+echo Build dir   : "%BUILD_DIR%"
+echo Install dir : "%INSTALL_DIR%\hg_squirrel"
+echo.
+
+echo [1/3] Configuration CMake HG Squirrel (%BACKEND%, %CONFIG%)...
 cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" %CMAKE_PLATFORM_ARG% ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
@@ -65,15 +91,19 @@ cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" %CMAKE_PLATFORM_ARG% ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^
 	-DHG_BUILD_HG_LUA=OFF ^
 	-DHG_BUILD_HG_SQUIRREL=ON ^
+	-DHG_BUILD_HG_PYTHON=OFF ^
+	-DHG_BUILD_HG_GO=OFF ^
 	-DHG_BUILD_ASSETC=ON ^
 	-DHG_BUILD_ASSIMP_CONVERTER=OFF ^
 	-DHG_BUILD_FBX_CONVERTER=OFF ^
 	-DHG_BUILD_GLTF_IMPORTER=OFF ^
-	-DHG_BUILD_GLTF_EXPORTER=OFF
+	-DHG_BUILD_GLTF_EXPORTER=OFF ^
+	-DHG_BUILD_LEGACY_ARCHIVE=ON ^
+	-DHG_SCENE_PHYSICS_BACKEND=%BACKEND%
 if errorlevel 1 exit /b !errorlevel!
 
-echo [2/2] Build et install HG Squirrel + AssetC (%CONFIG%)...
-cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target INSTALL
+echo [2/3] Build et install HG Squirrel + AssetC (%BACKEND%, %CONFIG%)...
+cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target INSTALL -- /m
 if errorlevel 1 exit /b !errorlevel!
 
 if not exist "%BUILD_DIR%\tools\assetc\cmake_install.cmake" (
@@ -81,10 +111,17 @@ if not exist "%BUILD_DIR%\tools\assetc\cmake_install.cmake" (
 	exit /b 1
 )
 
+echo [3/3] Installation d'AssetC dans le package Squirrel...
 cmake -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%\hg_squirrel\harfang" -DCMAKE_INSTALL_CONFIG_NAME="%CONFIG%" -DBUILD_TYPE="%CONFIG%" -P "%BUILD_DIR%\tools\assetc\cmake_install.cmake"
 if errorlevel 1 exit /b !errorlevel!
 
+if not exist "%INSTALL_DIR%\hg_squirrel\hg_squirrel.exe" (
+	echo Echec: package incomplet, "%INSTALL_DIR%\hg_squirrel\hg_squirrel.exe" absent.
+	exit /b 1
+)
+
 echo.
 echo HG Squirrel + AssetC rebuild ok.
+echo Backend: "%BACKEND%"
 echo Install: "%INSTALL_DIR%\hg_squirrel"
 exit /b 0

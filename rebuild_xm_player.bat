@@ -23,7 +23,7 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 
 set "BUILD_DIR=%WORK_DIR%\build\xm-player"
 set "INSTALL_DIR=%WORK_DIR%\install"
-set "PLAYER_DIR=%INSTALL_DIR%\hg_lua"
+set "PLAYER_DIR=%INSTALL_DIR%\hg_lua_xm"
 set "DATA_DIR=%PLAYER_DIR%\data"
 set "RESOURCE_DIR=%PLAYER_DIR%\resources\sounds"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"

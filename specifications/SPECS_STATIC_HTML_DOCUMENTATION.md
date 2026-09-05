@@ -304,7 +304,7 @@ rebuild_static_docs.bat
 Suggested behavior:
 
 1. Resolve `REPO_DIR`, `WORK_DIR`, `BUILD_DIR`, `INSTALL_DIR`, and `FABGEN_DIR`.
-2. Locate Python exactly like `rebuild_hg_lua.bat`.
+2. Locate Python exactly like `rebuild_hg_lua_backend.bat`.
 3. Configure a docs-only build tree.
 4. Build `harfang_static_docs_install`.
 5. Print the generated `index.html` path.

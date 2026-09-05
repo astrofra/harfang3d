@@ -393,7 +393,7 @@ That is materially lower-risk than the original 10-18 engineer-week estimate bec
    - `include()` for script composition
 2. Keep the current public package stable:
    - install `hg_squirrel.exe`, `harfang.dll`, `squirrel.dll`, `sqstdlib.dll`, `glfw3.dll`, and `lua54.dll`
-   - keep `rebuild_hg_squirrel.bat` aligned with `rebuild_hg_lua.bat`
+   - keep `rebuild_hg_squirrel.bat` aligned with `rebuild_hg_lua_backend.bat`
    - keep the launcher shutdown order safe by unloading native modules only after `sq_close()`
 3. Keep `.nut` passthrough support in `assetc`; defer Squirrel bytecode.
 4. Run the first public tutorial ports end-to-end in the packaged runtime:

@@ -33,21 +33,39 @@ else()
 	set(BDIST_WHEEL_LIMITED_API_FLAGS "--py-limited-api=cp32")
 endif()
 
+file(TO_CMAKE_PATH "${Python3_EXECUTABLE}" HG_PYTHON_EXECUTABLE_CMAKE_PATH)
+
 install(CODE "execute_process(
-		COMMAND ${Python3_EXECUTABLE} setup.py bdist_wheel ${BDIST_WHEEL_LIMITED_API_FLAGS}
-		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})"
+		COMMAND ${HG_PYTHON_EXECUTABLE_CMAKE_PATH} setup.py bdist_wheel ${BDIST_WHEEL_LIMITED_API_FLAGS}
+		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+		RESULT_VARIABLE HG_PYTHON_BDIST_WHEEL_RESULT)
+	if(NOT HG_PYTHON_BDIST_WHEEL_RESULT EQUAL 0)
+		message(FATAL_ERROR \"Harfang wheel generation failed: \${HG_PYTHON_BDIST_WHEEL_RESULT}\")
+	endif()"
 	COMPONENT python)
 
 if(WIN32)
 	install(CODE "execute_process(
-			COMMAND ${Python3_EXECUTABLE} rename.py -src dist
-			WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})"
+			COMMAND ${HG_PYTHON_EXECUTABLE_CMAKE_PATH} rename.py -src dist
+			WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+			RESULT_VARIABLE HG_PYTHON_WHEEL_RENAME_RESULT)
+		if(NOT HG_PYTHON_WHEEL_RENAME_RESULT EQUAL 0)
+			message(FATAL_ERROR \"Harfang wheel rename failed: \${HG_PYTHON_WHEEL_RENAME_RESULT}\")
+		endif()"
 		 COMPONENT python)
 endif()
 
 install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/dist/ DESTINATION hg_python COMPONENT python)
 
-install(
-	CODE "file(GLOB HG_PYTHON_WHEEL \"${CMAKE_INSTALL_PREFIX}/hg_python/*.whl\")"
-	CODE "execute_process(COMMAND ${Python3_EXECUTABLE} -m pip install \${HG_PYTHON_WHEEL} --upgrade --force-reinstall)"
-	COMPONENT python)
+option(HG_PYTHON_AUTO_INSTALL_WHEEL "Install the generated Harfang wheel into the active Python environment" ON)
+if(HG_PYTHON_AUTO_INSTALL_WHEEL)
+	install(
+		CODE "file(GLOB HG_PYTHON_WHEEL \"${CMAKE_INSTALL_PREFIX}/hg_python/*.whl\")"
+		CODE "execute_process(
+			COMMAND ${HG_PYTHON_EXECUTABLE_CMAKE_PATH} -m pip install \${HG_PYTHON_WHEEL} --upgrade --force-reinstall
+			RESULT_VARIABLE HG_PYTHON_WHEEL_INSTALL_RESULT)
+		if(NOT HG_PYTHON_WHEEL_INSTALL_RESULT EQUAL 0)
+			message(FATAL_ERROR \"Harfang wheel installation failed: \${HG_PYTHON_WHEEL_INSTALL_RESULT}\")
+		endif()"
+		COMPONENT python)
+endif()
