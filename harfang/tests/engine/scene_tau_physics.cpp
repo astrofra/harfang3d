@@ -300,6 +300,54 @@ void TestTauStepScratchReuse() {
 	TEST_CHECK(cleared_stats.velocity_constraint_capacity == 0);
 }
 
+void TestTauIslandWorkloadDiagnostics() {
+	Scene scene;
+	CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 0.45f, 0.f), RBT_Dynamic, 1.f);
+	CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 1.35f, 0.f), RBT_Dynamic, 1.f);
+	CreateTauContactPrimitive(scene, CT_Cube, Vec3(20.f, 4.f, 0.f), RBT_Dynamic, 1.f);
+	CreatePhysicCube(scene, Vec3(10.f, 1.f, 10.f), TranslationMat4(Vec3(0.f, -0.5f, 0.f)), InvalidModelRef, {}, 0.f);
+	scene.ReadyWorldMatrices();
+
+	SceneTauPhysics physics;
+	physics.SceneCreatePhysicsFromAssets(scene);
+	tau_internal::SetIslandWorkloadDiagnosticsForTest(physics, true);
+	physics.StepSimulation(time_from_ms(16), time_from_ms(16), 1);
+	const tau_internal::TauIslandWorkloadStats stats = tau_internal::GetLastIslandWorkloadStats(physics);
+	TEST_CHECK(stats.collected);
+	TEST_CHECK(stats.total_islands == 2);
+	TEST_CHECK(stats.active_islands == 2);
+	TEST_CHECK(stats.sleeping_islands == 0);
+	TEST_CHECK(stats.solver_islands == 1);
+	TEST_CHECK(stats.bodies_in_active_islands == 3);
+	TEST_CHECK(stats.active_bodies == 3);
+	TEST_CHECK(stats.contacts > 0);
+	TEST_CHECK(stats.position_constraints == stats.contacts);
+	TEST_CHECK(stats.velocity_constraints == stats.contacts);
+	TEST_CHECK(stats.position_evaluations == stats.position_constraints * 3);
+	TEST_CHECK(stats.velocity_evaluations == stats.velocity_constraints * 8);
+	TEST_CHECK(stats.solver_evaluations == stats.position_evaluations + stats.velocity_evaluations);
+	TEST_CHECK(stats.max_bodies == 2);
+	TEST_CHECK(stats.max_active_bodies == 2);
+	TEST_CHECK(stats.max_contacts == stats.contacts);
+	TEST_CHECK(Abs(stats.largest_body_share - 2.f / 3.f) < 0.0001f);
+	TEST_CHECK(Abs(stats.largest_active_body_share - 2.f / 3.f) < 0.0001f);
+	TEST_CHECK(Abs(stats.largest_contact_share - 1.f) < 0.0001f);
+	TEST_CHECK(Abs(stats.largest_solver_evaluation_share - 1.f) < 0.0001f);
+	auto histogram_total = [](const auto &histogram) {
+		size_t total = 0;
+		for (const size_t value : histogram)
+			total += value;
+		return total;
+	};
+	TEST_CHECK(histogram_total(stats.body_histogram) == stats.active_islands);
+	TEST_CHECK(histogram_total(stats.active_body_histogram) == stats.active_islands);
+	TEST_CHECK(histogram_total(stats.contact_histogram) == stats.active_islands);
+	TEST_CHECK(histogram_total(stats.position_constraint_histogram) == stats.active_islands);
+	TEST_CHECK(histogram_total(stats.velocity_constraint_histogram) == stats.active_islands);
+	TEST_CHECK(histogram_total(stats.solver_evaluation_histogram) == stats.active_islands);
+	TEST_CHECK(tau_internal::GetLastStepReuseStats(physics).island_workload_capacity >= 3);
+}
+
 void TestActiveBodyKeepsPublishedTransformWithoutSubstep() {
 	Scene scene;
 	const Node body = CreateTauContactPrimitive(scene, CT_Cube, Vec3(0.f, 3.f, 0.f), RBT_Dynamic, 1.f);
@@ -1080,6 +1128,7 @@ void test_scene_tau_physics() {
 	TestWorldInverseInertiaCacheTracksOrientation();
 	TestScenePhysicsPreTickAdapter();
 	TestTauStepScratchReuse();
+	TestTauIslandWorkloadDiagnostics();
 	TestActiveBodyKeepsPublishedTransformWithoutSubstep();
 	TestSleepingBodyKeepsPublishedTransform();
 	TestSleepingBodyWakeAndTrackedContacts();

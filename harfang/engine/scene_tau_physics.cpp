@@ -184,6 +184,7 @@ private:
 };
 
 bool TauContactDiagnosticsEnabled();
+bool TauIslandWorkloadDiagnosticsEnabled();
 
 bool HasTauResourceSuffix(const std::string &resource, const std::string &suffix) {
 	return resource.size() >= suffix.size() && resource.compare(resource.size() - suffix.size(), suffix.size(), suffix) == 0;
@@ -2214,6 +2215,12 @@ struct TauIslandGraph {
 		return root;
 	}
 
+	uint32_t Root(uint32_t index) const {
+		while (parents[index] != index)
+			index = parents[index];
+		return index;
+	}
+
 	void Union(uint32_t a, uint32_t b) {
 		a = Find(a);
 		b = Find(b);
@@ -2225,6 +2232,16 @@ struct TauIslandGraph {
 		if (ranks[a] == ranks[b])
 			++ranks[a];
 	}
+};
+
+struct TauIslandWorkload {
+	size_t bodies{0};
+	size_t active_bodies{0};
+	size_t contacts{0};
+	size_t position_constraints{0};
+	size_t velocity_constraints{0};
+	size_t joint_constraints{0};
+	size_t rolling_contact_evaluations{0};
 };
 
 } // namespace
@@ -2251,16 +2268,18 @@ struct TauStepScratch {
 	std::vector<uint32_t> assigned_island_ids;
 	std::vector<uint32_t> assigned_island_sizes;
 	std::unordered_set<uint32_t> sleeping_island_ids;
+	std::vector<TauIslandWorkload> island_workloads;
 	bool has_nonzero_rolling_friction{false};
 
-	std::array<size_t, 27> GetCapacitySnapshot() const {
+	std::array<size_t, 28> GetCapacitySnapshot() const {
 		return {{bodies.capacity(), body_bounds.capacity(), contacts.capacity(), position_constraints.capacity(),
 			position_contact_indices.capacity(), velocity_constraints.capacity(), velocity_impulses.capacity(),
 			velocity_restitution_velocities.capacity(), velocity_contact_indices.capacity(), body_pairs.capacity(), moved_proxies.capacity(),
 			islands.bodies.capacity(), islands.refs.capacity(), islands.parents.capacity(), islands.ranks.capacity(), wake_roots.capacity(),
 			wake_cohorts.bucket_count(), ready_islands.bodies.capacity(), ready_islands.refs.capacity(), ready_islands.parents.capacity(),
 			ready_islands.ranks.capacity(), body_stable.capacity(), body_hard_unstable.capacity(), ready.capacity(),
-			assigned_island_ids.capacity(), assigned_island_sizes.capacity(), sleeping_island_ids.bucket_count()}};
+			assigned_island_ids.capacity(), assigned_island_sizes.capacity(), sleeping_island_ids.bucket_count(),
+			island_workloads.capacity()}};
 	}
 };
 
@@ -2273,6 +2292,7 @@ void StoreTauScratchCapacityStats(const TauStepScratch &scratch, tau_internal::T
 	reuse_stats.position_constraint_capacity = scratch.position_constraints.capacity();
 	reuse_stats.velocity_constraint_capacity = scratch.velocity_constraints.capacity();
 	reuse_stats.island_body_capacity = scratch.islands.bodies.capacity();
+	reuse_stats.island_workload_capacity = scratch.island_workloads.capacity();
 }
 
 bool CanSkipTauAllSleepingSubstep(const TauNodeStore &nodes, const DynamicAABBTree &broadphase_tree,
@@ -2999,6 +3019,147 @@ void SolveTauRollingFriction(const std::vector<TauContactConstraint> &contacts, 
 	}
 }
 
+size_t GetTauIslandCountHistogramBucket(size_t value) {
+	if (value == 0)
+		return 0;
+	if (value == 1)
+		return 1;
+	if (value <= 4)
+		return 2;
+	if (value <= 16)
+		return 3;
+	if (value <= 64)
+		return 4;
+	if (value <= 256)
+		return 5;
+	return 6;
+}
+
+size_t GetTauIslandEvaluationHistogramBucket(size_t value) {
+	if (value == 0)
+		return 0;
+	if (value <= 64)
+		return 1;
+	if (value <= 256)
+		return 2;
+	if (value <= 1024)
+		return 3;
+	if (value <= 4096)
+		return 4;
+	if (value <= 16384)
+		return 5;
+	return 6;
+}
+
+uint32_t GetTauIslandRoot(const TauIslandGraph &graph, const TauContactConstraint &contact) {
+	if (IsDynamicTauNode(*contact.node_a))
+		return graph.Root(contact.node_a->cold->island_index);
+	if (IsDynamicTauNode(*contact.node_b))
+		return graph.Root(contact.node_b->cold->island_index);
+	return std::numeric_limits<uint32_t>::max();
+}
+
+void CollectTauIslandWorkloadStats(const TauNodeStore &nodes, const TauIslandGraph &graph,
+	const std::vector<TauContactConstraint> &contacts, const std::vector<Tau6DofConstraint> &constraints,
+	const std::vector<size_t> &position_contact_indices, const std::vector<size_t> &velocity_contact_indices,
+	bool rolling_friction_pass_executed, const TauContactDiagnostics &diagnostics, std::vector<TauIslandWorkload> &workloads,
+	tau_internal::TauIslandWorkloadStats &stats) {
+	stats = {};
+	stats.collected = true;
+	stats.proxy_updates = diagnostics.proxy_updates;
+	stats.candidate_pairs = diagnostics.body_pair_candidates;
+	stats.narrowphase_calls = diagnostics.narrowphase_calls;
+	workloads.assign(graph.bodies.size(), {});
+
+	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
+		auto &workload = workloads[graph.Root(i)];
+		++workload.bodies;
+		if (graph.bodies[i]->activation_state != TauActivationState::Sleeping)
+			++workload.active_bodies;
+	}
+	for (const auto &contact : contacts) {
+		const uint32_t root = GetTauIslandRoot(graph, contact);
+		if (root != std::numeric_limits<uint32_t>::max()) {
+			++workloads[root].contacts;
+			if (rolling_friction_pass_executed && IsTauContactSolverActive(contact))
+				++workloads[root].rolling_contact_evaluations;
+		}
+	}
+	for (const size_t contact_index : position_contact_indices)
+		if (contact_index < contacts.size()) {
+			const uint32_t root = GetTauIslandRoot(graph, contacts[contact_index]);
+			if (root != std::numeric_limits<uint32_t>::max())
+				++workloads[root].position_constraints;
+		}
+	for (const size_t contact_index : velocity_contact_indices)
+		if (contact_index < contacts.size()) {
+			const uint32_t root = GetTauIslandRoot(graph, contacts[contact_index]);
+			if (root != std::numeric_limits<uint32_t>::max())
+				++workloads[root].velocity_constraints;
+		}
+	for (const auto &constraint : constraints) {
+		const TauNode *node_a = FindTauNode(nodes, constraint.ref_a);
+		const TauNode *node_b = FindTauNode(nodes, constraint.ref_b);
+		const TauNode *dynamic_node = node_a != nullptr && IsDynamicTauNode(*node_a) ? node_a :
+			(node_b != nullptr && IsDynamicTauNode(*node_b) ? node_b : nullptr);
+		if (dynamic_node != nullptr)
+			++workloads[graph.Root(dynamic_node->cold->island_index)].joint_constraints;
+	}
+
+	for (uint32_t i = 0; i < graph.bodies.size(); ++i) {
+		if (graph.Root(i) != i)
+			continue;
+		++stats.total_islands;
+		const auto &workload = workloads[i];
+		if (workload.active_bodies == 0) {
+			++stats.sleeping_islands;
+			continue;
+		}
+
+		++stats.active_islands;
+		stats.bodies_in_active_islands += workload.bodies;
+		stats.active_bodies += workload.active_bodies;
+		stats.contacts += workload.contacts;
+		stats.position_constraints += workload.position_constraints;
+		stats.velocity_constraints += workload.velocity_constraints;
+		stats.joint_constraints += workload.joint_constraints;
+		const size_t position_evaluations = workload.position_constraints * size_t(k_tau_position_iterations);
+		const size_t velocity_evaluations = workload.velocity_constraints * size_t(k_tau_velocity_iterations);
+		const size_t solver_evaluations =
+			position_evaluations + velocity_evaluations + workload.rolling_contact_evaluations;
+		stats.position_evaluations += position_evaluations;
+		stats.velocity_evaluations += velocity_evaluations;
+		stats.rolling_contact_evaluations += workload.rolling_contact_evaluations;
+		stats.solver_evaluations += solver_evaluations;
+		if (solver_evaluations != 0)
+			++stats.solver_islands;
+
+		stats.max_bodies = std::max(stats.max_bodies, workload.bodies);
+		stats.max_active_bodies = std::max(stats.max_active_bodies, workload.active_bodies);
+		stats.max_contacts = std::max(stats.max_contacts, workload.contacts);
+		stats.max_position_constraints = std::max(stats.max_position_constraints, workload.position_constraints);
+		stats.max_velocity_constraints = std::max(stats.max_velocity_constraints, workload.velocity_constraints);
+		stats.max_joint_constraints = std::max(stats.max_joint_constraints, workload.joint_constraints);
+		stats.max_solver_evaluations = std::max(stats.max_solver_evaluations, solver_evaluations);
+		++stats.body_histogram[GetTauIslandCountHistogramBucket(workload.bodies)];
+		++stats.active_body_histogram[GetTauIslandCountHistogramBucket(workload.active_bodies)];
+		++stats.contact_histogram[GetTauIslandCountHistogramBucket(workload.contacts)];
+		++stats.position_constraint_histogram[GetTauIslandCountHistogramBucket(workload.position_constraints)];
+		++stats.velocity_constraint_histogram[GetTauIslandCountHistogramBucket(workload.velocity_constraints)];
+		++stats.joint_constraint_histogram[GetTauIslandCountHistogramBucket(workload.joint_constraints)];
+		++stats.solver_evaluation_histogram[GetTauIslandEvaluationHistogramBucket(solver_evaluations)];
+	}
+
+	if (stats.bodies_in_active_islands != 0)
+		stats.largest_body_share = float(stats.max_bodies) / float(stats.bodies_in_active_islands);
+	if (stats.active_bodies != 0)
+		stats.largest_active_body_share = float(stats.max_active_bodies) / float(stats.active_bodies);
+	if (stats.contacts != 0)
+		stats.largest_contact_share = float(stats.max_contacts) / float(stats.contacts);
+	if (stats.solver_evaluations != 0)
+		stats.largest_solver_evaluation_share = float(stats.max_solver_evaluations) / float(stats.solver_evaluations);
+}
+
 bool TauManifoldCacheKeyMatches(const TauContactManifold &a, const TauContactManifold &b) {
 	return a.ref_a == b.ref_a && a.ref_b == b.ref_b && a.shape_a == b.shape_a && a.shape_b == b.shape_b && a.feature == b.feature;
 }
@@ -3514,6 +3675,87 @@ bool TauContactDiagnosticsEnabled() {
 	return enabled;
 }
 
+bool TauIslandWorkloadDiagnosticsEnabled() {
+	static const bool enabled = [] {
+		const char *value = std::getenv("HG_TAU_ISLAND_DIAGNOSTICS");
+		return value != nullptr && value[0] != '\0' && value[0] != '0';
+	}();
+	return enabled;
+}
+
+template <size_t N> std::string TauHistogramJson(const std::array<size_t, N> &histogram) {
+	std::string json = "[";
+	for (size_t i = 0; i < histogram.size(); ++i) {
+		if (i != 0)
+			json += ',';
+		json += std::to_string(histogram[i]);
+	}
+	json += ']';
+	return json;
+}
+
+void ReportTauIslandWorkloadStats(uint32_t step, const tau_internal::TauIslandWorkloadStats &stats) {
+	if (!stats.collected || step % 60 != 0)
+		return;
+	std::string message = format("Tau island workload {\"schema\":1,\"step\":%1,")
+					  .arg(step)
+					  .str();
+	message += format("\"islands\":{\"total\":%1,\"active\":%2,\"sleeping\":%3,\"solver\":%4},")
+			   .arg(stats.total_islands)
+			   .arg(stats.active_islands)
+			   .arg(stats.sleeping_islands)
+			   .arg(stats.solver_islands)
+			   .str();
+	message += format("\"parallel_inputs\":{\"active_bodies\":%1,\"proxy_updates\":%2,\"candidate_pairs\":%3,"
+				  "\"narrowphase_calls\":%4},")
+			   .arg(stats.active_bodies)
+			   .arg(stats.proxy_updates)
+			   .arg(stats.candidate_pairs)
+			   .arg(stats.narrowphase_calls)
+			   .str();
+	message += format("\"totals\":{\"bodies\":%1,\"active_bodies\":%2,\"contacts\":%3,\"position_constraints\":%4,"
+				  "\"velocity_constraints\":%5,\"joint_constraints\":%6,\"position_evaluations\":%7,"
+				  "\"velocity_evaluations\":%8,\"rolling_evaluations\":%9,")
+			   .arg(stats.bodies_in_active_islands)
+			   .arg(stats.active_bodies)
+			   .arg(stats.contacts)
+			   .arg(stats.position_constraints)
+			   .arg(stats.velocity_constraints)
+			   .arg(stats.joint_constraints)
+			   .arg(stats.position_evaluations)
+			   .arg(stats.velocity_evaluations)
+			   .arg(stats.rolling_contact_evaluations)
+			   .str();
+	message += "\"solver_evaluations\":" + std::to_string(stats.solver_evaluations) + "},";
+	message += format("\"max\":{\"bodies\":%1,\"active_bodies\":%2,\"contacts\":%3,\"position_constraints\":%4,"
+				  "\"velocity_constraints\":%5,\"joint_constraints\":%6,\"solver_evaluations\":%7},")
+			   .arg(stats.max_bodies)
+			   .arg(stats.max_active_bodies)
+			   .arg(stats.max_contacts)
+			   .arg(stats.max_position_constraints)
+			   .arg(stats.max_velocity_constraints)
+			   .arg(stats.max_joint_constraints)
+			   .arg(stats.max_solver_evaluations)
+			   .str();
+	message += format("\"largest_share\":{\"bodies\":%1,\"active_bodies\":%2,\"contacts\":%3,\"solver_evaluations\":%4},")
+			   .arg(stats.largest_body_share)
+			   .arg(stats.largest_active_body_share)
+			   .arg(stats.largest_contact_share)
+			   .arg(stats.largest_solver_evaluation_share)
+			   .str();
+	message += "\"count_buckets\":[\"0\",\"1\",\"2-4\",\"5-16\",\"17-64\",\"65-256\",\"257+\"],";
+	message += "\"evaluation_buckets\":[\"0\",\"1-64\",\"65-256\",\"257-1024\",\"1025-4096\",\"4097-16384\",\"16385+\"],";
+	message += "\"histograms\":{";
+	message += "\"bodies\":" + TauHistogramJson(stats.body_histogram) + ',';
+	message += "\"active_bodies\":" + TauHistogramJson(stats.active_body_histogram) + ',';
+	message += "\"contacts\":" + TauHistogramJson(stats.contact_histogram) + ',';
+	message += "\"position_constraints\":" + TauHistogramJson(stats.position_constraint_histogram) + ',';
+	message += "\"velocity_constraints\":" + TauHistogramJson(stats.velocity_constraint_histogram) + ',';
+	message += "\"joint_constraints\":" + TauHistogramJson(stats.joint_constraint_histogram) + ',';
+	message += "\"solver_evaluations\":" + TauHistogramJson(stats.solver_evaluation_histogram) + "}}";
+	log(message.c_str());
+}
+
 void ReportTauContactDiagnostics(uint32_t step, const TauContactDiagnostics &diagnostics, size_t cache_size,
 	const tau_internal::TauStepReuseStats &reuse_stats) {
 	if (!TauContactDiagnosticsEnabled() || step % 60 != 0)
@@ -3643,7 +3885,8 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 	const std::vector<Tau6DofConstraint> &constraints, DynamicAABBTree &broadphase_tree, TauBroadphasePairCache &broadphase_pairs,
 	uint32_t &next_sleep_island_id, uint32_t step, float dt_sec,
 	const std::map<NodeRef, CollisionEventTrackingMode> &tracking_modes, NodePairContacts &latest_contacts,
-	TauStepScratch &scratch, tau_internal::TauStepReuseStats &reuse_stats) {
+	TauStepScratch &scratch, tau_internal::TauStepReuseStats &reuse_stats, bool collect_island_workload,
+	tau_internal::TauIslandWorkloadStats &island_workload_stats) {
 	TauProfileSection substep_profile("Tau.Substep");
 	const auto initial_scratch_capacity = scratch.GetCapacitySnapshot();
 	TauContactDiagnostics diagnostics;
@@ -3699,6 +3942,13 @@ bool StepTauSubstep(TauNodeStore &nodes, std::vector<TauContactManifold> &manifo
 			SolveTauRollingFriction(contacts, dt_sec, diagnostics);
 		else
 			++diagnostics.rolling_friction_pass_skips;
+	}
+	if (collect_island_workload) {
+		TauProfileSection island_diagnostics_profile("Tau.IslandDiagnostics");
+		CollectTauIslandWorkloadStats(nodes, islands, contacts, constraints, scratch.position_contact_indices,
+			scratch.velocity_contact_indices, scratch.has_nonzero_rolling_friction, diagnostics, scratch.island_workloads,
+			island_workload_stats);
+		ReportTauIslandWorkloadStats(step, island_workload_stats);
 	}
 	{
 		TauProfileSection manifold_store_profile("Tau.StoreManifoldImpulses");
@@ -3798,6 +4048,16 @@ bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref)
 }
 
 TauStepReuseStats GetLastStepReuseStats(const SceneTauPhysics &physics) { return physics.last_step_reuse_stats; }
+
+TauIslandWorkloadStats GetLastIslandWorkloadStats(const SceneTauPhysics &physics) {
+	return physics.last_island_workload_stats;
+}
+
+void SetIslandWorkloadDiagnosticsForTest(SceneTauPhysics &physics, bool enable) {
+	physics.force_island_workload_diagnostics = enable;
+	if (!enable)
+		physics.last_island_workload_stats = {};
+}
 
 void TransformNodeSleepCohortForTest(
 	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation) {
@@ -3960,6 +4220,7 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 	TauProfileSection step_profile("Tau.StepSimulation");
 	if (dt <= 0)
 		return;
+	const bool collect_island_workload = force_island_workload_diagnostics || TauIslandWorkloadDiagnosticsEnabled();
 
 	int substep_count = 0;
 	time_ns substep_time = dt;
@@ -3990,6 +4251,8 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 		if (CanSkipTauAllSleepingSubstep(nodes, broadphase_tree, node_collision_event_tracking_modes, requires_full_substep,
 				all_dynamic_bodies_sleeping, all_sleeping_fast_path_validated, all_sleeping_body_checks)) {
 			last_step_reuse_stats = {};
+			if (collect_island_workload)
+				last_island_workload_stats = {};
 			last_step_reuse_stats.all_sleeping_substeps_skipped = 1;
 			last_step_reuse_stats.all_sleeping_body_checks = all_sleeping_body_checks;
 			if (step_scratch)
@@ -4008,7 +4271,7 @@ void SceneTauPhysics::StepSimulation(time_ns dt, time_ns step, int max_step) {
 		all_dynamic_bodies_sleeping =
 			StepTauSubstep(nodes, contact_manifolds, contact_manifold_lookup, constraints, broadphase_tree, broadphase_pairs,
 				next_sleep_island_id, contact_step, time_to_sec_f(substep_time), node_collision_event_tracking_modes, latest_contacts,
-				*step_scratch, last_step_reuse_stats);
+				*step_scratch, last_step_reuse_stats, collect_island_workload, last_island_workload_stats);
 		all_sleeping_fast_path_validated = false;
 		last_step_reuse_stats.all_sleeping_body_checks = all_sleeping_body_checks;
 		requires_full_substep = false;
@@ -4149,6 +4412,7 @@ void SceneTauPhysics::ClearNodes() {
 	latest_contacts.clear();
 	step_scratch.reset();
 	last_step_reuse_stats = {};
+	last_island_workload_stats = {};
 }
 
 void SceneTauPhysics::Clear() {

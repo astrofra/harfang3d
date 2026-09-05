@@ -10,6 +10,8 @@
 --
 -- Set HG_TAU_PROFILE=1 for aggregate Tau phase timings. Profiled results are
 -- marked in JSON and should be used for attribution, not backend comparison.
+-- Set HG_TAU_ISLAND_DIAGNOSTICS=1 to emit a machine-readable island workload
+-- snapshot every 60 complete Tau substeps. Diagnostic runs perturb timings.
 -- BENCH_LAYOUT=spread places bodies on a deterministic non-overlapping grid
 -- to expose broad-phase scaling independently from dense-pile contact growth.
 -- BENCH_MODE selects how much of the frame is measured:
@@ -102,6 +104,9 @@ local fixed_step = hg.time_from_sec_f(1 / 60)
 local output_path = env_string("BENCH_OUTPUT", string.format("physics_pool_%s.jsonl", backend))
 local append_output = env_flag("BENCH_APPEND")
 local profiling = env_flag("HG_TAU_PROFILE")
+local contact_diagnostics = env_flag("HG_TAU_CONTACT_DIAGNOSTICS")
+local island_diagnostics = env_flag("HG_TAU_ISLAND_DIAGNOSTICS")
+local diagnostics_enabled = contact_diagnostics or island_diagnostics
 
 assert(target_count > 0, "BENCH_BODIES must be positive")
 assert(batch_size > 0, "BENCH_BATCH must be positive")
@@ -115,8 +120,11 @@ assert(repetitions > 0, "BENCH_REPETITIONS must be positive")
 if profiling and backend ~= "tau" then
 	print("[benchmark] warning: HG_TAU_PROFILE is enabled for a Bullet run")
 end
-if profiling and env_flag("HG_TAU_CONTACT_DIAGNOSTICS") then
-	print("[benchmark] warning: contact diagnostics logging will perturb profiled timings")
+if diagnostics_enabled and backend ~= "tau" then
+	print("[benchmark] warning: Tau diagnostics are enabled for a Bullet run")
+end
+if diagnostics_enabled then
+	print("[benchmark] warning: diagnostics collection/logging perturbs timings; use this run for workload attribution only")
 end
 
 local render_context = nil
@@ -384,12 +392,12 @@ local function measure_phase(world, phase, repetition, seed, sleep_wait_steps)
 		'{"schema":1,"timestamp_utc":%s,"backend":%s,"mode":%s,"phase":%s,"shape_mix":%s,"layout":%s,' ..
 		'"bodies":%d,"static_bodies":5,"batch":%d,"seed":%d,"repetition":%d,"samples":%d,' ..
 		'"fixed_step_ns":%d,"warmup_steps":%d,"settle_steps":%d,"phase_semantics":%s,' ..
-		'"sleep_wait_steps":%s,"sleep_poll_steps":%d,"sleep_max_steps":%d,"profiled":%s,' ..
+		'"sleep_wait_steps":%s,"sleep_poll_steps":%d,"sleep_max_steps":%d,"profiled":%s,"diagnostics":%s,' ..
 		'"total_ns":%d,"mean_us":%.3f,"median_us":%.3f,"p95_us":%.3f,"min_us":%.3f,"max_us":%.3f,' ..
 		'"revision":%s,"build_config":%s,"computer":%s,"processor":%s,"logical_processors":%s}',
 		json_string(os.date("!%Y-%m-%dT%H:%M:%SZ")), json_string(backend), json_string(mode), json_string(phase), json_string(shape_mix), json_string(layout),
 		target_count, batch_size, seed, repetition, sample_steps, fixed_step, warmup_steps, settle_steps, json_string(phase_semantics),
-		sleep_wait_json, sleep_poll_steps, sleep_max_steps, profiling and "true" or "false",
+		sleep_wait_json, sleep_poll_steps, sleep_max_steps, profiling and "true" or "false", diagnostics_enabled and "true" or "false",
 		total_ns, hg.time_to_us_f(total_ns) / sample_steps, hg.time_to_us_f(median_ns), hg.time_to_us_f(p95_ns),
 		hg.time_to_us_f(samples[1]), hg.time_to_us_f(samples[#samples]), json_string(env_string("BENCH_REVISION", "unknown")),
 		json_string(env_string("BENCH_BUILD_CONFIG", "unknown")), json_string(env_string("COMPUTERNAME", "unknown")),

@@ -30,6 +30,8 @@ struct CollisionGeometry;
 struct TauStepScratch;
 
 namespace tau_internal {
+static constexpr size_t kTauIslandHistogramBucketCount = 7;
+
 struct TauStepReuseStats {
 	size_t proxy_reuses{0};
 	size_t manifold_reuses{0};
@@ -56,12 +58,58 @@ struct TauStepReuseStats {
 	size_t position_constraint_capacity{0};
 	size_t velocity_constraint_capacity{0};
 	size_t island_body_capacity{0};
+	size_t island_workload_capacity{0};
+};
+
+// Optional per-substep topology/workload capture used to decide whether
+// independent-island scheduling can amortize its partitioning overhead. Count
+// histograms use 0, 1, 2-4, 5-16, 17-64, 65-256, and 257+ buckets. Evaluation
+// histograms use 0, 1-64, 65-256, 257-1024, 1025-4096, 4097-16384, and 16385+.
+struct TauIslandWorkloadStats {
+	bool collected{false};
+	size_t total_islands{0};
+	size_t active_islands{0};
+	size_t sleeping_islands{0};
+	size_t solver_islands{0};
+	size_t bodies_in_active_islands{0};
+	size_t active_bodies{0};
+	size_t proxy_updates{0};
+	size_t candidate_pairs{0};
+	size_t narrowphase_calls{0};
+	size_t contacts{0};
+	size_t position_constraints{0};
+	size_t velocity_constraints{0};
+	size_t joint_constraints{0};
+	size_t position_evaluations{0};
+	size_t velocity_evaluations{0};
+	size_t rolling_contact_evaluations{0};
+	size_t solver_evaluations{0};
+	size_t max_bodies{0};
+	size_t max_active_bodies{0};
+	size_t max_contacts{0};
+	size_t max_position_constraints{0};
+	size_t max_velocity_constraints{0};
+	size_t max_joint_constraints{0};
+	size_t max_solver_evaluations{0};
+	float largest_body_share{0.f};
+	float largest_active_body_share{0.f};
+	float largest_contact_share{0.f};
+	float largest_solver_evaluation_share{0.f};
+	std::array<size_t, kTauIslandHistogramBucketCount> body_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> active_body_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> contact_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> position_constraint_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> velocity_constraint_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> joint_constraint_histogram{};
+	std::array<size_t, kTauIslandHistogramBucketCount> solver_evaluation_histogram{};
 };
 
 bool IsNodeSleeping(const SceneTauPhysics &physics, NodeRef ref);
 uint32_t GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
 bool HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
 TauStepReuseStats GetLastStepReuseStats(const SceneTauPhysics &physics);
+TauIslandWorkloadStats GetLastIslandWorkloadStats(const SceneTauPhysics &physics);
+void SetIslandWorkloadDiagnosticsForTest(SceneTauPhysics &physics, bool enable);
 void TransformNodeSleepCohortForTest(
 	SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 }
@@ -320,6 +368,8 @@ private:
 	friend uint32_t tau_internal::GetNodeSleepIslandId(const SceneTauPhysics &physics, NodeRef ref);
 	friend bool tau_internal::HasNodeSleepingSupportSnapshot(const SceneTauPhysics &physics, NodeRef ref);
 	friend tau_internal::TauStepReuseStats tau_internal::GetLastStepReuseStats(const SceneTauPhysics &physics);
+	friend tau_internal::TauIslandWorkloadStats tau_internal::GetLastIslandWorkloadStats(const SceneTauPhysics &physics);
+	friend void tau_internal::SetIslandWorkloadDiagnosticsForTest(SceneTauPhysics &physics, bool enable);
 	friend void tau_internal::TransformNodeSleepCohortForTest(
 		SceneTauPhysics &physics, NodeRef ref, const Vec3 &displacement, const Quaternion &rotation);
 
@@ -350,6 +400,8 @@ private:
 	NodePairContacts latest_contacts;
 	std::unique_ptr<TauStepScratch> step_scratch;
 	tau_internal::TauStepReuseStats last_step_reuse_stats;
+	tau_internal::TauIslandWorkloadStats last_island_workload_stats;
+	bool force_island_workload_diagnostics{false};
 	std::function<void(SceneTauPhysics &, hg::time_ns t)> pre_tick_callback;
 };
 

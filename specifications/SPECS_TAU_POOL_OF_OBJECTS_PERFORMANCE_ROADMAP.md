@@ -1941,11 +1941,107 @@ step medians remain within about 1%. The compact slice is therefore accepted
 as behavior-safe and a small local improvement rather than claimed as a
 standalone FPS win.
 
-The next stage is island-size/work instrumentation. It should record body,
-contact, constraint, and solver-evaluation distributions per active island,
-plus the fraction of work in the largest island. Those measurements must
-precede any independent-island parallel scheduler and will show whether the
-remaining active cuboid deficit can actually benefit from parallelism.
+## 2026-09-05 Island And Parallel-Workload Instrumentation
+
+The island instrumentation stage is implemented. Setting
+`HG_TAU_ISLAND_DIAGNOSTICS=1` emits one JSON payload every 60 complete Tau
+substeps. Collection runs after merged-island wake-up and after the exact
+position and velocity streams have been prepared and solved, but before the
+sleep update changes activation state for the next substep. The payload
+contains:
+
+- total, active, sleeping, and solver-bearing island counts;
+- total and maximum bodies, active bodies, contact points, prepared position
+  constraints, prepared velocity constraints, and topology-only 6-DoF links;
+- exact three-pass position, eight-pass velocity, and optional rolling-contact
+  evaluation counts;
+- largest-island shares for bodies, active bodies, contacts, and solver
+  evaluations;
+- fixed, self-described histograms for every per-island count and for solver
+  evaluations;
+- the body-parallel and pair-parallel input sizes: active bodies, refreshed
+  proxies, broad-phase candidate pairs, and narrow-phase calls.
+
+The reusable per-root accumulation array lives in `TauStepScratch`, but it is
+assigned only when the diagnostic switch is enabled. With diagnostics off,
+there is no extra graph/contact traversal and no diagnostic allocation. The
+benchmark marks diagnostic records so their perturbed timings cannot be
+mistaken for acceptance timings. A focused C++ test covers a two-body contact
+island beside an isolated body, histogram conservation, exact iteration
+counts, largest-island shares, and scratch ownership. A simultaneous
+`HG_TAU_CONTACT_DIAGNOSTICS` cross-check produced 37 prepared constraints and
+the same 111 position and 296 velocity evaluations in both reporters.
+
+The Release diagnostic matrix is archived in
+`build/tau-island-workload-20260905`. It uses seed 5,521,749, one instrumented
+run per cell, the existing 10-step warm-up and 120-step active window, all
+five body counts, and cube-only, sphere-only, and mixed populations. The
+table below shows the final 60-step snapshot inside each active window.
+These are topology/workload observations, not timing samples.
+
+| Shapes | Bodies | Active bodies | Proxy updates | Candidate pairs | Narrow calls | Solver islands | Solver evaluations | Largest solver share |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| cube | 250 | 250 | 250 | 183 | 171 | 51 | 1,606 | 9.6% |
+| cube | 500 | 500 | 500 | 1,569 | 1,316 | 84 | 18,128 | 69.2% |
+| cube | 1,000 | 1,000 | 1,000 | 4,122 | 3,485 | 79 | 40,469 | 85.6% |
+| cube | 1,500 | 1,499 | 1,499 | 6,990 | 5,826 | 60 | 64,823 | 93.4% |
+| cube | 2,000 | 2,000 | 2,000 | 10,142 | 8,358 | 23 | 90,475 | 99.0% |
+| mixed | 250 | 250 | 250 | 135 | 128 | 55 | 1,023 | 8.6% |
+| mixed | 500 | 500 | 500 | 1,403 | 1,315 | 133 | 11,902 | 52.1% |
+| mixed | 1,000 | 1,000 | 1,000 | 3,734 | 3,526 | 110 | 27,104 | 83.6% |
+| mixed | 1,500 | 1,500 | 1,500 | 6,073 | 5,693 | 83 | 42,284 | 92.8% |
+| mixed | 2,000 | 1,999 | 1,999 | 8,640 | 7,972 | 45 | 61,061 | 97.7% |
+| sphere | 250 | 250 | 250 | 99 | 99 | 56 | 616 | 1.8% |
+| sphere | 500 | 500 | 500 | 1,222 | 1,222 | 157 | 7,183 | 20.1% |
+| sphere | 1,000 | 1,000 | 1,000 | 2,833 | 2,833 | 169 | 15,334 | 77.5% |
+| sphere | 1,500 | 1,500 | 1,500 | 4,601 | 4,601 | 138 | 24,739 | 87.5% |
+| sphere | 2,000 | 2,000 | 2,000 | 6,586 | 6,586 | 61 | 36,861 | 97.0% |
+
+The dense pool converges toward one dominant connected component. At 1,500
+bodies the largest component already carries 87.5-93.4% of iterative solver
+work; at 2,000 it carries 97.0-99.0%. Consequently, an island-only scheduler
+has a strict ideal speed-up ceiling of about 1.07x for the 1,500-cube final
+snapshot and about 1.01x for the 2,000-cube snapshot, even with unlimited
+workers and zero scheduling overhead. It remains valuable for fragmented
+worlds: a 2,000-cube spread control has 1,111 active islands, 847 solver
+islands, 37,268 evaluations, and only 0.12% of solver work in its largest
+island.
+
+This does not reject parallelism for the pool. The same dense snapshots expose
+1,499-2,000 independent body updates and 4,601-10,142 candidate-pair tasks.
+Those loops can be partitioned inside a single contact island. Parallel work
+must therefore be separated into three lanes:
+
+1. body-parallel integration and world-shape/AABB preparation, followed by a
+   deterministic serial commit to the mutable dynamic AABB tree;
+2. pair-parallel narrow phase into task-local contact/manifold candidates,
+   followed by a stable canonical merge and serial persistent-cache update;
+3. island-parallel solving for fragmented worlds, with the dominant dense
+   island kept serial until a behavior-safe within-island method is proven.
+
+The next bounded implementation slice should establish a reusable Harfang
+worker executor and make `SceneTauPhysics(thread_count)` retain and honor its
+requested concurrency. Its first physics consumer should be body-parallel
+integration/proxy preparation because bodies own disjoint hot state and the
+serial tree-commit boundary is explicit. Pair-parallel narrow phase is the
+larger expected dense-pool win but requires task-local outputs and a canonical
+merge first. Independent-island solving can then use the same executor with a
+minimum-work threshold; it must not be presented as the primary dense-pile
+optimization. Conflict coloring or block/Jacobi solving inside the dominant
+island remains a later, higher-risk experiment because it can change the
+accepted trajectory and convergence behavior.
+
+All 54 installed Release C++ test groups pass. Fresh chain and callback
+captures have byte-identical sample records to their accepted Tau baselines.
+The chain retains its 4.64718 m vertical envelope, 16.4712 m/s peak Tau speed,
+and zero static drift; the callback retains 0.03582168 m maximum position
+error and a -0.00141478 m amplitude delta. All three capsule contact pairs
+still pass. A diagnostics-off five-seed spot matrix at 1,500 bodies measures
+between 3.0% and 4.4% below the preceding medians/p95s across mixed, cube, and
+sphere populations. Because this is not a new alternating guarded matrix, it
+is used only to reject a 10% regression, not to claim an instrumentation
+speed-up. No Ollama model server was present; the resident launcher showed
+zero CPU change during a two-second post-run observation.
 
 ## Expected Outcome
 
@@ -1990,7 +2086,10 @@ cube-only sum time by 0.9%/0.8% in median/p95. The subsequent compact position
 working set preserves exact sensitive-pile diagnostics and passes its own
 30-run clean matrix without a 10% Tau regression. The current normalized
 active sum-time result is 0.959x/0.969x, while direct position-solve attribution
-improves by about 1.6% on both cuboids and the mixed workload. The next
-bounded step is island-size/work instrumentation before parallelism. The
-active cube-only per-cell stretch gates must pass before claiming that Tau
-beats Bullet without qualification.
+improves by about 1.6% on both cuboids and the mixed workload. Island workload
+instrumentation now shows that dense-pool solver work is dominated by one
+component, while body and narrow-phase inputs remain broadly partitionable.
+The next bounded step is a reusable worker executor plus a deterministic
+body-parallel integration/proxy-preparation slice. The active cube-only
+per-cell stretch gates must pass before claiming that Tau beats Bullet without
+qualification.

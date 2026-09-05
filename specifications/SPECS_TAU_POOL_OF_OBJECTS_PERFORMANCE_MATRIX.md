@@ -871,9 +871,91 @@ regression budget, and provides a compact sequential input for future
 per-island work partitioning. It is not claimed as a standalone frame-rate
 win.
 
-The next bounded task is island-size/work instrumentation: per-active-island
-body, contact, position-constraint, velocity-constraint, and evaluation counts,
-plus largest-island work share and distributions. Parallel independent-island
-execution should be designed only after those measurements show enough work
-outside the largest dense-pile island. Active cube-only performance remains
-the principal stretch gate.
+## 2026-09-05 Island And Parallel-Workload Matrix
+
+`HG_TAU_ISLAND_DIAGNOSTICS=1` now emits a self-described JSON workload record
+every 60 complete Tau substeps. The engine records exact prepared position and
+velocity streams per active island, their fixed-iteration evaluation counts,
+histograms, maxima, and largest-island shares. It also records active-body,
+proxy-update, candidate-pair, and narrow-phase input sizes so that body- and
+pair-parallel opportunities are not confused with island-parallel solving.
+Diagnostic collection is opt-in and reuses `TauStepScratch`; normal runs add
+no workload traversal or allocation. Benchmark JSON records are explicitly
+marked `"diagnostics":true` when either diagnostic mode is enabled.
+
+The artifact is `build/tau-island-workload-20260905`. It contains the raw log
+and benchmark JSONL for every cell, `post-spawn-snapshots.csv` for both
+60-step observations after population completion, and `summary.csv` for the
+last observation in each active window. The Release protocol uses seed
+5,521,749, one diagnostic repetition, 10 warm-up steps, 120 active samples,
+and the standard seven-body spawn batches. Timings from these runs are not
+used because collection and logging are deliberately inside the observed
+process.
+
+| Shapes | Bodies | Active bodies | Proxy updates | Candidate pairs | Narrow calls | Solver islands | Solver evaluations | Largest solver share |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| cube | 250 | 250 | 250 | 183 | 171 | 51 | 1,606 | 9.6% |
+| cube | 500 | 500 | 500 | 1,569 | 1,316 | 84 | 18,128 | 69.2% |
+| cube | 1,000 | 1,000 | 1,000 | 4,122 | 3,485 | 79 | 40,469 | 85.6% |
+| cube | 1,500 | 1,499 | 1,499 | 6,990 | 5,826 | 60 | 64,823 | 93.4% |
+| cube | 2,000 | 2,000 | 2,000 | 10,142 | 8,358 | 23 | 90,475 | 99.0% |
+| mixed | 250 | 250 | 250 | 135 | 128 | 55 | 1,023 | 8.6% |
+| mixed | 500 | 500 | 500 | 1,403 | 1,315 | 133 | 11,902 | 52.1% |
+| mixed | 1,000 | 1,000 | 1,000 | 3,734 | 3,526 | 110 | 27,104 | 83.6% |
+| mixed | 1,500 | 1,500 | 1,500 | 6,073 | 5,693 | 83 | 42,284 | 92.8% |
+| mixed | 2,000 | 1,999 | 1,999 | 8,640 | 7,972 | 45 | 61,061 | 97.7% |
+| sphere | 250 | 250 | 250 | 99 | 99 | 56 | 616 | 1.8% |
+| sphere | 500 | 500 | 500 | 1,222 | 1,222 | 157 | 7,183 | 20.1% |
+| sphere | 1,000 | 1,000 | 1,000 | 2,833 | 2,833 | 169 | 15,334 | 77.5% |
+| sphere | 1,500 | 1,500 | 1,500 | 4,601 | 4,601 | 138 | 24,739 | 87.5% |
+| sphere | 2,000 | 2,000 | 2,000 | 6,586 | 6,586 | 61 | 36,861 | 97.0% |
+
+The largest share is identical for contacts and iterative solver evaluations
+in this matrix because every active contact produces one position and one
+velocity constraint, the pool has zero rolling friction, and every constraint
+uses the same three plus eight passes. The histograms remain separate so this
+assumption is observable rather than embedded in future scheduling code.
+
+The final dense-pool snapshots make an island-only strategy unattractive for
+the main cuboid stretch cell. The largest island owns 93.4% of solver work at
+1,500 cubes and 99.0% at 2,000 cubes. In contrast, the same snapshots still
+offer 1,499-2,000 independent body/proxy inputs and thousands of narrow-phase
+pairs. A 2,000-cube spread control confirms the other topology extreme: its
+last snapshot has 1,111 active islands, 847 solver islands, 37,268 solver
+evaluations, and only 0.12% in the largest island.
+
+The instrumentation therefore accepts parallelism as three distinct paths:
+body-parallel integration/proxy preparation, pair-parallel narrow phase with
+a deterministic merge, and island-parallel solve for fragmented worlds. A
+reusable worker executor that honors `SceneTauPhysics(thread_count)` is the
+next infrastructure slice. The first low-risk consumer should be disjoint
+body work with a serial deterministic AABB-tree commit. Pair-parallel narrow
+phase has the larger likely dense-pool payoff but first needs task-local
+manifold/contact output. Within-island solver parallelism remains gated on a
+separate deterministic/convergence design.
+
+The Release build and all 54 installed C++ test groups pass. Two fresh
+600-sample ring-chain captures have byte-identical sample records to each
+other and to the accepted Tau capture; only the intentionally distinct
+backend metadata line differs. The bounded validator retains the 4.64718 m
+maximum vertical error, 16.4712 m/s maximum Tau speed, and zero static-ring
+drift. The impulse-callback sample records are also byte-identical to the
+accepted capture and retain 0.03582168 m maximum position error and a
+-0.00141478 m peak-to-peak amplitude delta. Capsule/sphere,
+capsule/cuboid, and capsule/capsule still report one contact each.
+
+A separate diagnostics-off, five-seed 1,500-body spot matrix verifies that the
+new inactive branch does not introduce a measurable regression:
+
+| Shapes | Compact-position median / p95 | Current median / p95 | Change median / p95 |
+|---|---:|---:|---:|
+| mixed | 10.844 / 13.063 ms | 10.524 / 12.593 ms | -3.0% / -3.6% |
+| cube | 16.193 / 19.648 ms | 15.556 / 19.041 ms | -3.9% / -3.1% |
+| sphere | 6.416 / 7.654 ms | 6.187 / 7.316 ms | -3.6% / -4.4% |
+
+The current records all contain `"diagnostics":false`. A post-run process
+check found no Ollama model-server process; the resident launcher held about
+29 MB and consumed 0 CPU seconds over a two-second observation. This focused
+matrix has no alternating process-delta guard, so the apparent improvements
+are not claimed as speed-ups. They are sufficient to reject a 10% regression
+from disabled instrumentation.
