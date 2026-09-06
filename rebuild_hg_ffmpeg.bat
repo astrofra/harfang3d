@@ -15,7 +15,7 @@ for %%I in ("%~dp0.") do set "REPO_DIR=%%~fI"
 for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 
 set "BUILD_DIR=%WORK_DIR%\build\ffmpeg-plugin"
-set "INSTALL_DIR=%WORK_DIR%\install\ffmpeg-plugin"
+set "INSTALL_DIR=%WORK_DIR%\install\ffmpeg"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
 set "GENERATOR=Visual Studio 17 2022"
 set "PLATFORM=x64"
@@ -60,7 +60,7 @@ if not defined PYTHON_EXE (
 )
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
-if not exist "%INSTALL_DIR%\%CONFIG%" mkdir "%INSTALL_DIR%\%CONFIG%"
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo [1/3] Configuration CMake...
 cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
@@ -94,16 +94,16 @@ if not exist "%PLUGIN_DLL%" (
 )
 
 echo [3/3] Copie des DLL...
-copy /Y "%PLUGIN_DLL%" "%INSTALL_DIR%\%CONFIG%\" >nul
+copy /Y "%PLUGIN_DLL%" "%INSTALL_DIR%\" >nul
 if errorlevel 1 exit /b !errorlevel!
 
 if exist "%FFMPEG_ROOT%\bin\*.dll" (
-	copy /Y "%FFMPEG_ROOT%\bin\*.dll" "%INSTALL_DIR%\%CONFIG%\" >nul
+	copy /Y "%FFMPEG_ROOT%\bin\*.dll" "%INSTALL_DIR%\" >nul
 	if errorlevel 1 exit /b !errorlevel!
 )
 
 echo.
 echo FFmpeg plugin rebuild ok.
-echo Plugin: "%INSTALL_DIR%\%CONFIG%\hg_ffmpeg.dll"
-echo DLLs: "%INSTALL_DIR%\%CONFIG%"
+echo Plugin: "%INSTALL_DIR%\hg_ffmpeg.dll"
+echo DLLs: "%INSTALL_DIR%"
 exit /b 0
