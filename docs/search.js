@@ -798,6 +798,18 @@ window.HG_SEARCH_INDEX = [
     "text": "Lua VM for scene script components. See man.Scripting."
   },
   {
+    "title": "ScenePhysics",
+    "href": "api/cpython/classes.html#scenephysics",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ScenePhysicsPreTickCallback",
+    "href": "api/cpython/classes.html#scenephysicspretickcallback",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "ScenePlayAnimRef",
     "href": "api/cpython/classes.html#sceneplayanimref",
     "kind": "class",
@@ -2302,6 +2314,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#getsceneforwardpipelinepassviewid",
     "kind": "function",
     "text": "Return the view id for a scene forward pipeline pass id."
+  },
+  {
+    "title": "GetScenePhysicsBackendName",
+    "href": "api/cpython/functions.html#getscenephysicsbackendname",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetSize",
@@ -6960,6 +6978,18 @@ window.HG_SEARCH_INDEX = [
     "text": "Lua VM for scene script components. See man.Scripting."
   },
   {
+    "title": "ScenePhysics",
+    "href": "api/lua/classes.html#scenephysics",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ScenePhysicsPreTickCallback",
+    "href": "api/lua/classes.html#scenephysicspretickcallback",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "ScenePlayAnimRef",
     "href": "api/lua/classes.html#sceneplayanimref",
     "kind": "class",
@@ -8464,6 +8494,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#getsceneforwardpipelinepassviewid",
     "kind": "function",
     "text": "Return the view id for a scene forward pipeline pass id."
+  },
+  {
+    "title": "GetScenePhysicsBackendName",
+    "href": "api/lua/functions.html#getscenephysicsbackendname",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetSize",
@@ -13122,6 +13158,18 @@ window.HG_SEARCH_INDEX = [
     "text": "Lua VM for scene script components. See man.Scripting."
   },
   {
+    "title": "ScenePhysics",
+    "href": "api/squirrel/classes.html#scenephysics",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ScenePhysicsPreTickCallback",
+    "href": "api/squirrel/classes.html#scenephysicspretickcallback",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "ScenePlayAnimRef",
     "href": "api/squirrel/classes.html#sceneplayanimref",
     "kind": "class",
@@ -14626,6 +14674,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#getsceneforwardpipelinepassviewid",
     "kind": "function",
     "text": "Return the view id for a scene forward pipeline pass id."
+  },
+  {
+    "title": "GetScenePhysicsBackendName",
+    "href": "api/squirrel/functions.html#getscenephysicsbackendname",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetSize",

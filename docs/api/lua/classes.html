@@ -9,7 +9,7 @@
 <body class="static-doc" data-root="../../">
 <div class="doc-layout">
 <aside class="doc-sidebar">
-<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.0</span></a>
 <input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
 <div id="doc-search-results" class="doc-search-results"></div>
 <div class="doc-nav-title">Manual</div>
@@ -1553,6 +1553,7 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <h3>Functions</h3>
 <table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
 <tr id="rigidbody_getangulardamping"><td><code>GetAngularDamping</code></td><td><div class="api-proto"><code>number</code> GetAngularDamping()</div></td><td><div class="api-doc"><p>Return the rigid body angular damping. A value of 0.0 means no damping, 1.0 means the maximal dissipation of the energy.</p></div></td></tr>
+<tr id="rigidbody_getcontinuouscollisiondetection"><td><code>GetContinuousCollisionDetection</code></td><td><div class="api-proto"><code>boolean</code> GetContinuousCollisionDetection()</div></td><td></td></tr>
 <tr id="rigidbody_getfriction"><td><code>GetFriction</code></td><td><div class="api-proto"><code>number</code> GetFriction()</div></td><td></td></tr>
 <tr id="rigidbody_getlineardamping"><td><code>GetLinearDamping</code></td><td><div class="api-proto"><code>number</code> GetLinearDamping()</div></td><td></td></tr>
 <tr id="rigidbody_getrestitution"><td><code>GetRestitution</code></td><td><div class="api-proto"><code>number</code> GetRestitution()</div></td><td></td></tr>
@@ -1560,6 +1561,7 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <tr id="rigidbody_gettype"><td><code>GetType</code></td><td><div class="api-proto"><a href="constants.html#rigidbodytype">RigidBodyType</a> GetType()</div></td><td><div class="api-doc"><p>Return the rigid body type. See <a href="#rigidbody_settype">RigidBody.SetType</a>.</p></div></td></tr>
 <tr id="rigidbody_isvalid"><td><code>IsValid</code></td><td><div class="api-proto"><code>boolean</code> IsValid()</div></td><td></td></tr>
 <tr id="rigidbody_setangulardamping"><td><code>SetAngularDamping</code></td><td><div class="api-proto"><code>nil</code> SetAngularDamping(<code>number</code> damping)</div></td><td><div class="api-doc"><p>Set the rigid body angular damping. A value of 0.0 means no damping, 1.0 means the maximal dissipation of the energy.</p></div></td></tr>
+<tr id="rigidbody_setcontinuouscollisiondetection"><td><code>SetContinuousCollisionDetection</code></td><td><div class="api-proto"><code>nil</code> SetContinuousCollisionDetection(<code>boolean</code> enable)</div></td><td></td></tr>
 <tr id="rigidbody_setfriction"><td><code>SetFriction</code></td><td><div class="api-proto"><code>nil</code> SetFriction(<code>number</code> friction)</div></td><td></td></tr>
 <tr id="rigidbody_setlineardamping"><td><code>SetLinearDamping</code></td><td><div class="api-proto"><code>nil</code> SetLinearDamping(<code>number</code> damping)</div></td><td></td></tr>
 <tr id="rigidbody_setrestitution"><td><code>SetRestitution</code></td><td><div class="api-proto"><code>nil</code> SetRestitution(<code>number</code> restitution)</div></td><td></td></tr>
@@ -1768,6 +1770,7 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <tr id="scenebullet3physics_nodegetlinearvelocity"><td><code>NodeGetLinearVelocity</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetLinearVelocity(<a href="#node">Node</a> node)</div></td><td></td></tr>
 <tr id="scenebullet3physics_nodegetpointvelocity"><td><code>NodeGetPointVelocity</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetPointVelocity(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> world_pos)</div></td><td></td></tr>
 <tr id="scenebullet3physics_nodehasbody"><td><code>NodeHasBody</code></td><td><div class="api-proto"><code>boolean</code> NodeHasBody(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenebullet3physics_nodeissleeping"><td><code>NodeIsSleeping</code></td><td><div class="api-proto"><code>boolean</code> NodeIsSleeping(<a href="#node">Node</a> node)</div></td><td></td></tr>
 <tr id="scenebullet3physics_noderesetworld"><td><code>NodeResetWorld</code></td><td><div class="api-proto"><code>nil</code> NodeResetWorld(<a href="#node">Node</a> node, <a href="#mat4">Mat4</a> world)</div></td><td></td></tr>
 <tr id="scenebullet3physics_nodesetangularfactor"><td><code>NodeSetAngularFactor</code></td><td><div class="api-proto"><code>nil</code> NodeSetAngularFactor(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> k)</div></td><td></td></tr>
 <tr id="scenebullet3physics_nodesetangularvelocity"><td><code>NodeSetAngularVelocity</code></td><td><div class="api-proto"><code>nil</code> NodeSetAngularVelocity(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> W)</div></td><td></td></tr>
@@ -1850,6 +1853,69 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <tr id="sceneluavm_setscriptvalue"><td><code>SetScriptValue</code></td><td><div class="api-proto"><code>boolean</code> SetScriptValue(<a href="#script">Script</a> script, <code>string</code> name, <a href="#luaobject">LuaObject</a> value)</div>
 <div class="api-proto"><code>boolean</code> SetScriptValue(<a href="#script">Script</a> script, <code>string</code> name, <a href="#luaobject">LuaObject</a> value, <code>boolean</code> notify)</div></td><td></td></tr>
 </table>
+</section>
+<section class="api-entry" id="scenephysics">
+<h2>ScenePhysics <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="scenephysics_add6dofconstraint"><td><code>Add6DofConstraint</code></td><td><div class="api-proto"><code>nil</code> Add6DofConstraint(<a href="#node">Node</a> nodeA, <a href="#node">Node</a> nodeB, <a href="#mat4">Mat4</a> anchorALocal, <a href="#mat4">Mat4</a> anchorBInLocalSpaceA)</div></td><td></td></tr>
+<tr id="scenephysics_clear"><td><code>Clear</code></td><td><div class="api-proto"><code>nil</code> Clear()</div></td><td></td></tr>
+<tr id="scenephysics_clearnodes"><td><code>ClearNodes</code></td><td><div class="api-proto"><code>nil</code> ClearNodes()</div></td><td></td></tr>
+<tr id="scenephysics_collectcollisionevents"><td><code>CollectCollisionEvents</code></td><td><div class="api-proto"><a href="#nodepaircontacts">NodePairContacts</a> CollectCollisionEvents(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+<tr id="scenephysics_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#scenephysics">ScenePhysics</a> Constructor()</div>
+<div class="api-proto"><a href="#scenephysics">ScenePhysics</a> Constructor(<code>integer</code> thread_count)</div></td><td></td></tr>
+<tr id="scenephysics_garbagecollect"><td><code>GarbageCollect</code></td><td><div class="api-proto"><code>integer</code> GarbageCollect(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+<tr id="scenephysics_garbagecollectresources"><td><code>GarbageCollectResources</code></td><td><div class="api-proto"><code>integer</code> GarbageCollectResources()</div></td><td></td></tr>
+<tr id="scenephysics_nodeaddforce"><td><code>NodeAddForce</code></td><td><div class="api-proto"><code>nil</code> NodeAddForce(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> F)</div>
+<div class="api-proto"><code>nil</code> NodeAddForce(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> F, <a href="#vec3">Vec3</a> world_pos)</div></td><td></td></tr>
+<tr id="scenephysics_nodeaddimpulse"><td><code>NodeAddImpulse</code></td><td><div class="api-proto"><code>nil</code> NodeAddImpulse(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> dt_velocity)</div>
+<div class="api-proto"><code>nil</code> NodeAddImpulse(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> dt_velocity, <a href="#vec3">Vec3</a> world_pos)</div></td><td></td></tr>
+<tr id="scenephysics_nodeaddtorque"><td><code>NodeAddTorque</code></td><td><div class="api-proto"><code>nil</code> NodeAddTorque(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> T)</div></td><td></td></tr>
+<tr id="scenephysics_nodeaddtorqueimpulse"><td><code>NodeAddTorqueImpulse</code></td><td><div class="api-proto"><code>nil</code> NodeAddTorqueImpulse(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> dt_angular_velocity)</div></td><td></td></tr>
+<tr id="scenephysics_nodecreatephysicsfromassets"><td><code>NodeCreatePhysicsFromAssets</code></td><td><div class="api-proto"><code>nil</code> NodeCreatePhysicsFromAssets(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodecreatephysicsfromfile"><td><code>NodeCreatePhysicsFromFile</code></td><td><div class="api-proto"><code>nil</code> NodeCreatePhysicsFromFile(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodedestroyphysics"><td><code>NodeDestroyPhysics</code></td><td><div class="api-proto"><code>nil</code> NodeDestroyPhysics(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetangularfactor"><td><code>NodeGetAngularFactor</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetAngularFactor(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetangularvelocity"><td><code>NodeGetAngularVelocity</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetAngularVelocity(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetdeactivation"><td><code>NodeGetDeactivation</code></td><td><div class="api-proto"><code>boolean</code> NodeGetDeactivation(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetlinearfactor"><td><code>NodeGetLinearFactor</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetLinearFactor(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetlinearvelocity"><td><code>NodeGetLinearVelocity</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetLinearVelocity(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodegetpointvelocity"><td><code>NodeGetPointVelocity</code></td><td><div class="api-proto"><a href="#vec3">Vec3</a> NodeGetPointVelocity(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> world_pos)</div></td><td></td></tr>
+<tr id="scenephysics_nodehasbody"><td><code>NodeHasBody</code></td><td><div class="api-proto"><code>boolean</code> NodeHasBody(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodeissleeping"><td><code>NodeIsSleeping</code></td><td><div class="api-proto"><code>boolean</code> NodeIsSleeping(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_noderesetworld"><td><code>NodeResetWorld</code></td><td><div class="api-proto"><code>nil</code> NodeResetWorld(<a href="#node">Node</a> node, <a href="#mat4">Mat4</a> world)</div></td><td></td></tr>
+<tr id="scenephysics_nodesetangularfactor"><td><code>NodeSetAngularFactor</code></td><td><div class="api-proto"><code>nil</code> NodeSetAngularFactor(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> k)</div></td><td></td></tr>
+<tr id="scenephysics_nodesetangularvelocity"><td><code>NodeSetAngularVelocity</code></td><td><div class="api-proto"><code>nil</code> NodeSetAngularVelocity(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> W)</div></td><td></td></tr>
+<tr id="scenephysics_nodesetdeactivation"><td><code>NodeSetDeactivation</code></td><td><div class="api-proto"><code>nil</code> NodeSetDeactivation(<a href="#node">Node</a> node, <code>boolean</code> enable)</div></td><td></td></tr>
+<tr id="scenephysics_nodesetlinearfactor"><td><code>NodeSetLinearFactor</code></td><td><div class="api-proto"><code>nil</code> NodeSetLinearFactor(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> k)</div></td><td></td></tr>
+<tr id="scenephysics_nodesetlinearvelocity"><td><code>NodeSetLinearVelocity</code></td><td><div class="api-proto"><code>nil</code> NodeSetLinearVelocity(<a href="#node">Node</a> node, <a href="#vec3">Vec3</a> V)</div></td><td></td></tr>
+<tr id="scenephysics_nodestarttrackingcollisionevents"><td><code>NodeStartTrackingCollisionEvents</code></td><td><div class="api-proto"><code>nil</code> NodeStartTrackingCollisionEvents(<a href="#node">Node</a> node)</div>
+<div class="api-proto"><code>nil</code> NodeStartTrackingCollisionEvents(<a href="#node">Node</a> node, <a href="constants.html#collisioneventtrackingmode">CollisionEventTrackingMode</a> mode)</div></td><td></td></tr>
+<tr id="scenephysics_nodestoptrackingcollisionevents"><td><code>NodeStopTrackingCollisionEvents</code></td><td><div class="api-proto"><code>nil</code> NodeStopTrackingCollisionEvents(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_nodeteleport"><td><code>NodeTeleport</code></td><td><div class="api-proto"><code>nil</code> NodeTeleport(<a href="#node">Node</a> node, <a href="#mat4">Mat4</a> world)</div></td><td></td></tr>
+<tr id="scenephysics_nodewake"><td><code>NodeWake</code></td><td><div class="api-proto"><code>nil</code> NodeWake(<a href="#node">Node</a> node)</div></td><td></td></tr>
+<tr id="scenephysics_raycastallhits"><td><code>RaycastAllHits</code></td><td><div class="api-proto"><a href="#raycastoutlist">RaycastOutList</a> RaycastAllHits(<a href="#scene">Scene</a> scene, <a href="#vec3">Vec3</a> p0, <a href="#vec3">Vec3</a> p1)</div></td><td></td></tr>
+<tr id="scenephysics_raycastfirsthit"><td><code>RaycastFirstHit</code></td><td><div class="api-proto"><a href="#raycastout">RaycastOut</a> RaycastFirstHit(<a href="#scene">Scene</a> scene, <a href="#vec3">Vec3</a> p0, <a href="#vec3">Vec3</a> p1)</div></td><td></td></tr>
+<tr id="scenephysics_rendercollision"><td><code>RenderCollision</code></td><td><div class="api-proto"><code>nil</code> RenderCollision(<code>integer</code> view_id, <a href="#vertexlayout">VertexLayout</a> vtx_layout, <a href="#programhandle">ProgramHandle</a> prg, <a href="#renderstate">RenderState</a> render_state, <code>integer</code> depth)</div></td><td></td></tr>
+<tr id="scenephysics_scenecreatephysicsfromassets"><td><code>SceneCreatePhysicsFromAssets</code></td><td><div class="api-proto"><code>nil</code> SceneCreatePhysicsFromAssets(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+<tr id="scenephysics_scenecreatephysicsfromfile"><td><code>SceneCreatePhysicsFromFile</code></td><td><div class="api-proto"><code>nil</code> SceneCreatePhysicsFromFile(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+<tr id="scenephysics_setpretickcallback"><td><code>SetPreTickCallback</code></td><td><div class="api-proto"><code>nil</code> SetPreTickCallback(<a href="#scenephysicspretickcallback">ScenePhysicsPreTickCallback</a> cbk)</div></td><td></td></tr>
+<tr id="scenephysics_stepsimulation"><td><code>StepSimulation</code></td><td><div class="api-proto"><code>nil</code> StepSimulation(<code>integer</code> display_dt)</div>
+<div class="api-proto"><code>nil</code> StepSimulation(<code>integer</code> display_dt, <code>integer</code> step_dt)</div>
+<div class="api-proto"><code>nil</code> StepSimulation(<code>integer</code> display_dt, <code>integer</code> step_dt, <code>integer</code> max_step)</div></td><td></td></tr>
+<tr id="scenephysics_synctransformsfromscene"><td><code>SyncTransformsFromScene</code></td><td><div class="api-proto"><code>nil</code> SyncTransformsFromScene(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+<tr id="scenephysics_synctransformstoscene"><td><code>SyncTransformsToScene</code></td><td><div class="api-proto"><code>nil</code> SyncTransformsToScene(<a href="#scene">Scene</a> scene)</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="scenephysicspretickcallback">
+<h2>ScenePhysicsPreTickCallback <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
 </section>
 <section class="api-entry" id="sceneplayanimref">
 <h2>ScenePlayAnimRef <span class="api-kind">Class</span></h2>
@@ -2560,7 +2626,7 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 
 
 </section>
-<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+<div class="doc-footer">Harfang 3.3.0 static documentation.</div>
 </main>
 </div>
 <script src="../../search.js"></script>

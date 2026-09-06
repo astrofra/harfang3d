@@ -9,7 +9,7 @@
 <body class="static-doc" data-root="../../">
 <div class="doc-layout">
 <aside class="doc-sidebar">
-<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.2.7</span></a>
+<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.0</span></a>
 <input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
 <div id="doc-search-results" class="doc-search-results"></div>
 <div class="doc-nav-title">Manual</div>
@@ -1320,6 +1320,11 @@ This function returns the backend current frame.</p>
 <h2>GetSceneForwardPipelinePassViewId <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetSceneForwardPipelinePassViewId(views: <a href="classes.html#sceneforwardpipelinepassviewid">SceneForwardPipelinePassViewId</a>, pass: <a href="constants.html#sceneforwardpipelinepass">SceneForwardPipelinePass</a>) -&gt; <code>int</code></div>
 <div class="api-doc"><p>Return the view id for a scene forward pipeline pass id.</p></div>
+</section>
+<section class="api-entry" id="getscenephysicsbackendname">
+<h2>GetScenePhysicsBackendName <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetScenePhysicsBackendName() -&gt; <code>str</code></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="getsize">
 <h2>GetSize <span class="api-kind">Function</span></h2>
@@ -4015,6 +4020,8 @@ is copied to the audio backend before the function returns.</p></div>
 <h2>SceneClearSystems <span class="api-kind">Function</span></h2>
 <div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneClearSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Clear scene and all optional systems.</p></div>
@@ -4023,6 +4030,8 @@ is copied to the audio backend before the function returns.</p></div>
 <h2>SceneGarbageCollectSystems <span class="api-kind">Function</span></h2>
 <div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>) -&gt; <code>int</code></div>
 <div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>int</code></div>
+<div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>) -&gt; <code>int</code></div>
+<div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>int</code></div>
 <div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>) -&gt; <code>int</code></div>
 <div class="api-proto">SceneGarbageCollectSystems(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>int</code></div>
 <div class="api-doc"><p>Garbage collect a scene and all its optional systems.</p></div>
@@ -4030,6 +4039,8 @@ is copied to the audio backend before the function returns.</p></div>
 <section class="api-entry" id="scenesynctosystemsfromassets">
 <h2>SceneSyncToSystemsFromAssets <span class="api-kind">Function</span></h2>
 <div class="api-proto">SceneSyncToSystemsFromAssets(scene: <a href="classes.html#scene">Scene</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneSyncToSystemsFromAssets(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneSyncToSystemsFromAssets(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneSyncToSystemsFromAssets(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneSyncToSystemsFromAssets(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Synchronize optional systems (eg. physics or script) states with the scene states. Load resources from the assets system if required.</p>
@@ -4038,6 +4049,8 @@ is copied to the audio backend before the function returns.</p></div>
 <section class="api-entry" id="scenesynctosystemsfromfile">
 <h2>SceneSyncToSystemsFromFile <span class="api-kind">Function</span></h2>
 <div class="api-proto">SceneSyncToSystemsFromFile(scene: <a href="classes.html#scene">Scene</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneSyncToSystemsFromFile(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneSyncToSystemsFromFile(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneSyncToSystemsFromFile(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneSyncToSystemsFromFile(scene: <a href="classes.html#scene">Scene</a>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Synchronize optional systems (eg. physics or script) states with the scene states. Load resources from the local filesystem if required.</p>
@@ -4047,6 +4060,10 @@ is copied to the audio backend before the function returns.</p></div>
 <h2>SceneUpdateSystems <span class="api-kind">Function</span></h2>
 <div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, step: <code>int</code>, max_physics_step: <code>int</code>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, step: <code>int</code>, max_physics_step: <code>int</code>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, contacts: <a href="classes.html#nodepaircontacts">NodePairContacts</a>, step: <code>int</code>, max_physics_step: <code>int</code>) -&gt; <code>None</code></div>
+<div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenephysics">ScenePhysics</a>, contacts: <a href="classes.html#nodepaircontacts">NodePairContacts</a>, step: <code>int</code>, max_physics_step: <code>int</code>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, step: <code>int</code>, max_physics_step: <code>int</code>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, step: <code>int</code>, max_physics_step: <code>int</code>, vm: <a href="classes.html#sceneluavm">SceneLuaVM</a>) -&gt; <code>None</code></div>
 <div class="api-proto">SceneUpdateSystems(scene: <a href="classes.html#scene">Scene</a>, clocks: <a href="classes.html#sceneclocks">SceneClocks</a>, dt: <code>int</code>, physics: <a href="classes.html#scenebullet3physics">SceneBullet3Physics</a>, contacts: <a href="classes.html#nodepaircontacts">NodePairContacts</a>, step: <code>int</code>, max_physics_step: <code>int</code>) -&gt; <code>None</code></div>
@@ -4922,7 +4939,7 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">ZoomFactorToFov(zoom_factor: <code>float</code>) -&gt; <code>float</code></div>
 <div class="api-doc"><p>Convert from a zoom factor value in meters to a fov value in radian.</p></div>
 </section>
-<div class="doc-footer">Harfang 3.2.7 static documentation.</div>
+<div class="doc-footer">Harfang 3.3.0 static documentation.</div>
 </main>
 </div>
 <script src="../../search.js"></script>
