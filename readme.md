@@ -2,19 +2,20 @@
 
 # HARFANG® 3D engine
 
-_Non official fork_
+_Unofficial fork_
 
 [![PyPI](https://img.shields.io/pypi/v/harfang)](https://pypi.org/project/harfang)
 [![Downloads](https://static.pepy.tech/badge/harfang)](https://pepy.tech/project/harfang)
 [![Downloads](https://static.pepy.tech/badge/harfang/month)](https://pepy.tech/project/harfang)
 
-HARFANG®3D is an all-in-one 3D visualization library usable in C++, Python and Lua.
-This fork currently ships Lua and Squirrel support. CPython build support remains present in-tree, but is not guaranteed in recent builds.
+HARFANG®3D is an all-in-one 3D visualization library usable in C++, Lua, Squirrel and Python.
+This fork ships validated Lua and Squirrel runtimes. CPython build support remains present in-tree, but is not guaranteed in recent builds.
 #### Table of contents
 
 1. [About](#section_1)
     - [Features](#subsection_1a)
-    - [Screenshots](#subsection_1b)
+    - [What's new in 3.3.0](#subsection_1b)
+    - [Screenshots](#subsection_1c)
 2. [Download](#section_2)
 3. [Building the SDK](#section_3)
     - [Prerequisites](#subsection_3a)
@@ -57,10 +58,13 @@ VR API
 * Tested with the HTC Vive/Vive Pro, Valve Index, Lenovo Explorer, Oculus Rift S, Oculus Quest 2, Varjo XR-3
 
 Physics API
-* Rigid bodies, collisions, mechanical constraints, ray casting
+* Selectable Bullet 3 or Tau scene-physics backend through the common `ScenePhysics` API
+* Rigid bodies, collisions, mechanical constraints, ray casting and continuous collision detection
+* Primitive and mesh collision geometry with BVH-accelerated queries
 
 Audio API
 * Play/stream WAV/OGG formats
+* Stream MOD/XM/S3M/IT modules through the XMP audio plugin
 * 3D audio spatialization
 
 Languages supported
@@ -72,8 +76,17 @@ Languages supported
 
 Binding status notes
 * Squirrel support is available in this fork through `HG_BUILD_HG_SQUIRREL`, the `hg_squirrel` package, and the `hg_squirrel` / `launcher_squirrel` executables.
+* Squirrel currently supports host-side scripting; embedded scene scripting remains Lua-only.
 * Python support still exists in-tree through `HG_BUILD_HG_PYTHON`, but recent builds may fail or may not ship validated Python artifacts depending on platform and branch state.
+
 <a name="subsection_1b"></a>
+## What's new in 3.3.0
+
+Version 3.3.0 adds an experimental Tau rigid-body backend alongside Bullet 3, a backend-neutral `ScenePhysics` API, Squirrel 3.2+ bindings and packaged-application launchers for Lua and Squirrel. It also brings improved HiDPI handling, configurable spotlight shadow ranges, compositing shader parameters, XMP module audio streaming, an optional FFmpeg video plugin, static HTML API documentation, and an expanded multi-language tutorial suite.
+
+See the [3.3.0 release notes](release-notes.md#330---2026-09-06) for details and compatibility notes.
+
+<a name="subsection_1c"></a>
 ## Screenshots
 
 The following screenshots were captured on a 1080GTX in 1080P running at 60FPS.
@@ -87,8 +100,10 @@ The following screenshots were captured on a 1080GTX in 1080P running at 60FPS.
 <a name="section_2"></a>
 # Download
 
-You can download the HARFANG binaries from the official website:
+You can download upstream HARFANG binaries from the official website:
 https://dev.harfang3d.com/releases
+
+To use the 3.3.0 features from this unofficial fork, build the SDK from source as described below.
 
 <a name="section_3"></a>
 # Build the SDK
@@ -97,7 +112,7 @@ https://dev.harfang3d.com/releases
 ## Prerequisites
 
 * Git
-* CMake 3.19+
+* CMake 3.16.2+
 * CPython 3.2+
 * Go 1+ _(for Harfang Go module)_
 * Doxygen _(for Harfang C++ SDK documentation)_
@@ -116,7 +131,7 @@ https://dev.harfang3d.com/releases
 
 1. Clone the `Harfang 3D` repository including its remaining submodules.
     ```
-    git clone --recursive -j8 https://github.com/harfang3d/harfang3d.git
+    git clone --recursive -j8 https://github.com/astrofra/harfang3d.git
     cd harfang3d
     ```
     The BGFX stack (`extern/bgfx/bgfx`, `extern/bgfx/bimg`, `extern/bgfx/bx`) is vendored directly in-tree; see `extern/bgfx/VENDORED.md`.
@@ -161,9 +176,13 @@ https://dev.harfang3d.com/releases
         * `HG_BUILD_CPP_SDK` : Build C++ SDK (default: __OFF__).
         * `HG_BUILD_TESTS`   : Build C++ SDK unit tests (default: __OFF__).
         * `HG_BUILD_DOCS`    : Build API and C++ SDK documentations (default: __OFF__).
-        * `HG_ENABLE_BULLET3_SCENE_PHYSICS` : Enable Bullet physics API (default: __ON__).
+        * `HG_BUILD_STATIC_DOCS` : Build the static HTML documentation (default: __OFF__).
+        * `HG_SCENE_PHYSICS_BACKEND` : Select `auto`, `none`, `bullet`, or `tau` (default: `auto`, which selects Bullet while its legacy option is enabled).
+        * `HG_ENABLE_BULLET3_SCENE_PHYSICS` : Enable Bullet physics for `auto` backend selection (default: __ON__).
+        * `HG_ENABLE_XMP_AUDIO` : Enable the MOD/XM/S3M/IT audio streamer plugin (default: __ON__).
         * `HG_ENABLE_RECAST_DETOUR_API` : Enable Recast/Detour navigation mesh and path finding API (default: __ON__).
         * `HG_ENABLE_OPENVR_API`   : Enable OpenVR API (default: __OFF__).
+        * `HG_ENABLE_OPENXR_API`   : Enable OpenXR API (default: __OFF__).
         * `HG_ENABLE_SRANIPAL_API` : Enable VIVE Eye and Facial Tracking SDK (SRanipal) API (default: __OFF__).
     * __Tools__
         * `HG_BUILD_ASSETC`             : Build AssetC asset compiler (default: __ON__).
@@ -171,11 +190,15 @@ https://dev.harfang3d.com/releases
         * `HG_BUILD_FBX_CONVERTER`      : Build FBX converter (default: __ON__).
         * `HG_BUILD_GLTF_IMPORTER`      : Build GLTF importer (default: __ON__).
         * `HG_BUILD_GLTF_EXPORTER`      : Build GLTF exporter (default: __ON__).
+        * `HG_BUILD_LEGACY_ARCHIVE`     : Build the legacy GSA/NAC archive tool (default: __ON__).
+        * `HG_BUILD_FFMPEG_PLUGIN`      : Build the optional FFmpeg video stream plugin (default: __OFF__).
     * __Bindings__
-        * `HG_BUILD_HG_LUA`     : Build Harfang LUA module (default: __OFF__).
+        * `HG_BUILD_HG_LUA`     : Build Harfang Lua module and application launchers (default: __OFF__).
         * `HG_BUILD_HG_SQUIRREL`: Build Harfang Squirrel extension and launcher package (default: __OFF__).
         * `HG_BUILD_HG_PYTHON`  : Build Harfang Python module (wheel) (default: __OFF__, recent builds not guaranteed).
         * `HG_BUILD_HG_GO`      : Build Harfang GO module (default: __OFF__).
+    * __Validation__
+        * `HG_BUILD_LAUNCHER_TESTS` : Build Lua and Squirrel launcher regression tests (default: __OFF__).
         
     &nbsp;    
 
@@ -239,6 +262,8 @@ install_cppsdk_dependencies(destination component)
 
 <a name="section_5"></a>
 # Version
+
+The current source-tree version is **3.3.0**. See the [release notes](release-notes.md#330---2026-09-06) for the changes since 3.2.7.
 
 Harfang follows the Semantic Versioning Specification (SemVer) (http://semver.org).
 

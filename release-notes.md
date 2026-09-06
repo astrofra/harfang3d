@@ -1,3 +1,55 @@
+# [3.3.0] - 2026-09-06
+
+This release expands HARFANG with a selectable experimental Tau physics backend, first-class Squirrel support, application launchers, media plugins, rendering controls, and a much larger in-tree documentation and tutorial set. Bullet 3 remains the default scene-physics backend.
+
+### Physics
+
+* Added `HG_SCENE_PHYSICS_BACKEND` with `auto`, `none`, `bullet`, and `tau` choices. The new backend-neutral `ScenePhysics` class maps to the backend selected at build time, and `GetScenePhysicsBackendName` exposes that choice at runtime.
+* Added the Tau rigid-body backend with dynamic, kinematic, and static bodies; discrete contacts for cuboids, spheres, capsules, and multi-shape compounds; first-hit and all-hits ray casting for analytic shapes and triangle meshes; 6DoF constraints; and pre-tick callbacks.
+* Added continuous collision detection to rigid-body components, including JSON/binary serialization and scripting bindings. Tau CCD is currently limited to moving cuboids (including multi-cuboid compounds) against immovable cuboids and static triangle meshes; dynamic-against-dynamic, angular, sphere, and capsule CCD remain deferred.
+* Added backend-neutral deactivation and sleep queries through `NodeSetDeactivation`, `NodeGetDeactivation`, and `NodeIsSleeping`.
+* Added backend-neutral `.physics` collision geometry with BVH acceleration for triangle meshes and boundary edges.
+* Improved Tau determinism, stability, and performance with fixed-step accumulation, persistent contact manifolds, a dynamic AABB broad phase, sleeping islands, reusable scratch storage, cached transforms/inertia, optimized constraint solving, and all-sleeping fast paths.
+* Added an in-tree physics QA suite with deterministic dumps, Bullet/Tau comparisons, trajectory plots, ray-cast and collision tests, and performance benchmarks.
+* Deprecated direct use of the legacy `SceneBullet3Physics` scripting constructor in favor of `ScenePhysics`; the former remains available for compatibility.
+
+### Scripting and application launchers
+
+* Added host-side Squirrel 3.2+ support with a vendored runtime, generated HARFANG bindings, `hg_squirrel`, `launcher_squirrel`, and a no-console Windows launcher. Embedded scene scripting remains Lua-only.
+* Added Lua application launchers and shared Lua/Squirrel launcher infrastructure.
+* Launchers can mount applications from a `data/` folder or `data.zip`, `data.gsa`, and `data.nac` archives, using `bootstrap.json` or `launcher.json` configuration files.
+* Added the `legacy_archive` packing/unpacking tool and launcher regression tests for folder and archive deployments.
+* Added backend-specific rebuild helpers for Lua, Squirrel, and Python. CPython support remains in-tree but is not guaranteed for every current platform/configuration.
+
+### Rendering and platform
+
+* Added configurable near/far clipping ranges for spotlight shadow maps through `GetShadowNear`, `SetShadowNear`, `GetShadowFar`, and `SetShadowFar`.
+* Added four user-controlled `Vec4` compositing parameter slots to `ForwardPipelineAAAConfig`, serialized with the pipeline configuration and exposed to the compositing shader as `uCompositingParams`.
+* Fixed compositing shader sampler names.
+* Improved HiDPI behavior with an explicit runtime policy and `GetWindowContentScale`.
+* Vendored the BGFX stack in the repository and documented the macOS Metal integration fix.
+
+### Audio and video
+
+* Fixed OGG streaming playback and added test coverage for audio streams.
+* Added the XMP audio streamer plugin and helpers for MOD, XM, S3M, and IT module playback.
+* Added `LoadLPCMSound` for loading raw PCM samples into the audio API.
+* Added an optional FFmpeg `IVideoStreamer` plugin, enabled with `HG_BUILD_FFMPEG_PLUGIN`.
+
+### Documentation, tutorials, and tools
+
+* Moved the Python and Lua tutorials into the main repository, added Squirrel ports, and expanded coverage across rendering, input, filesystems, ImGui, audio, physics, VR/XR, scene management, and picture processing.
+* Added a self-contained static HTML documentation build with C++, Python, Lua, and Squirrel API output.
+* Added the first Lua-based Mini Studio prototype, including project opening, asset compilation, multi-scene management, a scene graph, viewport rendering, transform gizmos, and scene saving.
+* Updated build scripts and documentation to use `HG_FABGEN_PATH` with the `astrofra/FABGen` fork.
+* Reduced repetitive runtime warnings and corrected the PyPI download badges.
+
+### Build notes
+
+* Bullet remains selected by default (`HG_SCENE_PHYSICS_BACKEND=auto`). Select Tau explicitly with `-DHG_SCENE_PHYSICS_BACKEND=tau`.
+* XMP audio support is enabled by default except on Emscripten, where dynamic audio plugins are disabled. The FFmpeg plugin remains opt-in and requires FFmpeg development files.
+* Squirrel is the primary newly supported scripting target in this fork. Python build files are retained, but current Python artifacts are not guaranteed on all platforms.
+
 # [3.2.7] - 2023-08-14
 
 This minor release brings the support for the DOF post process.
