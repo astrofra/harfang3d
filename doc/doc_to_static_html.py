@@ -69,6 +69,9 @@ EXTRA_CSS = """
 }
 
 body.static-doc {
+	width: 100%;
+	max-width: none;
+	min-height: 100vh;
 	margin: 0;
 	padding: 0;
 	color: #1d1f23;
@@ -78,6 +81,7 @@ body.static-doc {
 .doc-layout {
 	display: grid;
 	grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+	width: 100%;
 	min-height: 100vh;
 }
 
@@ -186,7 +190,9 @@ body.static-doc {
 }
 
 .doc-content {
-	width: min(1120px, 100%);
+	width: 100%;
+	max-width: 1440px;
+	min-width: 0;
 	padding: 24px 34px 64px;
 }
 

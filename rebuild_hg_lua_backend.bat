@@ -20,10 +20,10 @@ if "%CONFIG%"=="" set "CONFIG=Release"
 
 if /I "%BACKEND%"=="bullet" (
 	set "BUILD_DIR_NAME=lua-cmake-bullet"
-	set "INSTALL_DIR_NAME=bullet"
+	set "INSTALL_DIR_NAME=lua_bullet"
 ) else if /I "%BACKEND%"=="tau" (
 	set "BUILD_DIR_NAME=lua-cmake-tau"
-	set "INSTALL_DIR_NAME=tau"
+	set "INSTALL_DIR_NAME=lua_tau"
 ) else (
 	echo Backend invalide: "%BACKEND%"
 	echo Valeurs attendues: bullet ou tau
