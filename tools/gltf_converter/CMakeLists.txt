@@ -15,7 +15,11 @@ function(gltf_build_tool name)
 
 	add_dependencies(${name} bind_hg_lua)
 
-	install(TARGETS ${name} RUNTIME DESTINATION ${name} LIBRARY DESTINATION ${name} COMPONENT ${name})
+	install(
+		TARGETS ${name}
+		RUNTIME DESTINATION ${name} COMPONENT ${name}
+		LIBRARY DESTINATION ${name} COMPONENT ${name}
+	)
 	
 	install_cppsdk_dependencies(${name})
 endfunction()

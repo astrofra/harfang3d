@@ -17,7 +17,11 @@ if(UNIX)
 endif()
 
 # assetc installation
-install(TARGETS assetc RUNTIME DESTINATION assetc LIBRARY DESTINATION assetc COMPONENT assetc)
+install(
+	TARGETS assetc
+	RUNTIME DESTINATION assetc COMPONENT assetc
+	LIBRARY DESTINATION assetc COMPONENT assetc
+)
 
 install_cppsdk_dependencies(assetc)
 

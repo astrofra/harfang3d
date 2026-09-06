@@ -23,12 +23,14 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 
 set "BUILD_DIR=%WORK_DIR%\build\xm-player"
 set "INSTALL_DIR=%WORK_DIR%\install"
-set "PLAYER_DIR=%INSTALL_DIR%\xm_player_hg_lua"
+set "PLAYER_DIR_NAME=xm_player_hg_lua"
+set "PLAYER_DIR=%INSTALL_DIR%\%PLAYER_DIR_NAME%"
 set "DATA_DIR=%PLAYER_DIR%\data"
 set "RESOURCE_DIR=%PLAYER_DIR%\resources\sounds"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
 set "GENERATOR=Visual Studio 17 2022"
 set "PLATFORM=x64"
+set "BUILD_TARGETS=launcher launcher_noconsole audio_xmp"
 
 if not exist "%FABGEN_DIR%\" (
 	echo FABGen introuvable: "%FABGEN_DIR%"
@@ -49,13 +51,15 @@ if not defined PYTHON_EXE (
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
-echo [1/3] Configuration CMake...
+echo [1/4] Configuration CMake...
 cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
+	-DHG_LUA_INSTALL_DIR="%PLAYER_DIR_NAME%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^
 	-DHG_ENABLE_XMP_AUDIO=ON ^
 	-DHG_BUILD_HG_LUA=ON ^
+	-DHG_BUILD_HG_SQUIRREL=OFF ^
 	-DHG_BUILD_CPP_SDK=OFF ^
 	-DHG_BUILD_TESTS=OFF ^
 	-DHG_BUILD_DOCS=OFF ^
@@ -63,6 +67,7 @@ cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
 	-DHG_BUILD_HG_PYTHON=OFF ^
 	-DHG_BUILD_HG_GO=OFF ^
 	-DHG_BUILD_ASSETC=OFF ^
+	-DHG_BUILD_LEGACY_ARCHIVE=OFF ^
 	-DHG_BUILD_ASSIMP_CONVERTER=OFF ^
 	-DHG_BUILD_FBX_CONVERTER=OFF ^
 	-DHG_BUILD_GLTF_IMPORTER=OFF ^
@@ -74,11 +79,15 @@ cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
 	-DHG_ENABLE_SRANIPAL_API=OFF
 if errorlevel 1 exit /b !errorlevel!
 
-echo [2/3] Build et install XM player (%CONFIG%)...
-cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target INSTALL
+echo [2/4] Build XM player (%CONFIG%)...
+cmake --build "%BUILD_DIR%" --config "%CONFIG%" --target %BUILD_TARGETS% -- /m
 if errorlevel 1 exit /b !errorlevel!
 
-echo [3/3] Preparation du player et des ressources...
+echo [3/4] Installation du runtime Lua...
+cmake --install "%BUILD_DIR%" --config "%CONFIG%" --component lua
+if errorlevel 1 exit /b !errorlevel!
+
+echo [4/4] Preparation du player et des ressources...
 if not exist "%DATA_DIR%" mkdir "%DATA_DIR%"
 if not exist "%RESOURCE_DIR%" mkdir "%RESOURCE_DIR%"
 

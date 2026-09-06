@@ -63,18 +63,22 @@ elseif(UNIX)
 	target_compile_definitions(hg_lua PUBLIC LUA_USE_LINUX)
 endif()
 
-install(TARGETS hg_lua lua launcher RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
+install(
+	TARGETS hg_lua lua launcher
+	RUNTIME DESTINATION ${HG_LUA_INSTALL_DIR} COMPONENT lua
+	LIBRARY DESTINATION ${HG_LUA_INSTALL_DIR} COMPONENT lua
+)
 if(WIN32)
-	install(TARGETS launcher_noconsole RUNTIME DESTINATION hg_lua COMPONENT lua)
+	install(TARGETS launcher_noconsole RUNTIME DESTINATION ${HG_LUA_INSTALL_DIR} COMPONENT lua)
 endif()
 
-install_cppsdk_dependencies(hg_lua lua)
+install_cppsdk_dependencies(${HG_LUA_INSTALL_DIR} lua)
 
 foreach(_target assetc fbx_converter assimp_converter gltf_importer gltf_exporter)
 	if(TARGET ${_target})
-		install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}/hg_lua/harfang -DBUILD_TYPE=$<CONFIG> -P $<TARGET_PROPERTY:${_target},BINARY_DIR>/cmake_install.cmake)"
+		install(CODE "execute_process(COMMAND ${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX}/${HG_LUA_INSTALL_DIR}/harfang -DBUILD_TYPE=$<CONFIG> -P $<TARGET_PROPERTY:${_target},BINARY_DIR>/cmake_install.cmake)"
 			COMPONENT lua)
 	endif()
 endforeach()
 
-install(FILES bin.lua DESTINATION hg_lua/harfang COMPONENT lua)
+install(FILES bin.lua DESTINATION ${HG_LUA_INSTALL_DIR}/harfang COMPONENT lua)

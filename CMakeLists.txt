@@ -53,6 +53,7 @@ option(HG_BUILD_HG_LUA "Harfang: Build Harfang Lua extension" OFF)
 option(HG_BUILD_HG_SQUIRREL "Harfang: Build Harfang Squirrel 3.2+ extension" OFF)
 option(HG_BUILD_HG_PYTHON "Harfang: Build Harfang CPython 3.2+ extension" OFF)
 option(HG_BUILD_HG_GO "Harfang: Build Harfang Go extension" OFF)
+set(HG_LUA_INSTALL_DIR "hg_lua" CACHE STRING "Harfang: Lua runtime install directory, relative to CMAKE_INSTALL_PREFIX")
 
 option(HG_USE_GLFW "Harfang: Use GLFW backend" ON)
 

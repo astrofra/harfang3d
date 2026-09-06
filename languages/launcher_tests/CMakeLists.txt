@@ -29,11 +29,11 @@ endfunction()
 
 if(BUILD_TESTING)
 	if(TARGET launcher)
-		add_launcher_regression_test(launcher_lua_folder lua folder folder launcher hg_lua launcher)
+		add_launcher_regression_test(launcher_lua_folder lua folder folder launcher ${HG_LUA_INSTALL_DIR} launcher)
 	endif()
 
 	if(TARGET launcher AND TARGET legacy_archive)
-		add_launcher_regression_test(launcher_lua_legacy lua legacy legacy launcher hg_lua launcher)
+		add_launcher_regression_test(launcher_lua_legacy lua legacy legacy launcher ${HG_LUA_INSTALL_DIR} launcher)
 	endif()
 
 	if(TARGET launcher_squirrel)

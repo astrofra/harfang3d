@@ -8,7 +8,11 @@ set_target_properties(audio_xmp PROPERTIES PREFIX "" DEBUG_POSTFIX "" FOLDER "ha
 install_cppsdk_target(audio_xmp)
 
 if(HG_BUILD_HG_LUA)
-	install(TARGETS audio_xmp RUNTIME DESTINATION hg_lua LIBRARY DESTINATION hg_lua COMPONENT lua)
+	install(
+		TARGETS audio_xmp
+		RUNTIME DESTINATION ${HG_LUA_INSTALL_DIR} COMPONENT lua
+		LIBRARY DESTINATION ${HG_LUA_INSTALL_DIR} COMPONENT lua
+	)
 endif()
 
 if(HG_BUILD_HG_SQUIRREL)
