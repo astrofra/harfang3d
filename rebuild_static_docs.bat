@@ -15,7 +15,7 @@ for %%I in ("%~dp0.") do set "REPO_DIR=%%~fI"
 for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 
 set "BUILD_DIR=%WORK_DIR%\build\docs-static"
-set "INSTALL_DIR=%WORK_DIR%\install\documation"
+set "INSTALL_DIR=%WORK_DIR%\install\documentation"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
 set "GENERATOR=Visual Studio 17 2022"
 set "PLATFORM=x64"
