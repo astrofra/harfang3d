@@ -66,6 +66,7 @@ Mat4 ComputeBillboardMat4(const Vec3 &pos, const ViewState &view_state, const Ve
 //
 struct Window;
 
+/// Initialize the renderer at the window's drawable pixel size.
 bool RenderInit(Window *window, bgfx::RendererType::Enum type, bgfx::CallbackI *callback = nullptr);
 bool RenderInit(Window *window, bgfx::CallbackI *callback = nullptr);
 
@@ -82,7 +83,8 @@ void RenderShutdown();
 
 bool IsRenderUp();
 
-/// Fit the backbuffer to the specified window client area dimensions, return true if resizing was carried out.
+/// Fit the backbuffer to the window's drawable pixel size; width/height are in pixels.
+/// Return true if resized. Leave width/height unchanged if the drawable is empty or the query fails.
 bool RenderResetToWindow(Window *win, int &width, int &height, uint32_t reset_flags = 0);
 
 void SetView2D(bgfx::ViewId id, int x, int y, int res_x, int res_y, float znear = -1.f, float zfar = 1.f,

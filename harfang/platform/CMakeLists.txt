@@ -38,6 +38,11 @@ if(WIN32)
 		win32/input_dinput.cpp
 	)
 elseif(APPLE)
+	if(HG_USE_GLFW)
+		list(APPEND HDRS osx/gamecontroller.h)
+		list(APPEND SRCS osx/gamecontroller.mm)
+		set_source_files_properties(osx/gamecontroller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+	endif()
 	list(APPEND SRCS
 		osx/platform.cpp
 		posix/crash_dump.cpp
@@ -101,6 +106,9 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
 else()
 	target_include_directories(platform PUBLIC ${GLFW_INCLUDE_DIRS})
 	target_link_libraries(platform foundation glfw)
+	if(APPLE AND HG_USE_GLFW)
+		target_link_libraries(platform "-framework GameController" "-framework Foundation")
+	endif()
 	if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
 		find_package(PkgConfig)
 		if(PkgConfig_FOUND)

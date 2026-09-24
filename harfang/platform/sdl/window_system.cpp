@@ -161,6 +161,14 @@ bool SetWindowClientSize(Window *w, int width, int height) {
 	return true;
 }
 
+bool GetWindowFrameBufferSize(const Window *w, int &width, int &height) {
+	width = height = 0;
+	if (!w || !w->w)
+		return false;
+	SDL_GL_GetDrawableSize(w->w, &width, &height);
+	return true;
+}
+
 bool GetWindowTitle(const Window *w, std::string &title) { return true; }
 
 bool SetWindowTitle(Window *w, const std::string &title) { return true; }

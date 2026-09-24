@@ -2646,6 +2646,10 @@ static void DumpRenderPipelineInfos() {
 bool IsRenderUp() { return bgfx_is_up; }
 
 bool RenderInit(Window *window, bgfx::RendererType::Enum type, bgfx::CallbackI *callback) {
+	int w, h;
+	if (!GetWindowFrameBufferSize(window, w, h) || w <= 0 || h <= 0)
+		return false;
+
 	bgfx::PlatformData pd;
 	bx::memSet(&pd, 0, sizeof(pd));
 	pd.ndt = GetDisplay();
@@ -2666,8 +2670,6 @@ bool RenderInit(Window *window, bgfx::RendererType::Enum type, bgfx::CallbackI *
 
 	DumpRenderPipelineInfos();
 
-	int w, h;
-	GetWindowClientSize(window, w, h);
 	init.resolution.width = w;
 	init.resolution.height = h;
 
@@ -2702,8 +2704,9 @@ Window *RenderInit(const char *window_title, int width, int height, bgfx::Render
 
 	reset_flags |= BGFX_RESET_FLIP_AFTER_RENDER | BGFX_RESET_FLUSH_AFTER_RENDER | BGFX_RESET_MAXANISOTROPY;
 
+	// NewWindow takes screen coordinates; the renderer needs drawable pixels.
 	int effective_width = width, effective_height = height;
-	GetWindowClientSize(win, effective_width, effective_height);
+	GetWindowFrameBufferSize(win, effective_width, effective_height);
 
 	if (reset_flags)
 		bgfx::reset(effective_width, effective_height, reset_flags, format);
@@ -2738,8 +2741,8 @@ bool RenderResetToWindow(Window *win, int &width, int &height, uint32_t reset_fl
 	ProfilerPerfSection section("RenderResetToWindow");
 
 	int new_width, new_height;
-	if (!GetWindowClientSize(win, new_width, new_height))
-		return false; // query failed...
+	if (!GetWindowFrameBufferSize(win, new_width, new_height) || new_width <= 0 || new_height <= 0)
+		return false; // query failed or the drawable is temporarily unavailable
 
 	if (new_width == width && new_height == height)
 		return false; // nothing to be done

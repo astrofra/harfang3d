@@ -412,6 +412,14 @@ bool SetWindowClientSize(Window *w, int width, int height) {
 	return true;
 }
 
+bool GetWindowFrameBufferSize(const Window *w, int &width, int &height) {
+	width = height = 0;
+	if (!w)
+		return false;
+	glfwGetFramebufferSize((GLFWwindow *)w, &width, &height);
+	return true;
+}
+
 Vec2 GetWindowContentScale(const Window *w) {
 #if (GLFW_VERSION_MAJOR >= 3) && (GLFW_VERSION_MINOR >= 3)
 	Vec2 v;

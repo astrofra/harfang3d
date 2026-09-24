@@ -1,1 +1,3 @@
-Return a window client rectangle. The client area of a window does not include its decorations.
+Return the window client size in screen coordinates, excluding decorations. On macOS these coordinates are points, which can differ from drawable pixels on Retina displays.
+
+Use [GetWindowFrameBufferSize] for renderer backbuffer dimensions and viewports. Use this function for window layout and sizing.

@@ -102,6 +102,14 @@ static void timer_thread__(time_ns resolution) {
 }
 
 void start_timer(time_ns resolution) {
+	// Register cleanup on first use, after the timer's global state exists.
+	// In particular, AudioInit starts this service from Lua, which has no
+	// stop_timer binding. Join before static destruction reaches std::thread.
+	struct TimerShutdown {
+		~TimerShutdown() { stop_timer(); }
+	};
+	static TimerShutdown shutdown;
+
 	if (!timer_thread.joinable()) {
 		timer_thread_running = true;
 		timer_thread = std::thread(timer_thread__, resolution);

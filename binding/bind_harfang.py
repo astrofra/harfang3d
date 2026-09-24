@@ -802,6 +802,7 @@ def bind_window_system(gen):
 	gen.bind_function('hg::DestroyWindow', 'bool', ['const hg::Window *window'])
 
 	gen.bind_function('hg::GetWindowClientSize', 'bool', ['const hg::Window *window', 'int &width', 'int &height'], features={'arg_out': ['width', 'height']})
+	gen.bind_function('hg::GetWindowFrameBufferSize', 'bool', ['const hg::Window *window', 'int &width', 'int &height'], features={'arg_out': ['width', 'height']})
 	gen.bind_function('hg::SetWindowClientSize', 'bool', ['hg::Window *window', 'int width', 'int height'])
 
 	gen.bind_function('hg::GetWindowContentScale', 'hg::tVec2<float>', ['const hg::Window *window'])

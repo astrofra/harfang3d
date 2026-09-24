@@ -93,8 +93,11 @@ bool UpdateWindow(const Window *window);
 /// Destroy a window.
 bool DestroyWindow(Window *window);
 
-/// Get the window client size.
+/// Get the window client size in screen coordinates (points on macOS).
 bool GetWindowClientSize(const Window *window, int &width, int &height);
+/// Get the drawable size in pixels. Use this size for the backbuffer and viewports.
+/// Returns false for a null window and sets both dimensions to zero.
+bool GetWindowFrameBufferSize(const Window *window, int &width, int &height);
 /// Set the window client size.
 bool SetWindowClientSize(Window *window, int width, int height);
 

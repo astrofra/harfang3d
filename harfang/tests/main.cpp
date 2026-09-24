@@ -47,6 +47,9 @@ extern void test_signal();
 
 // platform tests
 extern void test_window();
+#ifdef HG_TEST_GAMECONTROLLER
+extern void test_gamecontroller();
+#endif
 
 // engine tests
 extern void test_assets();
@@ -66,6 +69,9 @@ extern void test_scene_tau_physics_contact();
 extern void test_lua_vm();
 
 TEST_LIST = {
+#ifdef HG_TEST_GAMECONTROLLER
+	{"platform.gamecontroller", test_gamecontroller},
+#endif
 	// foundation
 	{"foundation.bvh", test_bvh},
 	{"foundation.dynamic_aabb_tree", test_dynamic_aabb_tree},

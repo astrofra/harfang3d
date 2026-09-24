@@ -1,3 +1,7 @@
+add_executable(test_timer_exit timer_exit.cpp)
+target_link_libraries(test_timer_exit PRIVATE foundation platform)
+set_target_properties(test_timer_exit PROPERTIES FOLDER "harfang")
+
 add_library(DummyVideoStream SHARED dummy_video_stream.cpp)
 target_include_directories(DummyVideoStream PRIVATE ${CMAKE_SOURCE_DIR}/harfang/engine ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(DummyVideoStream PROPERTIES
@@ -95,7 +99,15 @@ set(TEST_PLATFORM_SRCS
 	platform/window.cpp
 )
 
+if(APPLE AND HG_USE_GLFW)
+	list(APPEND TEST_PLATFORM_SRCS platform/gamecontroller.mm)
+	set_source_files_properties(platform/gamecontroller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
+
 add_executable(tests main.cpp utils.cpp utils.h ${TEST_FOUNDATION_SRCS} ${TEST_ENGINE_SRCS} ${TEST_PLATFORM_SRCS} ${TEST_SCRIPT_SRCS})
+if(APPLE AND HG_USE_GLFW)
+	target_compile_definitions(tests PRIVATE HG_TEST_GAMECONTROLLER)
+endif()
 target_link_libraries(tests PUBLIC engine foundation platform PRIVATE miniz)
 target_include_directories(tests PRIVATE ../../extern/acutest)
 add_dependencies(tests DummyVideoStream)

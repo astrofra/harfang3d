@@ -8,6 +8,10 @@
 
 #include <GLFW/glfw3.h>
 
+#ifdef __APPLE__
+#include "platform/osx/gamecontroller.h"
+#endif
+
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -622,9 +626,17 @@ void InputInit() {
 	AddJoystickReader("joystick_slot_13", ReadJoystick<GLFW_JOYSTICK_14>, DeviceNameJoystick<GLFW_JOYSTICK_14>);
 	AddJoystickReader("joystick_slot_14", ReadJoystick<GLFW_JOYSTICK_15>, DeviceNameJoystick<GLFW_JOYSTICK_15>);
 	AddJoystickReader("joystick_slot_15", ReadJoystick<GLFW_JOYSTICK_16>, DeviceNameJoystick<GLFW_JOYSTICK_16>);
+#ifdef __APPLE__
+	InitGameControllerInput(ReadGamepad<GLFW_JOYSTICK_1>);
+#endif
 #endif
 }
 
-void InputShutdown() { new_window_signal.Disconnect(on_new_window_connection); }
+void InputShutdown() {
+#ifdef __APPLE__
+	ShutdownGameControllerInput();
+#endif
+	new_window_signal.Disconnect(on_new_window_connection);
+}
 
 } // namespace hg
