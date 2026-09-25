@@ -364,13 +364,13 @@ Proposed minimal surface:
 | --- | --- |
 | `Scene::CreateInstanceAnimPlayer(node)` | Creates one player for that instance and resolves its clips within that view. Rejects duplicate ownership. |
 | `player.SetCrossFadeDuration(time_ns)` | Sets the default for subsequent requests; does not retime a transition already underway. |
-| `player.Play(name, loop_mode = ALM_Once, restart = false)` | Validates and starts or transitions to a clip; returns a `ScenePlayAnimRef` for that request. |
+| `player.Play(name, AnimLoopMode loop_mode = ALM_Once, bool restart = false)` | Validates and starts or transitions to a clip; returns a `ScenePlayAnimRef` for that request. |
 | `player.IsTransitioning()` | Reports whether a transition envelope remains active. |
 | `player.Stop()` | Cancels live clips and transitions, releases held-pose ownership and leaves the last applied values in place. |
 | `Scene::DestroyAnimPlayer(player)` | Releases player resources and invalidates its wrapper. |
 
 An options overload can later expose a per-request fade duration, playback
-range, initial time, speed and transition curve. A C++ factory for an explicitly
+range, initial time, speed and an `Easing` transition curve. A C++ factory for an explicitly
 declared node/property scope can reuse the same implementation outside scene
 instances. Neither extension is necessary to demonstrate the first release.
 
@@ -389,6 +389,65 @@ transform writes remain possible; their ordering is the application's contract.
 
 ## Crossfade semantics
 
+### Enum types, names and language bindings
+
+Follow the existing public animation API convention: named, unscoped C++ enums
+in namespace `hg`, with a type-specific prefix on each enumerator. Lua and Python
+expose those prefixed constants directly on the `harfang` module, conventionally
+imported as `hg`. The reference declarations and bindings are
+`AnimLoopMode` in [animation.h](../harfang/engine/animation.h), `Easing` in
+[easing.h](../harfang/foundation/easing.h), and `bind_scene` in
+[bind_harfang.py](../binding/bind_harfang.py), around lines 898 and 918.
+
+| Meaning | Existing C++ type | C++ constant | Lua / Python constant |
+| --- | --- | --- | --- |
+| Play once | `hg::AnimLoopMode` | `hg::ALM_Once` | `hg.ALM_Once` |
+| Advance indefinitely without wrapping | `hg::AnimLoopMode` | `hg::ALM_Infinite` | `hg.ALM_Infinite` |
+| Repeat within the clip range | `hg::AnimLoopMode` | `hg::ALM_Loop` | `hg.ALM_Loop` |
+| Linear fade envelope | `hg::Easing` | `hg::E_Linear` | `hg.E_Linear` |
+| Smooth-step envelope, if curve selection is added | `hg::Easing` | `hg::E_SmoothStep` | `hg.E_SmoothStep` |
+
+Reuse these enum types and constants. Loop mode remains a per-clip setting;
+crossfade easing is a separate setting that reuses the existing `Easing` type.
+It must not modify either clip's playback easing or clock. No new loop enum or
+parallel family of curve constants is needed.
+
+The binding generator already registers these enums through
+`gen.bind_named_enum('hg::AnimLoopMode', ...)` and
+`gen.bind_named_enum('hg::Easing', ...)`. New player bindings must use the typed
+argument `hg::AnimLoopMode`; a future crossfade-curve setter should take
+`hg::Easing`. Reuse the existing registrations and numeric values. Document
+defaults with named constants and validate supported values before indexing an
+easing-function table or accepting a playback request.
+
+Example call forms for the proposed player, using existing constants:
+
+```cpp
+player.Play("walk", hg::ALM_Loop);
+```
+
+```lua
+local hg = require("harfang")
+player:Play("walk", hg.ALM_Loop)
+```
+
+```python
+import harfang as hg
+player.Play("walk", hg.ALM_Loop)
+```
+
+Do not specify string-valued modes such as `"loop"` or `"linear"`, raw numeric
+mode identifiers, or nested bound names such as `hg.AnimLoopMode.Loop` and
+`hg.Easing.Linear`. Clip names such as `"walk"` remain strings. The existing
+source JSON's serialized loop strings are an asset-format convention, not the
+Lua/Python API convention.
+
+If a later release exposes selectable interruption or completion policies,
+declare named `hg` enums with distinct prefixed enumerators and register them
+through `bind_named_enum` in the same way. The initial fixed policies below do
+not require additional enum types. The `restart` argument remains a boolean
+request modifier.
+
 ### Two clip clocks and one transition clock
 
 Let `D` be the fade duration, `e` elapsed scene time since the request and `w`
@@ -396,7 +455,7 @@ the incoming weight:
 
 ```text
 u = clamp(e / D, 0, 1)
-w = u                         # linear default
+w = u                         # E_Linear; hg.E_Linear in Lua/Python
 position = lerp(position_A(tA), position_B(tB), w)
 scale    = lerp(scale_A(tA),    scale_B(tB),    w)
 rotation = normalize(slerp(rotation_A(tA), rotation_B(tB), w))
@@ -419,19 +478,21 @@ engine's current Euler TRS representation when committing. HARFANG already has
 [quaternion.cpp](../harfang/foundation/quaternion.cpp). Preserve the existing
 interpolation inside each clip. Do not interpolate matrices element by element.
 
-The first version can use only a linear envelope. If curves are added, require
-bounded weights with exact endpoints; an overshooting easing curve is not a
-valid default blend weight. Optional phase synchronization is separate: equal
-weights do not imply matching foot-contact phases.
+The first version uses `E_Linear`. If curve selection is added, reuse `Easing`
+and document the supported subset, initially `E_Linear` and `E_SmoothStep`.
+Require continuous, bounded weights with exact endpoints. Reject unsupported
+values explicitly: the existing enum also contains step and overshooting curves
+that do not satisfy this transition contract. Optional phase synchronization is
+separate: equal weights do not imply matching foot-contact phases.
 
 ### Loop and once combinations
 
 | Outgoing A | Incoming B | During the fade | After the fade |
 | --- | --- | --- | --- |
-| Loop | Loop | Both advance and wrap independently. | B continues looping at its advanced time. |
-| Loop | Once | A wraps; B advances towards its end. | B continues once, or holds its endpoint if already finished. |
-| Once | Loop | A advances, then holds its endpoint if reached; B wraps. | B continues looping. |
-| Once | Once | Each advances and independently holds its endpoint on completion. | B continues once or remains at its endpoint. |
+| `ALM_Loop` | `ALM_Loop` | Both advance and wrap independently. | B continues looping at its advanced time. |
+| `ALM_Loop` | `ALM_Once` | A wraps; B advances towards its end. | B continues once, or holds its endpoint if already finished. |
+| `ALM_Once` | `ALM_Loop` | A advances, then holds its endpoint if reached; B wraps. | B continues looping. |
+| `ALM_Once` | `ALM_Once` | Each advances and independently holds its endpoint on completion. | B continues once or remains at its endpoint. |
 
 Holding an outgoing endpoint is essential when A ends before its weight reaches
 zero. Deleting all source pose state at that point would make the transition
@@ -586,7 +647,8 @@ nested/discrete clip and should receive a useful diagnostic.
    Do not keep invalid raw pointers or re-use a destroyed node's storage slot.
 5. **Expose the API through `binding/bind_harfang.py`.** Generate and smoke-test
    Lua and Python, and Squirrel where enabled. Keep defaults and reference
-   lifetime behavior aligned with C++.
+   lifetime behavior aligned with C++. Reuse `AnimLoopMode` and `Easing` and
+   preserve module-level prefixed enum names across the bound APIs.
 6. **Document and demonstrate it.** Add a minimal instance example and API docs,
    then migrate the astronaut helper once the new assets are validated.
 
@@ -702,6 +764,7 @@ manifest must not append duplicate clips or alter input files.
 | Two instances with identical node names | Each player changes only its own resolved nodes. |
 | Stop, clear, asset deletion and instance reload | No stale handles, retained writes, leaks or access to reused node storage. |
 | Legacy animation and ownership conflict | Unmanaged behavior remains unchanged outside owned channels; conflicts are diagnosed. |
+| Enum bindings and defaults | C++, Lua and Python accept the existing `ALM_*` constants with the same meaning and `ALM_Once` default. Crossfade defaults to `E_Linear`; a future curve selector uses existing `E_*` constants and rejects unsupported values. |
 | Unsupported master/discrete/nested clips | Clear rejection without disturbing the current accepted playback. |
 | All scene update entry points | Same blend result via `Scene::Update` and appropriate `SceneUpdateSystems` variants; no double advancement. |
 | Large step versus equivalent smaller steps | Equivalent final pose/time for deterministic clips within numeric tolerance, absent intervening requests. |
