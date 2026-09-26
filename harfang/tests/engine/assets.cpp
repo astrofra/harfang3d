@@ -28,6 +28,8 @@ struct TestArchiveEntry {
 	std::string path;
 	std::string content;
 	bool compressed = false;
+	// Optional independently encoded payload for LZMA reader tests.
+	std::string lzma_payload;
 };
 
 struct TempDirectory {
@@ -165,8 +167,12 @@ void WriteLegacyArchive(const std::string &path, const std::vector<TestArchiveEn
 
 		std::string payload = entry.content;
 		uint8_t method = entry.compressed ? 1 : 0;
+		if (!entry.lzma_payload.empty()) {
+			method = 2;
+			payload = entry.lzma_payload;
+		}
 
-		if (entry.compressed) {
+		if (method == 1) {
 			mz_ulong compressed_size = mz_compressBound(static_cast<mz_ulong>(entry.content.size()));
 			std::string compressed(compressed_size, '\0');
 			TEST_CHECK(mz_compress2(reinterpret_cast<unsigned char *>(&compressed[0]), &compressed_size,
@@ -188,7 +194,7 @@ void WriteLegacyArchive(const std::string &path, const std::vector<TestArchiveEn
 		AlignWrite(file, 4);
 		WriteU32LE(file, static_cast<uint32_t>(entry.content.size()));
 
-		if (entry.compressed) {
+		if (method != 0) {
 			AlignWrite(file, 4);
 			WriteU32LE(file, static_cast<uint32_t>(payload.size()));
 		}
@@ -252,6 +258,56 @@ void test_assets() {
 	}
 
 	RemoveAssetsPackage(pkg_path.c_str());
+
+	{
+		// Python/liblzma FORMAT_RAW, LZMA1, 1 MiB dictionary, lc=3/lp=0/pb=2,
+		// prefixed with the five LZMA properties bytes. Includes an end marker.
+		const unsigned char encoded[] = {0x5d, 0x00, 0x00, 0x10, 0x00, 0x00, 0x26, 0x16, 0x85, 0xbc, 0x45, 0xf0, 0xd0, 0x89, 0x4d,
+			0x73, 0x5c, 0x46, 0x9a, 0xc3, 0x63, 0x3f, 0xeb, 0xa0, 0x0a, 0xcb, 0x11, 0x9f, 0xde, 0x21, 0x14, 0xee, 0x39, 0xec,
+			0xd2, 0x55, 0x59, 0x0a, 0xd7, 0xff, 0xfe, 0xac, 0xa0, 0x00};
+		const std::string payload(reinterpret_cast<const char *>(encoded), sizeof(encoded));
+		std::string content;
+		for (int i = 0; i < 32; ++i)
+			content.append("LZMA archive fixture.\0", 22);
+
+		TempDirectory dir;
+		const auto archive_path = PathJoin(dir.path, "lzma.nac");
+		WriteLegacyArchive(archive_path, {
+			{"lzma.bin", content, false, payload},
+			{"raw.txt", "raw", false},
+			{"zlib.txt", "zlib", true},
+		});
+		TEST_CHECK(AddAssetsPackage(archive_path.c_str()) == true);
+		const auto binary = OpenAsset("lzma.bin");
+		TEST_CHECK(IsValid(binary) == true);
+		TEST_CHECK(GetSize(binary) == content.size());
+		std::string decoded(content.size(), '\0');
+		TEST_CHECK(Read(binary, &decoded[0], decoded.size()) == decoded.size());
+		TEST_CHECK(decoded == content);
+		Close(binary);
+		TEST_CHECK(strcmp(AssetToString("raw.txt").c_str(), "raw") == 0);
+		TEST_CHECK(strcmp(AssetToString("zlib.txt").c_str(), "zlib") == 0);
+		RemoveAssetsPackage(archive_path.c_str());
+
+		// Reject invalid properties, missing end marker, trailing bytes and wrong size.
+		auto invalid_props = payload;
+		invalid_props[0] = static_cast<char>(0xff);
+		const std::vector<TestArchiveEntry> invalid_entries = {
+			{"bad.bin", content, false, invalid_props},
+			{"bad.bin", content, false, payload.substr(0, 4)},
+			{"bad.bin", content, false, payload.substr(0, payload.size() - 1)},
+			{"bad.bin", content, false, payload + "extra"},
+			{"bad.bin", content + "extra", false, payload},
+		};
+		for (const auto &entry : invalid_entries) {
+			WriteLegacyArchive(archive_path, {entry});
+			TEST_CHECK(AddAssetsPackage(archive_path.c_str()) == true);
+			const auto asset = OpenAsset("bad.bin", true);
+			TEST_CHECK(IsValid(asset) == false);
+			Close(asset);
+			RemoveAssetsPackage(archive_path.c_str());
+		}
+	}
 
 	{
 		TempDirectory dir;

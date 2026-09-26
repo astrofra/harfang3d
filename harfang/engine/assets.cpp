@@ -23,6 +23,8 @@
 #include <vector>
 
 #include <miniz/miniz.h>
+#include <Alloc.h>
+#include <LzmaDec.h>
 
 namespace hg {
 
@@ -33,6 +35,9 @@ constexpr uint32_t kZipEmptyArchiveMagic = 0x06054b50u;
 constexpr uint32_t kZipSpannedArchiveMagic = 0x08074b50u;
 constexpr uint32_t kLegacyEnhancedMagic = 0x4E415244u;
 constexpr uint32_t kLegacyLegacyMagic = 0x4E415243u;
+constexpr uint8_t kLegacyMethodRaw = 0;
+constexpr uint8_t kLegacyMethodZlib = 1;
+constexpr uint8_t kLegacyMethodLzma = 2;
 constexpr uint64_t kMaxArchiveEntrySize = 512ull * 1024ull * 1024ull;
 
 enum class ArchiveKind { Unknown, Zip, Legacy };
@@ -347,7 +352,7 @@ struct LegacyAssetContainer final : AssetContainer {
 				error = format("truncated entry method for '%1'").arg(normalized_alias).str();
 				return false;
 			}
-			if ((method & ~0x1u) != 0) {
+			if (method != kLegacyMethodRaw && method != kLegacyMethodZlib && method != kLegacyMethodLzma) {
 				error = format("unsupported method %1 for entry '%2'").arg(static_cast<int>(method)).arg(normalized_alias).str();
 				return false;
 			}
@@ -362,7 +367,7 @@ struct LegacyAssetContainer final : AssetContainer {
 			}
 
 			uint32_t compressed_length = length;
-			if ((method & 0x1u) != 0) {
+			if (method != kLegacyMethodRaw) {
 				if (!AlignRead(file, metadata.offset_padding, metadata.file_size, "entry compressed size", error))
 					return false;
 				if (!ReadU32LE(file, compressed_length)) {
@@ -380,7 +385,7 @@ struct LegacyAssetContainer final : AssetContainer {
 				return false;
 
 			const auto data_offset = file.Tell();
-			const auto stored_length = static_cast<uint64_t>((method & 0x1u) != 0 ? compressed_length : length);
+			const auto stored_length = static_cast<uint64_t>(compressed_length);
 			if (data_offset > metadata.file_size || stored_length > metadata.file_size - data_offset) {
 				error = format("entry '%1' payload exceeds archive bounds").arg(normalized_alias).str();
 				return false;
@@ -406,7 +411,7 @@ struct LegacyAssetContainer final : AssetContainer {
 			return false;
 
 		const auto &entry = it->second;
-		const auto stored_length = static_cast<size_t>((entry.method & 0x1u) != 0 ? entry.compressed_length : entry.length);
+		const auto stored_length = static_cast<size_t>(entry.compressed_length);
 
 		RawBinaryFile file;
 		std::string local_error;
@@ -428,12 +433,30 @@ struct LegacyAssetContainer final : AssetContainer {
 			return false;
 		}
 
-		if ((entry.method & 0x1u) == 0) {
+		if (entry.method == kLegacyMethodRaw) {
 			data = std::move(payload);
 			return true;
 		}
 
 		data.resize(entry.length);
+		if (entry.method == kLegacyMethodLzma) {
+			SizeT decoded_length = data.size();
+			SizeT source_length = payload.size() >= LZMA_PROPS_SIZE ? payload.size() - LZMA_PROPS_SIZE : 0;
+			ELzmaStatus status;
+			unsigned char empty = 0;
+			const auto *source = reinterpret_cast<const unsigned char *>(payload.data());
+			if (payload.size() < LZMA_PROPS_SIZE ||
+				LzmaDecode(data.empty() ? &empty : reinterpret_cast<unsigned char *>(&data[0]), &decoded_length,
+					source + LZMA_PROPS_SIZE, &source_length, source, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, &g_Alloc) != SZ_OK ||
+				status != LZMA_STATUS_FINISHED_WITH_MARK || decoded_length != data.size() || source_length != payload.size() - LZMA_PROPS_SIZE) {
+				data.clear();
+				if (error)
+					*error = "LZMA decompression failed or size mismatch";
+				return false;
+			}
+			return true;
+		}
+
 		mz_ulong decoded_length = static_cast<mz_ulong>(data.size());
 		const auto result = mz_uncompress(reinterpret_cast<unsigned char *>(data.empty() ? nullptr : &data[0]), &decoded_length,
 			reinterpret_cast<const unsigned char *>(payload.empty() ? nullptr : payload.data()), static_cast<mz_ulong>(payload.size()));

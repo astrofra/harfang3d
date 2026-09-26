@@ -1,4 +1,6 @@
+#ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#endif
 
 /*
     Standalone command-line tool for legacy nArchive packages.
@@ -36,11 +38,15 @@
 #endif
 
 #include <miniz.h>
+#include <Alloc.h>
+#include <LzmaDec.h>
+#include <LzmaEnc.h>
 
 #define GS_MAGIC_ENHANCED 0x4E415244u
 #define GS_MAGIC_LEGACY 0x4E415243u
 #define GS_METHOD_RAW 0u
 #define GS_METHOD_ZLIB 1u
+#define GS_METHOD_LZMA 2u
 #define GS_MAX_ALIAS_LENGTH 511u
 
 typedef struct GsEntry {
@@ -70,6 +76,7 @@ typedef struct StringList {
 
 typedef struct PackOptions {
     int compression_level;
+    uint8_t method;
     uint32_t offset_padding;
     uint32_t size_padding;
     int legacy;
@@ -398,11 +405,15 @@ static void archive_free(GsArchive *archive) {
 }
 
 static uint32_t entry_stored_length(const GsEntry *entry) {
-    return entry->method == GS_METHOD_ZLIB ? entry->compressed_length : entry->length;
+    return entry->method != GS_METHOD_RAW ? entry->compressed_length : entry->length;
 }
 
 static const char *entry_method_name(const GsEntry *entry) {
-    return entry->method == GS_METHOD_ZLIB ? "Zlib" : "Raw";
+    switch (entry->method) {
+        case GS_METHOD_ZLIB: return "Zlib";
+        case GS_METHOD_LZMA: return "LZMA";
+        default: return "Raw";
+    }
 }
 
 static int scan_archive(const char *path, GsArchive *archive, char *err, size_t err_size) {
@@ -523,24 +534,30 @@ static int scan_archive(const char *path, GsArchive *archive, char *err, size_t 
         }
         method_raw = fgetc(file);
         if (method_raw == EOF) {
+            set_error(err, err_size, "truncated method for entry '%s'", alias);
             free(alias);
             fclose(file);
-            set_error(err, err_size, "truncated method for entry '%s'", alias);
+            return 0;
+        }
+        if (method_raw != GS_METHOD_RAW && method_raw != GS_METHOD_ZLIB && method_raw != GS_METHOD_LZMA) {
+            set_error(err, err_size, "unsupported method %d for entry '%s'", method_raw, alias);
+            free(alias);
+            fclose(file);
             return 0;
         }
 
         if (!align_read(file, archive->offset_padding) || !read_u32(file, &length)) {
+            set_error(err, err_size, "truncated length for entry '%s'", alias);
             free(alias);
             fclose(file);
-            set_error(err, err_size, "truncated length for entry '%s'", alias);
             return 0;
         }
 
-        if ((method_raw & 1) == GS_METHOD_ZLIB) {
+        if (method_raw != GS_METHOD_RAW) {
             if (!align_read(file, archive->offset_padding) || !read_u32(file, &compressed_length)) {
+                set_error(err, err_size, "truncated compressed length for entry '%s'", alias);
                 free(alias);
                 fclose(file);
-                set_error(err, err_size, "truncated compressed length for entry '%s'", alias);
                 return 0;
             }
         } else {
@@ -548,9 +565,9 @@ static int scan_archive(const char *path, GsArchive *archive, char *err, size_t 
         }
 
         if (!align_read(file, archive->offset_padding)) {
+            set_error(err, err_size, "could not align before payload for entry '%s'", alias);
             free(alias);
             fclose(file);
-            set_error(err, err_size, "could not align before payload for entry '%s'", alias);
             return 0;
         }
         data_offset = (uint32_t)ftell(file);
@@ -562,7 +579,7 @@ static int scan_archive(const char *path, GsArchive *archive, char *err, size_t 
         }
 
         entry.alias = alias;
-        entry.method = (uint8_t)(method_raw & 1);
+        entry.method = (uint8_t)method_raw;
         entry.length = length;
         entry.compressed_length = compressed_length;
         entry.data_offset = data_offset;
@@ -605,16 +622,28 @@ static int read_entry_data(FILE *file, const GsEntry *entry, unsigned char **out
         return 0;
     }
 
-    if (entry->method == GS_METHOD_ZLIB) {
-        uLongf decoded_length = (uLongf)entry->length;
+    if (entry->method != GS_METHOD_RAW) {
+        int decoded_ok = 0;
         data = (unsigned char *)malloc(entry->length ? entry->length : 1);
         if (!data) {
             free(payload);
             set_error(err, err_size, "out of memory");
             return 0;
         }
-        if (uncompress((Bytef *)data, &decoded_length, (const Bytef *)payload, (uLong)stored_length) != Z_OK ||
-            decoded_length != entry->length) {
+        if (entry->method == GS_METHOD_ZLIB) {
+            uLongf decoded_length = (uLongf)entry->length;
+            decoded_ok = uncompress((Bytef *)data, &decoded_length, (const Bytef *)payload, (uLong)stored_length) == Z_OK &&
+                decoded_length == entry->length;
+        } else if (stored_length >= LZMA_PROPS_SIZE) {
+            SizeT decoded_length = entry->length;
+            SizeT source_length = stored_length - LZMA_PROPS_SIZE;
+            ELzmaStatus status;
+            decoded_ok = LzmaDecode(data, &decoded_length, payload + LZMA_PROPS_SIZE, &source_length,
+                payload, LZMA_PROPS_SIZE, LZMA_FINISH_END, &status, &g_Alloc) == SZ_OK &&
+                status == LZMA_STATUS_FINISHED_WITH_MARK && decoded_length == entry->length &&
+                source_length == stored_length - LZMA_PROPS_SIZE;
+        }
+        if (!decoded_ok) {
             free(payload);
             free(data);
             set_error(err, err_size, "could not decompress entry '%s'", entry->alias);
@@ -1009,7 +1038,7 @@ static int collect_files_recursive(const char *root, const char *rel, StringList
     return 1;
 }
 
-static int write_entry(FILE *out, const char *alias, const unsigned char *data, uint32_t len, int compression_level, uint32_t offset_padding, GsEntry *entry, char *err, size_t err_size) {
+static int write_entry(FILE *out, const char *alias, const unsigned char *data, uint32_t len, int compression_level, uint8_t compression_method, uint32_t offset_padding, GsEntry *entry, char *err, size_t err_size) {
     unsigned char *payload = NULL;
     uint32_t payload_len = len;
     uint8_t method = GS_METHOD_RAW;
@@ -1020,7 +1049,35 @@ static int write_entry(FILE *out, const char *alias, const unsigned char *data, 
         return 0;
     }
 
-    if (compression_level >= 0) {
+    if (compression_level >= 0 && compression_method == GS_METHOD_LZMA && len > LZMA_PROPS_SIZE) {
+        CLzmaEncProps props;
+        SizeT props_size = LZMA_PROPS_SIZE;
+        SizeT encoded_size = len - LZMA_PROPS_SIZE;
+        SRes result;
+        payload = (unsigned char *)malloc(len);
+        if (!payload) {
+            set_error(err, err_size, "out of memory");
+            return 0;
+        }
+        LzmaEncProps_Init(&props);
+        props.level = compression_level;
+        props.reduceSize = len;
+        props.numThreads = 1;
+        result = LzmaEncode(payload + LZMA_PROPS_SIZE, &encoded_size, data, len, &props,
+            payload, &props_size, 1, NULL, &g_Alloc, &g_Alloc);
+        if (result == SZ_ERROR_OUTPUT_EOF || (result == SZ_OK && encoded_size + props_size >= len)) {
+            /* Store incompressible entries raw instead of expanding them. */
+            free(payload);
+            payload = (unsigned char *)data;
+        } else if (result != SZ_OK) {
+            free(payload);
+            set_error(err, err_size, "LZMA compression failed for '%s' (error %d)", alias, result);
+            return 0;
+        } else {
+            payload_len = (uint32_t)(encoded_size + props_size);
+            method = GS_METHOD_LZMA;
+        }
+    } else if (compression_level >= 0 && compression_method == GS_METHOD_ZLIB) {
         uLongf bound = compressBound((uLong)len);
         payload = (unsigned char *)malloc(bound ? (size_t)bound : 1);
         if (!payload) {
@@ -1044,14 +1101,14 @@ static int write_entry(FILE *out, const char *alias, const unsigned char *data, 
         !align_write(out, offset_padding) || fwrite(alias, 1, alias_len, out) != alias_len ||
         !align_write(out, offset_padding) || fputc(method, out) == EOF ||
         !align_write(out, offset_padding) || !write_u32(out, len)) {
-        if (compression_level >= 0) {
+        if (method != GS_METHOD_RAW) {
             free(payload);
         }
         set_error(err, err_size, "could not write archive entry '%s'", alias);
         return 0;
     }
 
-    if (method == GS_METHOD_ZLIB) {
+    if (method != GS_METHOD_RAW) {
         if (!align_write(out, offset_padding) || !write_u32(out, payload_len)) {
             free(payload);
             set_error(err, err_size, "could not write compressed length for '%s'", alias);
@@ -1060,7 +1117,7 @@ static int write_entry(FILE *out, const char *alias, const unsigned char *data, 
     }
 
     if (!align_write(out, offset_padding)) {
-        if (compression_level >= 0) {
+        if (method != GS_METHOD_RAW) {
             free(payload);
         }
         set_error(err, err_size, "could not align payload for '%s'", alias);
@@ -1076,14 +1133,14 @@ static int write_entry(FILE *out, const char *alias, const unsigned char *data, 
     if (!entry->alias || (payload_len && fwrite(payload, 1, payload_len, out) != payload_len)) {
         free(entry->alias);
         entry->alias = NULL;
-        if (compression_level >= 0) {
+        if (method != GS_METHOD_RAW) {
             free(payload);
         }
         set_error(err, err_size, "could not write payload for '%s'", alias);
         return 0;
     }
 
-    if (compression_level >= 0) {
+    if (method != GS_METHOD_RAW) {
         free(payload);
     }
     return 1;
@@ -1181,7 +1238,7 @@ static int pack_archive_cmd(const char *input_dir, const char *archive_path, con
 
         entry_level = matches_any(&opts->raw_patterns, files.items[i]) ? -1 : opts->compression_level;
         memset(&entry, 0, sizeof(entry));
-        if (!write_entry(out, files.items[i], data, data_len, entry_level, effective_padding, &entry, err, err_size) ||
+        if (!write_entry(out, files.items[i], data, data_len, entry_level, opts->method, effective_padding, &entry, err, err_size) ||
             !archive_add_entry(&written, entry)) {
             free(entry.alias);
             free(data);
@@ -1368,8 +1425,13 @@ static void usage(void) {
     printf("  list [--json] [-n|--names-only] [--include PATTERN] <archive>\n");
     printf("  unpack [-f|--overwrite] [--include PATTERN] <archive> <output_dir>\n");
     printf("  pack [-f|--overwrite] [-c LEVEL] [--offset-padding N] [--size-padding N]\n");
+    printf("       [--method lzma|zlib]\n");
     printf("       [--legacy] [--exclude PATTERN] [--raw PATTERN] [--allow-empty]\n");
     printf("       <input_dir> <archive>\n");
+    printf("\nCompression: LZMA by default; --method zlib for older readers.\n");
+    printf("  -c, --compression LEVEL: 0..9 (default 6), -1 stores raw.\n");
+    printf("  LZMA stores entries raw when compression would not reduce their size.\n");
+    printf("  --legacy selects the old header layout, not the compression method.\n");
 }
 
 static int require_value(int argc, char **argv, int *i, const char *option, char *err, size_t err_size) {
@@ -1492,6 +1554,7 @@ int main(int argc, char **argv) {
         int ok;
         memset(&opts, 0, sizeof(opts));
         opts.compression_level = 6;
+        opts.method = GS_METHOD_LZMA;
         opts.offset_padding = 4;
         opts.size_padding = 0;
         for (i = 2; i < argc; ++i) {
@@ -1501,6 +1564,23 @@ int main(int argc, char **argv) {
                 opts.legacy = 1;
             } else if (strcmp(argv[i], "--allow-empty") == 0) {
                 opts.allow_empty = 1;
+            } else if (strcmp(argv[i], "--method") == 0) {
+                if (!require_value(argc, argv, &i, "--method", err, sizeof(err))) {
+                    fprintf(stderr, "error: %s\n", err);
+                    string_list_free(&opts.excludes);
+                    string_list_free(&opts.raw_patterns);
+                    return 1;
+                }
+                if (strcmp(argv[i], "lzma") == 0) {
+                    opts.method = GS_METHOD_LZMA;
+                } else if (strcmp(argv[i], "zlib") == 0) {
+                    opts.method = GS_METHOD_ZLIB;
+                } else {
+                    fprintf(stderr, "error: unknown compression method '%s' (expected lzma or zlib)\n", argv[i]);
+                    string_list_free(&opts.excludes);
+                    string_list_free(&opts.raw_patterns);
+                    return 1;
+                }
             } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--compression") == 0) {
                 if (!require_value(argc, argv, &i, argv[i], err, sizeof(err))) {
                     fprintf(stderr, "error: %s\n", err);

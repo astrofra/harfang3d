@@ -109,6 +109,10 @@ set_target_properties(miniz PROPERTIES FOLDER "harfang/3rdparty")
 target_include_directories(miniz PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/miniz> )
 install_cppsdk_external_target(miniz)
 
+# LZMA (legacy nArchive compression)
+add_subdirectory(lzma EXCLUDE_FROM_ALL)
+install_cppsdk_external_target(lzma)
+
 # bgfx
 add_subdirectory(bgfx EXCLUDE_FROM_ALL)
 

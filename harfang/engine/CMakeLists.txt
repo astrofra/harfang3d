@@ -135,7 +135,7 @@ if(NOT (CMAKE_SYSTEM_NAME STREQUAL "Emscripten"))
 	target_link_libraries(engine PRIVATE OpenAL)
 endif()
 
-target_link_libraries(engine PRIVATE miniz mikktspace)
+target_link_libraries(engine PRIVATE miniz lzma mikktspace)
 
 if(HG_ENABLE_OPENVR_API)
 	target_link_libraries(engine PRIVATE OpenVR)
