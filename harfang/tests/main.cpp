@@ -60,6 +60,7 @@ extern void test_meta();
 extern void test_picture();
 extern void test_video_stream();
 extern void test_scene();
+extern void test_scene_animation();
 #if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
 extern void test_scene_tau_physics();
 extern void test_scene_tau_physics_contact();
@@ -128,6 +129,7 @@ TEST_LIST = {
 	{"engine.picture", test_picture},
 	{"engine.video_stream", test_video_stream},
 	{"engine.scene", test_scene},
+	{"engine.scene_animation", test_scene_animation},
 #if defined(HG_ENABLE_TAU_SCENE_PHYSICS)
 	{"engine.scene_tau_physics", test_scene_tau_physics},
 	{"engine.scene_tau_physics_contact", test_scene_tau_physics_contact},

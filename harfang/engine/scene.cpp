@@ -49,6 +49,8 @@ static void _ResizeComponents(std::vector<ComponentRef> &cs) {
 
 //
 void Scene::Clear() {
+	ClearAnimPlayers();
+	StopAllAnims();
 	// physic world
 	collisions.clear();
 	rigid_bodies.clear();
@@ -70,8 +72,6 @@ void Scene::Clear() {
 	// animations
 	anims.clear();
 	scene_anims.clear();
-
-	play_anims.clear();
 
 	// scripts
 	scripts.clear();
@@ -466,7 +466,10 @@ std::vector<NodeRef> NodesChildren::GetChildren(NodeRef node) const {
 
 //
 Node Scene::CreateNode(std::string name) { return {scene_ref, nodes.add_ref({std::move(name)})}; }
-void Scene::DestroyNode(NodeRef ref) { nodes.remove_ref(ref); }
+void Scene::DestroyNode(NodeRef ref) {
+	InvalidateAnimPlayers(ref);
+	nodes.remove_ref(ref);
+}
 
 //
 void Scene::EnableNode_(NodeRef ref, bool through_instance) {
@@ -1301,6 +1304,7 @@ void Scene::DestroyViewContent(const SceneView &view) {
 }
 
 void Scene::NodeDestroyInstance(NodeRef ref) {
+	InvalidateAnimPlayers(ref);
 	NodeStopOnInstantiateAnim(ref);
 
 	const auto i = node_instance_view.find(ref);
@@ -1326,6 +1330,7 @@ bool Scene::NodeSetupInstance(
 		return false;
 
 	const auto host_is_enabled = IsNodeEnabled(ref);
+	InvalidateAnimPlayers(ref); // Instance setup/reload invalidates players bound to its previous view.
 
 	if (instances.is_valid(i->second)) {
 		LoadSceneContext ctx = {recursion_level};
@@ -1993,7 +1998,11 @@ std::vector<ScenePlayAnimRef> Scene::GetPlayingAnimRefs() const {
 }
 
 //
-void Scene::StopAllAnims() { play_anims.clear(); }
+void Scene::StopAllAnims() {
+	StopAllAnimPlayers();
+	while (play_anims.size())
+		play_anims.remove_ref(play_anims.first_ref());
+}
 bool Scene::GetMinMax(const PipelineResources &resources, MinMax &minmax) const { return GetNodesMinMax(GetNodesWithComponent(NCI_Object), resources, minmax); }
 
 //
@@ -2013,7 +2022,10 @@ std::vector<AnimRef> Scene::GetAnims() const {
 
 Anim *Scene::GetAnim(AnimRef ref) { return anims.is_valid(ref) ? &anims[ref.idx] : nullptr; }
 const Anim *Scene::GetAnim(AnimRef ref) const { return anims.is_valid(ref) ? &anims[ref.idx] : nullptr; }
-void Scene::DestroyAnim(AnimRef anim) { anims.remove_ref(anim); }
+void Scene::DestroyAnim(AnimRef anim) {
+	InvalidateAnimPlayers({}, anim);
+	anims.remove_ref(anim);
+}
 
 BoundToSceneAnim Scene::BindSceneAnim(AnimRef anim_ref) const {
 	if (!anims.is_valid(anim_ref)) {
@@ -2288,7 +2300,10 @@ void Scene::EvaluateBoundAnim(const BoundToNodeAnim &bound_anim, time_ns t) {
 const SceneAnimRef InvalidSceneAnimRef;
 
 SceneAnimRef Scene::AddSceneAnim(SceneAnim anim) { return scene_anims.add_ref(std::move(anim)); }
-void Scene::DestroySceneAnim(SceneAnimRef ref) { scene_anims.remove_ref(ref); }
+void Scene::DestroySceneAnim(SceneAnimRef ref) {
+	InvalidateAnimPlayers({}, {}, ref);
+	scene_anims.remove_ref(ref);
+}
 
 size_t Scene::GarbageCollectAnims() {
 	std::vector<bool> is_refd(anims.capacity(), false);
@@ -2306,7 +2321,7 @@ size_t Scene::GarbageCollectAnims() {
 
 	for (size_t i = 0; i < is_refd.size(); ++i)
 		if (!is_refd[i] && anims.is_used(uint32_t(i))) {
-			anims.remove(uint32_t(i));
+			DestroyAnim(anims.get_ref(uint32_t(i)));
 			++removed_count;
 		}
 
@@ -2377,6 +2392,10 @@ ScenePlayAnimRef Scene::PlayAnim(SceneAnimRef ref, AnimLoopMode loop_mode, Easin
 
 	play_anim.name = scene_anims[ref.idx].name;
 	play_anim.bound_anim = BindAnim(ref);
+	if (HasAnimPlayerConflict(play_anim.bound_anim)) {
+		warn("Animation targets are owned by an animation player");
+		return InvalidScenePlayAnimRef;
+	}
 
 	play_anim.flags = paused ? SPAF_Paused : 0;
 	play_anim.loop_mode = loop_mode;
@@ -2392,13 +2411,18 @@ ScenePlayAnimRef Scene::PlayAnim(SceneAnimRef ref, AnimLoopMode loop_mode, Easin
 }
 
 bool Scene::IsPlaying(ScenePlayAnimRef ref) const { return play_anims.is_valid(ref); }
-void Scene::StopAnim(ScenePlayAnimRef ref) { play_anims.remove_ref(ref); }
+void Scene::StopAnim(ScenePlayAnimRef ref) {
+	if (play_anims.is_valid(ref) && !StopManagedAnim(ref))
+		play_anims.remove_ref(ref);
+}
 
 void Scene::UpdatePlayingAnims(time_ns dt) {
 	std::vector<ScenePlayAnimRef> clean_list;
 
 	for (auto i = play_anims.first_ref(); i != InvalidScenePlayAnimRef; i = play_anims.next_ref(i)) {
 		auto &play_anim = play_anims[i.idx];
+		if (play_anim.flags & SPAF_Managed)
+			continue;
 
 		// step clock
 		if (!(play_anim.flags & SPAF_Paused))
@@ -2444,7 +2468,8 @@ void Scene::UpdatePlayingAnims(time_ns dt) {
 	}
 
 	for (auto i : clean_list)
-		play_anims.remove(i.idx); // no point in going through the gen_ref check
+		play_anims.remove_ref(i);
+	UpdateAnimPlayers(dt);
 }
 
 //

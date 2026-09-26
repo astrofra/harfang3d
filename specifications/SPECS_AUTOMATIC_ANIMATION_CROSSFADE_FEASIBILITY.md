@@ -2,9 +2,16 @@
 
 Date: 2026-09-25
 
-Status: feasibility study and proposed runtime contract; not implemented.
+Status: original feasibility study and proposed runtime contract.
 
-Method: static inspection of engine code, bindings, application code and source
+Implementation update (2026-09-26): the transform crossfade player, C++/Lua/Python
+bindings, animation import API and Martian Melodies integration are implemented.
+See [Animation crossfade implementation](ANIMATION_CROSSFADE.md) for the actual
+API, supported behavior and validation. The investigation below is preserved as
+historical design context; its proposed signatures and estimates are not the
+implemented API contract.
+
+Original study method: static inspection of engine code, bindings, application code and source
 scene JSON. No modified engine was built, no visual playback comparison was run,
 and no performance measurements were taken. Effort and performance estimates
 below are engineering estimates.

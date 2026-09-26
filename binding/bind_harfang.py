@@ -1261,6 +1261,31 @@ def bind_scene(gen):
 	# hg::Scene
 	bind_signal_T(gen, 'TimeSignal', 'void', ['hg::time_ns'], 'TimeCallback')
 
+	anim_player = gen.begin_class('hg::SceneAnimPlayer')
+	gen.bind_method(anim_player, 'IsValid', 'bool', [])
+	gen.bind_method(anim_player, 'SetCrossFadeDuration', 'bool', ['hg::time_ns duration'])
+	gen.bind_method(anim_player, 'GetCrossFadeDuration', 'hg::time_ns', [])
+	gen.bind_method(anim_player, 'SetCrossFadeEasing', 'bool', ['hg::Easing easing'])
+	gen.bind_method(anim_player, 'GetCrossFadeEasing', 'hg::Easing', [])
+	gen.bind_method(anim_player, 'Play', 'hg::ScenePlayAnimRef', ['const std::string &name', '?hg::AnimLoopMode loop_mode', '?bool restart'])
+	gen.bind_method(anim_player, 'IsTransitioning', 'bool', [])
+	gen.bind_method(anim_player, 'Stop', 'void', [])
+	gen.end_class(anim_player)
+
+	anim_info = gen.begin_class('hg::SceneAnimInfo')
+	gen.bind_members(anim_info, ['bool valid', 'std::string name', 'hg::time_ns t_start', 'hg::time_ns t_end', 'hg::time_ns frame_duration'])
+	gen.end_class(anim_info)
+	anim_node_map = gen.begin_class('hg::SceneAnimNodeMap')
+	gen.bind_constructor(anim_node_map, [])
+	gen.bind_members(anim_node_map, ['bool success', 'std::string message', 'std::vector<hg::Node> source_nodes', 'std::vector<hg::Node> destination_nodes'])
+	gen.end_class(anim_node_map)
+	anim_import = gen.begin_class('hg::SceneAnimImportResult')
+	gen.bind_members(anim_import, ['bool success', 'std::string message', 'hg::SceneAnimRef anim', 'uint32_t copied_channels', 'uint32_t completed_channels'])
+	gen.end_class(anim_import)
+	gen.bind_function('hg::GetSceneAnimInfo', 'hg::SceneAnimInfo', ['const hg::Scene &scene', 'hg::SceneAnimRef ref'])
+	gen.bind_function('hg::BuildSceneAnimNodeMap', 'hg::SceneAnimNodeMap', ['const hg::Scene &source', 'const hg::Scene &destination'])
+	gen.bind_function('hg::ImportSceneAnim', 'hg::SceneAnimImportResult', ['const hg::Scene &source', 'hg::SceneAnimRef source_anim', 'hg::Scene &destination', 'const hg::SceneAnimNodeMap &node_map', 'const std::string &name', '?bool preserve_missing_trs'])
+
 	gen.bind_constructor(scene, [])
 
 	gen.bind_method(scene, 'GetNode', 'hg::Node', ['const std::string &name'])
@@ -1299,6 +1324,9 @@ def bind_scene(gen):
 	gen.bind_method(scene, 'GetPlayingAnimNames', 'std::vector<std::string>', [])
 	gen.bind_method(scene, 'GetPlayingAnimRefs', 'std::vector<hg::ScenePlayAnimRef>', [])
 	gen.bind_method(scene, 'UpdatePlayingAnims', 'void', ['hg::time_ns dt'])
+	gen.bind_method(scene, 'CreateAnimPlayer', 'hg::SceneAnimPlayer', ['const std::vector<hg::SceneAnimRef> &clips'])
+	gen.bind_method(scene, 'CreateInstanceAnimPlayer', 'hg::SceneAnimPlayer', ['const hg::Node &node'])
+	gen.bind_method(scene, 'DestroyAnimPlayer', 'void', ['const hg::SceneAnimPlayer &player'])
 
 	#
 	gen.bind_method(scene, 'HasKey', 'bool', ['const std::string &key'])
@@ -1461,6 +1489,7 @@ def bind_scene(gen):
 		("LSSF_QueueTextureLoads", "hg::LSSF_QueueTextureLoads"),
 		("LSSF_FreezeMatrixToTransformOnSave", "hg::LSSF_FreezeMatrixToTransformOnSave"),
 		("LSSF_QueueModelLoads", "hg::LSSF_QueueModelLoads"),
+		("LSSF_DoNotLoadResources", "hg::LSSF_DoNotLoadResources"),
 		("LSSF_DoNotChangeCurrentCameraIfValid", "hg::LSSF_DoNotChangeCurrentCameraIfValid"),
 	], 'LoadSaveSceneFlags')
 

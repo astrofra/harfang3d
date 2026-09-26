@@ -129,6 +129,50 @@ struct SceneBoundAnim {
 using ScenePlayAnimRef = gen_ref;
 extern const ScenePlayAnimRef InvalidScenePlayAnimRef;
 
+struct SceneAnimPlayerData;
+
+/// Scene-owned transform animation player. Copies reference the same player.
+struct SceneAnimPlayer {
+	bool IsValid() const;
+	bool SetCrossFadeDuration(time_ns duration);
+	time_ns GetCrossFadeDuration() const;
+	bool SetCrossFadeEasing(Easing easing);
+	Easing GetCrossFadeEasing() const;
+	ScenePlayAnimRef Play(const std::string &name, AnimLoopMode loop_mode = ALM_Once, bool restart = false);
+	bool IsTransitioning() const;
+	void Stop();
+
+	intrusive_shared_ptr_st<SceneRef> scene_ref;
+	gen_ref ref;
+
+private:
+	SceneAnimPlayerData *GetData() const;
+};
+
+struct SceneAnimInfo {
+	bool valid{false};
+	std::string name;
+	time_ns t_start{}, t_end{}, frame_duration{};
+};
+
+struct SceneAnimNodeMap {
+	bool success{false};
+	std::string message;
+	std::vector<Node> source_nodes, destination_nodes;
+};
+
+struct SceneAnimImportResult {
+	bool success{false};
+	std::string message;
+	SceneAnimRef anim;
+	uint32_t copied_channels{}, completed_channels{};
+};
+
+SceneAnimInfo GetSceneAnimInfo(const Scene &scene, SceneAnimRef ref);
+SceneAnimNodeMap BuildSceneAnimNodeMap(const Scene &source, const Scene &destination);
+SceneAnimImportResult ImportSceneAnim(const Scene &source, SceneAnimRef source_anim, Scene &destination,
+	const SceneAnimNodeMap &node_map, const std::string &name, bool preserve_missing_trs = true);
+
 //
 enum ProbeType : uint8_t { PT_Sphere, PT_Cube, PT_Count };
 
@@ -664,6 +708,10 @@ public:
 
 	void UpdatePlayingAnims(time_ns dt);
 
+	SceneAnimPlayer CreateAnimPlayer(const std::vector<SceneAnimRef> &clips);
+	SceneAnimPlayer CreateInstanceAnimPlayer(const Node &node);
+	void DestroyAnimPlayer(const SceneAnimPlayer &player);
+
 	SceneAnimRef DuplicateSceneAnim(SceneAnimRef ref);
 
 	size_t GarbageCollectAnims();
@@ -889,6 +937,7 @@ private:
 
 	//
 	static constexpr uint8_t SPAF_Paused = 0x1;
+	static constexpr uint8_t SPAF_Managed = 0x2;
 
 	struct ScenePlayAnim {
 		std::string name;
@@ -904,6 +953,14 @@ private:
 	};
 
 	generational_vector_list<ScenePlayAnim> play_anims;
+	friend struct SceneAnimPlayer;
+	generational_vector_list<std::shared_ptr<SceneAnimPlayerData>> anim_players;
+	void UpdateAnimPlayers(time_ns dt);
+	void StopAllAnimPlayers();
+	void ClearAnimPlayers();
+	bool StopManagedAnim(ScenePlayAnimRef ref);
+	bool HasAnimPlayerConflict(const SceneBoundAnim &anim, const SceneAnimPlayerData *except = nullptr) const;
+	void InvalidateAnimPlayers(NodeRef node = {}, AnimRef anim = {}, SceneAnimRef clip = {});
 
 private:
 	NodeRef current_camera{};

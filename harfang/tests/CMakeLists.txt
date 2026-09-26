@@ -85,6 +85,7 @@ set(TEST_ENGINE_SRCS
 	engine/picture.cpp
 	engine/video_stream.cpp
 	engine/scene.cpp
+	engine/scene_animation.cpp
 )
 
 if(HG_ENABLE_TAU_SCENE_PHYSICS)

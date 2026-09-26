@@ -196,7 +196,7 @@ bool Node::SetupInstanceFromFile(PipelineResources &resources, const PipelineInf
 
 bool Node::SetupInstanceFromAssets(PipelineResources &resources, const PipelineInfo &pipeline, uint32_t flags) {
 	if (scene_ref && scene_ref->scene)
-		return scene_ref->scene->NodeSetupInstanceFromAssets(ref, resources, pipeline);
+		return scene_ref->scene->NodeSetupInstanceFromAssets(ref, resources, pipeline, flags);
 	return true;
 }
 
