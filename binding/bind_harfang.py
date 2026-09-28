@@ -894,9 +894,10 @@ def bind_signal_T(gen, name, rtype, args, cb_name):
 def bind_scene(gen):
 	gen.add_include('engine/scene.h')
 
-	# hg::SceneAnimRef
-	gen.bind_named_enum('hg::AnimLoopMode', ['ALM_Once', 'ALM_Infinite', 'ALM_Loop'])
+	# Match the enum's underlying type: converters write directly into its storage.
+	gen.bind_named_enum('hg::AnimLoopMode', ['ALM_Once', 'ALM_Infinite', 'ALM_Loop'], storage_type='uint8_t')
 
+	# hg::SceneAnimRef
 	scene_anim_ref = gen.begin_class('hg::SceneAnimRef')
 	scene_anim_ref._inline = True
 	gen.bind_comparison_ops(scene_anim_ref, ['==', '!='], ['const hg::SceneAnimRef &ref'])

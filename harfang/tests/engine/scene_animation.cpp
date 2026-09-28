@@ -4,6 +4,7 @@
 #undef far
 #include "engine/forward_pipeline.h"
 #include "engine/scene.h"
+#include "engine/scene_lua_vm.h"
 #include "engine/scene_systems.h"
 #include "foundation/data.h"
 #include "foundation/file_rw_interface.h"
@@ -268,6 +269,56 @@ static void TestImportAndRoundTrip() {
 	CheckX(loaded.GetNode("unanimated"), 7);
 }
 
+static void TestLuaLoopModes() {
+	Scene scene;
+	PositionClip(scene, AnimNode(scene), "walk", 0, 10);
+	auto script = scene.CreateScript();
+	scene.SetScript(0, script);
+	SceneLuaVM vm;
+	vm.OverrideScriptSource(script.ref, R"lua(
+local function test_loop_modes(scene)
+    local node = scene:GetNode("bone")
+    local player = scene:CreateAnimPlayer(scene:GetSceneAnims())
+    assert(player:IsValid())
+    local function check(ref, mode)
+        scene:UpdatePlayingAnims(hg.time_from_ms(250))
+        local x = node:GetTransform():GetPos().x
+        assert(math.abs(x - 2.03125) < 0.0001)
+        for cycle = 1, 3 do
+            scene:UpdatePlayingAnims(hg.time_from_sec(1))
+            assert(scene:IsPlaying(ref) == (mode ~= hg.ALM_Once), "Lua playback loop mode lost")
+            local expected = mode == hg.ALM_Loop and x or 10
+            assert(math.abs(node:GetTransform():GetPos().x - expected) < 0.0001, "Lua loop pose did not repeat")
+        end
+    end
+    for _, mode in ipairs({hg.ALM_Once, hg.ALM_Infinite, hg.ALM_Loop}) do
+        -- Exercise both Play overloads and the adjacent restart argument.
+        for arity = 2, 4 do
+            local ref
+            if arity == 2 then ref = player:Play("walk", mode)
+            else ref = player:Play("walk", mode, arity == 4) end
+            check(ref, mode)
+            player:Stop()
+        end
+        local instance = scene:CreateInstance()
+        instance:SetOnInstantiateAnimLoopMode(mode)
+        assert(instance:GetOnInstantiateAnimLoopMode() == mode)
+        check(scene:PlayAnim(scene:GetSceneAnim("walk"), mode), mode)
+        scene:StopAllAnims()
+    end
+    check(player:Play("walk"), hg.ALM_Once)
+end
+function OnAttachToScene(scene)
+    local ok, err = pcall(test_loop_modes, scene)
+    G.loop_modes_passed = ok
+    G.loop_modes_error = tostring(err)
+end
+)lua");
+	SceneSyncToSystemsFromAssets(scene, vm);
+	TEST_CHECK(LuaObjValue(vm.GetGlobal("loop_modes_passed"), false));
+	TEST_MSG("%s", LuaObjValue(vm.GetGlobal("loop_modes_error"), std::string{}).c_str());
+}
+
 static void TestEasingAndTimeSteps() {
 	for (const auto easing : {E_Linear, E_SmoothStep}) {
 		Scene scene;
@@ -315,5 +366,6 @@ void test_scene_animation() {
 	TestSparsePoseAndRotation();
 	TestOwnershipLifecycleAndClocks();
 	TestImportAndRoundTrip();
+	TestLuaLoopModes();
 	TestEasingAndTimeSteps();
 }

@@ -210,6 +210,18 @@ Validation on Windows x64 Release covers:
   `props/metal_tents/metal_tent_40.geo`); those warnings are outside the animation
   integration.
 
+macOS ARM64 Release validation (2026-09-28) reproduced a Lua binding defect:
+`AnimLoopMode` was bound with the default `int` storage, although its C++
+underlying type is `uint8_t`. Generated converters accessed four bytes through
+a one-byte enum, causing undefined behavior; looping demo clips stopped at their
+first endpoint. The binding now declares `storage_type='uint8_t'` for all bound
+languages. No scene conversion or controller change is required.
+
+The regression checks exercise Lua player overloads, legacy playback and instance
+loop-mode accessors. The rebuilt macOS Lua module also passes the compiled demo's
+three-cycle pose comparisons for idle/walk/crouch-walk and its 120-second controller
+runs at 30, 60 and 120 FPS. These macOS checks are headless, without rendered capture.
+
 This is functional validation, not a performance benchmark. No new animation
 serialization format or renderer/shader feature is required. The demo's previous
 `assetc` binary predates the engine's current scene format, so its local compiler
