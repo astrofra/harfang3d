@@ -87,4 +87,17 @@ Option | Shortcut | Description
 
 *Note:* When run in daemon mode `assetc` will not exit after its initial run and will keep watching the input folder. When a resource is modified it will automatically be compiled to the output folder.
 
+## Texture compilation
+
+`assetc` uses the bundled portable `texc` compiler for BC1, BC3, BC4, BC5, BC7,
+RGBA8, BGRA8 and RAW textures on Windows, Linux and macOS. RAW selects BGRA8 for
+DX11 and RGBA8 for the other graphics APIs. The existing `compression`,
+`generate-mips` and `max-size` metadata remain supported. The fast path uses
+quality 0 and power-of-two dimensions, bounded by `max-size`.
+
+Formats outside this set, and HDR/EXR inputs, use the existing compilers
+(`texconv` when available and compatible, otherwise BGFX `texturec`). Custom
+toolchains without `texc` also retain this fallback. Changing the selected
+compiler invalidates the texture's compilation cache automatically.
+
 See [man.GLTF] and [man.FBX] to convert common 3d formats to Harfang resources.

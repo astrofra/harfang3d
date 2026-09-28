@@ -118,7 +118,7 @@ static std::string global_shader_defines;
 
 //
 struct Toolchain {
-	std::string shaderc, texturec, luac, cmft, recastc, texconv, bulletc;
+	std::string shaderc, texturec, luac, cmft, recastc, texconv, bulletc, texc;
 };
 
 static Toolchain toolchain;
@@ -138,14 +138,17 @@ static void ToolchainExists() {
 		toolchain.texconv.clear();
 	if (!IsFile(toolchain.bulletc.c_str()))
 		toolchain.bulletc.clear();
+	if (!IsFile(toolchain.texc.c_str()))
+		toolchain.texc.clear();
 }
 
 static void SetToolchain(const std::string &path) {
 #ifdef WIN32
 	toolchain = {PathJoin({path, "shaderc.exe"}), PathJoin({path, "texturec.exe"}), PathJoin({path, "luac.exe"}), PathJoin({path, "cmft.exe"}),
-		PathJoin({path, "recastc.exe"}), PathJoin({path, "texconv.exe"}), PathJoin({path, "bulletc.exe"})};
+		PathJoin({path, "recastc.exe"}), PathJoin({path, "texconv.exe"}), PathJoin({path, "bulletc.exe"}), PathJoin({path, "texc.exe"})};
 #else
-	toolchain = {PathJoin({path, "shaderc"}), PathJoin({path, "texturec"}), PathJoin({path, "luac"}), PathJoin({path, "cmft"}), PathJoin({path, "recast"}), PathJoin({path, "texconv"}), PathJoin({path, "bulletc"})};
+	toolchain = {PathJoin({path, "shaderc"}), PathJoin({path, "texturec"}), PathJoin({path, "luac"}), PathJoin({path, "cmft"}), PathJoin({path, "recast"}),
+		PathJoin({path, "texconv"}), PathJoin({path, "bulletc"}), PathJoin({path, "texc"})};
 #endif
 }
 
@@ -707,6 +710,16 @@ void Scene(std::map<std::string, Hash> &hashes, const std::string &path) {
 void Copy(std::map<std::string, Hash> &hashes, const std::string &path);
 
 //
+static std::string Get_texc_Format(const std::string &f) {
+	if (f == "BC1" || f == "BC3" || f == "BC4" || f == "BC5" || f == "BC7")
+		return f + "_UNORM";
+	if (f == "RAW")
+		return assetc::api == "DX11" ? "BGRA8" : "RGBA8";
+	if (f == "RGBA8" || f == "BGRA8")
+		return f;
+	return "";
+}
+
 static std::string Get_texconv_Format(const std::string &f) {
 	if (f == "BC1")
 		return "BC1_UNORM";
@@ -980,13 +993,20 @@ void Texture(std::map<std::string, Hash> &hashes, std::string path) {
 			Write(build_ctx, generate_mips);
 			Write(build_ctx, compression);
 
+			const auto texc_fmt = Get_texc_Format(compression);
+			// Keep floating-point inputs on the existing conversion path. stb_image does not support EXR.
+			const auto input_ext = tolower(GetFileExtension(in_path));
+			const auto use_texc = !toolchain.texc.empty() && !texc_fmt.empty() && input_ext != "exr" && input_ext != "hdr";
 			const auto texconv_fmt = Get_texconv_Format(compression);
-			const auto use_texconv = !toolchain.texconv.empty() && !texconv_fmt.empty();
+			const auto use_texconv = !use_texc && !toolchain.texconv.empty() && !texconv_fmt.empty();
 
-			if (use_texconv)
+			if (use_texc) {
+				Write(build_ctx, "texc");
+				Write(build_ctx, texc_fmt); // RAW depends on the target graphics API
+			} else if (use_texconv)
 				Write(build_ctx, "texconv");
 
-			if (toolchain.texturec.empty()) {
+			if (!use_texc && !use_texconv && toolchain.texturec.empty()) {
 				warn("    Skipping, no compiler found for texture resource");
 			} else {
 				if (NeedsCompilation(hashes, {in_path}, {path}, build_ctx)) {
@@ -995,15 +1015,20 @@ void Texture(std::map<std::string, Hash> &hashes, std::string path) {
 
 					std::string cmd;
 
-					if (use_texconv) { // favor the much faster texconv over texturec
-						cmd = format("%1 -y -nologo -maxsize %2 -f %3 -bc x").arg(toolchain.texconv).arg(max_size).arg(texconv_fmt).str();
+					if (use_texc) { // favor the portable, fast encoder
+						cmd = format("\"%1\" -r -s %2 -f %3 -q 0").arg(toolchain.texc).arg(max_size).arg(texc_fmt).str();
+						if (generate_mips)
+							cmd += " -m";
+						cmd += format(" \"%1\" \"%2\"").arg(src).arg(dst).str();
+					} else if (use_texconv) {
+						cmd = format("\"%1\" -y -nologo -maxsize %2 -f %3 -bc x").arg(toolchain.texconv).arg(max_size).arg(texconv_fmt).str();
 						if (!generate_mips)
 							cmd += " -m 1";
 						cmd += format(" \"%1\" \"%2\"").arg(src).arg(dst).str();
 					}
 
 					if (cmd.empty()) { // fallback to texturec
-						cmd = format("%1 -f \"%2\" -o \"%3\" --as dds --max %4").arg(toolchain.texturec).arg(src).arg(dst).arg(max_size).str();
+						cmd = format("\"%1\" -f \"%2\" -o \"%3\" --as dds --max %4").arg(toolchain.texturec).arg(src).arg(dst).arg(max_size).str();
 
 						if (compression != "RAW")
 							cmd += format(" -t %1").arg(compression).str();
@@ -2169,6 +2194,7 @@ int main(int narg, const char **args) {
 	log(format("> Toolchain compilers (%1):").arg(toolchain_path));
 	log(format("  - Shader      %1").arg(exe_path_or_nothing(assetc::toolchain.shaderc)));
 	log(format("  - Texture     %1").arg(exe_path_or_nothing(assetc::toolchain.texturec)));
+	log(format("  - Texture fast %1").arg(exe_path_or_nothing(assetc::toolchain.texc)));
 	log(format("  - Probe       %1").arg(exe_path_or_nothing(assetc::toolchain.cmft)));
 	log(format("  - Lua         %1").arg(exe_path_or_nothing(assetc::toolchain.luac)));
 	log(format("  - Pathfinding %1").arg(exe_path_or_nothing(assetc::toolchain.recastc)));
