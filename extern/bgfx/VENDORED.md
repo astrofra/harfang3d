@@ -15,6 +15,9 @@ Current Harfang-specific delta:
 
 - `bgfx/src/renderer_mtl.mm`: bump Metal `UNIFORM_BUFFER_SIZE` from 8 MB to
   32 MB to avoid per-frame uniform-ring overflow on heavy macOS/Metal scenes.
+- `bgfx/src/renderer_mtl.mm`: preserve depth/stencil attachments across render
+  passes even when the main swap chain uses MSAA. Discarding offscreen depth
+  based on the swap chain's MSAA setting broke shadow maps on Apple GPUs.
 
 Maintenance rules:
 

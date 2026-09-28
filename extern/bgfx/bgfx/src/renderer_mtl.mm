@@ -4086,10 +4086,9 @@ namespace bgfx { namespace mtl
 										? MTLLoadActionClear
 										: MTLLoadActionLoad
 										;
-										depthAttachment.storeAction = NULL != m_mainFrameBuffer.m_swapChain->m_backBufferColorMsaa
-										? MTLStoreActionDontCare
-										: MTLStoreActionStore
-										;
+									// Later passes can sample this depth (e.g. shadow maps),
+									// regardless of the main swap chain's MSAA setting.
+									depthAttachment.storeAction = MTLStoreActionStore;
 								}
 
 								RenderPassStencilAttachmentDescriptor stencilAttachment = renderPassDescriptor.stencilAttachment;
@@ -4101,10 +4100,7 @@ namespace bgfx { namespace mtl
 										? MTLLoadActionClear
 										: MTLLoadActionLoad
 										;
-									stencilAttachment.storeAction = NULL != m_mainFrameBuffer.m_swapChain->m_backBufferColorMsaa
-										? MTLStoreActionDontCare
-										: MTLStoreActionStore
-										;
+									stencilAttachment.storeAction = MTLStoreActionStore;
 								}
 							}
 							else
