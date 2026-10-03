@@ -6,6 +6,8 @@ Status: proposed phased specifications; no implementation is claimed.
 
 Architecture and source evidence: [Hybrid HARFANG Feasibility](SPECS_HYBRID_CPP_JS_WEBGL_FEASIBILITY.md). Native binding baseline: [QuickJS Language Integration Feasibility](../../FABGen/specifications/SPECS_QUICKJS_LANG_INTEGRATION_FEASIBILITY.md).
 
+Primary acceptance suite: [Tutorial-Based Validation Matrix](SPECS_HYBRID_CPP_JS_WEBGL_TUTORIAL_VALIDATION.md), covering all 56 existing tutorial families with explicit retained/deferred/excluded decisions.
+
 ## 1. Fixed Constraints
 
 - The native product uses HARFANG C++ with a JavaScript API, initially through QuickJS.
@@ -51,6 +53,29 @@ flowchart LR
 Testing and resource accounting start in W0. W10 consolidates production behavior; it is not the first time error handling or conformance is implemented.
 
 Scene instancing and GPU draw instancing are different features. W5 implements scene semantics. Draw batching/instancing is an optimization that can follow wherever it improves measured performance.
+
+### Tutorial-Based Acceptance
+
+Validate each slice primarily by porting the applicable existing tutorials to shared JS and comparing native JS with the pure-JS browser runtime. Keep desktop lifecycle calls explicit in `main.js`. Existing native tutorials remain unchanged; excluded examples are removed from the acceptance scope, not deleted.
+
+The detailed matrix classifies **25 retained, 12 deferred, and 19 excluded families**. A language variant is not another independent test. Staged derivatives have separate case IDs; passing a reduced derivative does not imply passing the original complete scenario.
+
+| Slice | Primary existing tutorial coverage | Essential supplement or qualification |
+| --- | --- | --- |
+| C/N | Every retained shared-JS tutorial; `scene_lua_script` reworked as JS behavior communication | Native ownership, type conversion, and exact-value boundaries still need focused tests |
+| W0 | `basic_loop`, keyboard/mouse basics and transitions, `draw_lines`, `draw_lines_starfield`, resize | Browser async/cancellation/focus behavior; no busy-loop translation |
+| W1 | `draw_model_no_pipeline`, `filesystem_assets`, `picture_load`, structural stage of `scene_pbr` | Small direct-drawing/program subset; malformed/missing dependencies and rollback |
+| W2 | `scene_pbr`, `material_update_value`, `scene_light_priority` | Support the used `default.hps` family as well as PBR; retain material texture/variant transitions |
+| W3 | `scene_spot_shadow_clip`, shadow-enabled retained scenes | Spot case is conditional on declared spot support; add directional/cascade and alpha-cut fixtures |
+| W4 | `filesystem_assets`, `picture_load`, `scene_pbr`, `material_update_value` across texture routes | Add known-size compressed mip/fallback/color-space cases |
+| W5 | Static stage of `scene_instances`, `game_mouse_flight`, full `mouse_scene_projection` | The projection scene contains an instance; add nesting/cycle/destruction cases |
+| W6 | Animated stage of `scene_instances` using authored idle/walk/run clips | Fixed-time interpolation, seek/loop, and timestamp fixtures |
+| W7 | No existing tutorial establishes weighted skinning | Add a two-bone weighted mesh and representative character; the current biped scene lacks object/material skinning markers |
+| W8 | `audio_play_sound_stereo`, spatialized variant when that capability ships | Activation/lifetime checks; OGG streaming remains deferred |
+| W9 | `imgui_basic`, `imgui_edit`, `imgui_mouse_capture` through the portable facade | Stable IDs, focus/composition, and explicit adaptations of native-only controls |
+| W10 | Whole applicable retained suite, `scene_many_nodes`, `game_mouse_flight` | Separate reduced correctness cases from original stress workloads; device/lifetime/zero-Wasm checks |
+
+The fixtures below supplement these tutorial gates where needed; they are not a request to replace the tutorial corpus with unrelated demos. No validation runs are claimed in these specifications. Deferred capabilities do not enter the current estimate merely because their tutorial exists.
 
 ## 3. Effort Allocation
 
@@ -137,6 +162,7 @@ Deliver:
 - A resource manager with asynchronous fetch, cancellation, deduplication, and logical-ID resolution.
 - A JS scene-script manager with per-component factory instances and defined callback ordering.
 - Renderer initialization, capability detection, and a visible diagnostic frame.
+- The minimal dynamic-line drawing path and known program/layout mappings needed by the retained drawing tutorials.
 
 Acceptance fixtures:
 
@@ -157,6 +183,7 @@ Supported content:
 
 - Nodes, transforms, parent hierarchy, perspective/orthographic cameras, current-camera selection, and enabled/disabled state.
 - Static indexed geometry with submeshes/material assignments and bounds.
+- Minimal cube/plane construction and direct model drawing for `draw_model_no_pipeline`; general `ModelBuilder` remains deferred.
 - A simple unlit material and ordinary JPEG/PNG images before W2/W4.
 - Core scene metadata and compiled dependency references.
 
@@ -180,7 +207,7 @@ Inert physics authoring metadata may be explicitly stripped by the compiler with
 
 **Result:** authored material controls and a small forward light rig produce a usable interactive scene.
 
-Deliver approved unlit and HARFANG PBR program adapters, with the channel/parameter mapping documented in the feasibility study. Support base opacity, ORM, normal and self/emissive inputs; alpha cut; depth/culling/write controls; and agreed blend modes.
+Deliver approved unlit, historical `default.hps`, and HARFANG PBR program adapters, with the channel/parameter mapping documented in the feasibility study. The default-family subset preserves the diffuse/specular/self values and diffuse-map toggling used by retained tutorials; do not silently replace it with PBR. Support base opacity, ORM, normal and self/emissive inputs in the PBR family; alpha cut; depth/culling/write controls; and agreed blend modes.
 
 Start with one directional light and two points. Extend to the agreed eight-slot profile with spot attenuation, priorities, diffuse/specular intensities, and a stable overflow policy. Add fog and one environment-lighting path by the supported V1 gate; an explicit ambient approximation is acceptable in the first pilot.
 
@@ -261,7 +288,7 @@ Start with position/rotation/scale and the exact track/interpolation variants us
 
 Deliver named scene-animation lookup, node-track binding, playing/stopped state, looping, speed, seek, and timestamp conversion. Preserve Hermite metadata and quaternion interpolation where used. Blending/crossfade behavior must be explicitly specified before it is advertised.
 
-Acceptance fixture: a parented mechanical assembly with independent rotation and translation, a quaternion rotation, a scalar/color track, and a nested instance animation once W5 is present.
+Primary acceptance uses the animated `scene_instances` tutorial and its instance-local idle/walk/run clips. Supplement it with a parented mechanical assembly or minimal authored tracks covering quaternion rotation, scalar/color properties, and nested instance animation where the tutorial does not exercise those semantics.
 
 Sample native/web transforms and supported properties at a fixed list of times, including start, end, loop boundary, seek backward, and non-unit playback speed. Compare numerically with documented tolerances. Include a script that reads the animated transform to confirm callback order.
 
@@ -272,6 +299,8 @@ No skinning is required to complete this tranche. Rigid objects animated through
 ## 13. W7: Skinning
 
 **Result:** a supported skinned character uses native HARFANG skeleton/animation data in the pure-JS/WebGL engine.
+
+The existing `scene_instances` bipeds do not establish this feature: the inspected asset has hierarchical animation but no nonempty object `bones` references or `EnableSkinning` material markers. W7 therefore requires actual weighted-mesh fixtures in addition to the tutorial-based suite.
 
 Depends on W6 playback and W2 material variants. Reuse W5 instance tests when animated characters are instantiated. Extend W3's shadow fixture when shadows are enabled.
 
@@ -354,7 +383,7 @@ Complete:
 - Samples showing the same JS application on native/browser, with explicit profile limitations.
 - A release manifest that records engine/profile/asset-schema versions and proves the absence of Wasm runtime dependencies.
 
-The same conformance fixtures must run after changes to native bindings, JS math, scene formats, shader families, or asset encoders. Release notes identify intentional rendering changes and asset rebuild requirements.
+The same retained tutorial ports and supplemental conformance fixtures must run after changes to native bindings, JS math, scene formats, shader families, or asset encoders. Release notes identify intentional rendering changes and asset rebuild requirements. Report original-native, JS-native, and JS-web results separately, with the adaptation record and exact content/quality settings; no missing required feature can be counted as a successful skip.
 
 Suggested repository areas, not created by this study:
 

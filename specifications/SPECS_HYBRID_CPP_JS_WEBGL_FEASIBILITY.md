@@ -10,6 +10,8 @@ All new module names, command-line options, schemas, package names, profiles, an
 
 Scope refinement: the browser target is **pure JavaScript + WebGL, with no C++ engine or service ported to WebAssembly and no Wasm codecs**. Physics and video playback/replay are excluded from the current product and estimates. Audio and a portable UI subset are independent delivery slices. UI uses Dear ImGui on desktop and a pure-JS DOM/CSS backend on the web. Native C++ tools may still run offline. The feature-by-feature plan is in [Hybrid HARFANG Delivery Slices](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md).
 
+Validation policy: use the existing `tutorials/` scenarios as the primary per-slice acceptance suite. The [Tutorial-Based Validation Matrix](SPECS_HYBRID_CPP_JS_WEBGL_TUTORIAL_VALIDATION.md) inventories the corpus, records exclusions/adaptations, and identifies remaining coverage gaps.
+
 ## 1. Feasibility Verdict
 
 **The hybrid is feasible if the product promises a shared JavaScript application contract and a defined portable subset of HARFANG.** It requires two runtime implementations: the existing C++ engine exposed to JavaScript, and a smaller JavaScript engine that renders through WebGL 2. The browser implementation is a substantial engine project; FABGen cannot generate it from the C++ binding declarations.
@@ -153,7 +155,7 @@ This is source and behavioral compatibility. It is not binary compatibility, uni
 | Transform animation | Existing engine | Required subset | Defined supported track types and interpolation |
 | Skeletal animation | Existing engine | May be deferred | Included for the agreed V1 fixtures and joint budgets |
 | Arbitrary morph/deformation features | Native API dependent | Excluded | Separate scope after an inventory of actual content |
-| Basic PBR/unlit materials | Native pipeline | Required subset | Explicit adapters for approved program families |
+| Default/PBR/unlit materials | Native pipeline | Required subset | Explicit adapters for approved program families, including the historical default shader used by retained tutorials |
 | Custom shaders | Native bgfx program path | Require a supplied web implementation | Fail if no web variant exists |
 | Directional/point/spot lighting | Native forward pipeline | One directional and two point lights | Target eight slots, including spot lights |
 | Shadow maps | Native directional/spot paths | One directional shadow map | One/two directional cascades and optional one spot shadow |
@@ -517,7 +519,7 @@ Publish actual limits through a capabilities object. Exceeding a required light/
 
 ### 10.3 Material Compatibility Is A Translation Table
 
-Begin with a small registry of supported source program paths and aliases. For each family, define allowed parameters, textures, feature flags, render state, and shader variants. A first mapping for the inspected PBR shader is:
+Begin with a small registry of supported source program paths and aliases. For each family, define allowed parameters, textures, feature flags, render state, and shader variants. Tutorial-based acceptance requires both `core/shader/pbr.hps` and the used subset of the historical `core/shader/default.hps` family, alongside simple unlit/direct-drawing programs. A first mapping for the inspected PBR shader is:
 
 | HARFANG material input | Proposed web interpretation |
 | --- | --- |
@@ -534,11 +536,13 @@ The source sometimes selects the map instead of multiplying it by the uniform co
 
 For unknown custom programs, require one of three explicit choices: supply a GLSL ES web variant, map it to a reviewed family, or mark it intentionally replaceable by a named fallback. Defaulting every unknown material to a generic grey PBR surface would hide portability failures.
 
+The retained `material_update_value` and light/shadow tutorials use the [default shader](../tutorials/resources/core/shader/default_fs.sc) with `uDiffuseColor`, `uSpecularColor`, `uSelfColor`, and `uDiffuseMap`. Its inspected fragment source contains a Phong lighting model; preserve the tested behavior in a separate adapter instead of interpreting these values as generic PBR parameters. `material_update_value` specifically toggles a texture and updates the pipeline variant, so that transition is part of its acceptance test.
+
 ### 10.4 Shader Strategy
 
 The current `.sc` shaders contain bgfx conventions: input declarations, macros, sampler helpers, includes, feature switches, and pipeline-specific uniforms. Compiled native shaders cannot be used directly as WebGL shader objects.
 
-Recommended first implementation: hand-port the approved PBR/unlit/shadow families to GLSL ES 3.00, share mathematical snippets where practical, and generate a bounded set of variants from material features. Keep provenance to the source shader and a visual fixture for each supported variant. A general shader transpiler is a separate project.
+Recommended first implementation: hand-port the approved default/PBR/unlit/shadow families to GLSL ES 3.00, share mathematical snippets where practical, and generate a bounded set of variants from material features. Add reviewed simple programs/layouts for the retained line and direct-model tutorials. Keep provenance to the source shader and a visual fixture for each supported variant. A general shader transpiler is a separate project.
 
 `assetc` can resolve includes, validate source, prune variants, and emit GLSL plus diagnostics. The browser still compiles and links against its driver; an offline build cannot ship a universally reusable WebGL GPU binary. Warm up the known variants during loading, and use [KHR_parallel_shader_compile](https://registry.khronos.org/webgl/extensions/KHR_parallel_shader_compile/) when available to poll completion without forcing the same blocking status checks.
 
@@ -858,6 +862,8 @@ A sensible early comparison is the same HARFANG JSON fixture rendered through a 
 Deliver the engine in explicit slices: foundation, static scenes, materials/lights, shadows, scene instances, animation, skinning, audio, portable UI, and production hardening. Each slice has its own profile capability and fixture. A viewer can ship before characters or audio are implemented.
 
 The detailed dependencies, proposed follow-up specifications, and acceptance criteria are in [Hybrid HARFANG Delivery Slices](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md).
+
+The [tutorial validation matrix](SPECS_HYBRID_CPP_JS_WEBGL_TUTORIAL_VALIDATION.md) makes those criteria concrete: 25 of the 56 inspected tutorial families are retained, 12 are deferred as additional capabilities, and 19 are excluded from the web profile. Compare the original native scenario, its shared-JS native port, and that same JS port on the web. Record staged variants separately, especially scene loading versus PBR and static versus animated instances. The current biped scene does not establish weighted skinning, so W7 still needs a dedicated fixture. These are planned gates, not executed test results.
 
 ### 15.1 Planning Ranges
 
