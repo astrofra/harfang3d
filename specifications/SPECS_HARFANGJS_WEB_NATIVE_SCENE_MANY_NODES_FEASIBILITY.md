@@ -39,6 +39,22 @@ There are three distinct claims to validate:
 | Unchanged module pair | The imported `js/window.js` also has exactly the original bytes. Browser implementations of `harfang` and `harfang-host` supply the required services. This is the recommended final experiment target. |
 | Equivalent tutorial behavior | All 10,201 spheres, the original camera, ground, materials, wave motion and requested spotlight shadows are retained. Host timing/presentation differences are documented, and rendering is compared within declared tolerances. |
 
+### Accepted initial host concessions
+
+The following concessions are explicitly accepted for the first implementation.
+They qualify the behavior gate above and apply throughout this specification:
+
+| Native request | Initial Web policy | Acceptance impact |
+| --- | --- | --- |
+| Window size, including the tutorial's 1280 x 720 default | The browser layout determines the canvas size. Native dimensions are advisory; rendering follows the effective drawing-buffer dimensions. | Exact native window dimensions are not required. |
+| Fullscreen, chromeless, windowed or hidden window modes | Accept the relevant API arguments/constants, but let the browser host determine presentation. Native window-mode emulation is deferred. | An ignored desktop presentation mode does not block execution or source compatibility. |
+| Antialiasing, including `RF_MSAA4X` | Use browser-provided antialiasing when convenient; ignoring the request or running without antialiasing is allowed. Emit a Web console warning when the requested setting is ignored or cannot be honored. | Exact sample-count parity and a custom MSAA resolve path are not required initially. |
+
+Record requested and effective presentation settings in experiment reports. Emit
+antialiasing warnings once per distinct request/effective-setting pair per session,
+rather than every frame. These concessions can pass E3 with the source unchanged;
+they do not waive the full object population, motion, materials or spotlight shadows.
+
 Matching source hashes does not by itself establish matching behavior or speed.
 Conversely, a similar image from an independently rewritten Web example does not
 establish source compatibility.
@@ -91,7 +107,7 @@ successful execution of that source in the browser:
 | Camera | Position `(15.5, 5, -6)`, rotation `(0.4, -1.2, 0)`, near/far `0.01/100`; native helper default FOV 45 degrees |
 | Light | One spotlight; radius 0, inner/outer angles 5/30 degrees, map shadows, bias `0.000005`; helper default shadow range `0.1/100` |
 | Pipeline | `CreateForwardPipeline(4096)` |
-| Presentation | Default 1280 x 720, `RF_VSync | RF_MSAA4X` |
+| Presentation | Native default 1280 x 720, `RF_VSync | RF_MSAA4X`; Web dimensions and antialiasing follow the accepted host concessions in section 2 |
 | Explicit external asset | `core/shader/default.hps` |
 | Frame contract | `await nextFrame(window)` supplies `dtNs`; the helper calls `draw`, then `hg.Frame()` |
 
@@ -119,7 +135,7 @@ The authoritative sources for this table are the native
 | Area | Current problem | Proposed Web implementation |
 | --- | --- | --- |
 | Module entry | No automatic invocation of exported `main`; `harfang-host` is unresolved | Browser bootstrap imports the staged module and awaits `main(options)` after readiness; import map selects both host modules. |
-| Window lifecycle | `InputInit`, `WindowSystemInit`, `NewWindow`, `RenderInit` and their shutdown counterparts are absent | One session-owned canvas/window handle, synchronous setup after asynchronous preparation, and deterministic cleanup. Preserve the helper's call order and boolean renderer-init result. |
+| Window lifecycle | `InputInit`, `WindowSystemInit`, `NewWindow`, `RenderInit` and their shutdown counterparts are absent | One session-owned canvas/window handle, synchronous setup after asynchronous preparation, and deterministic cleanup. Preserve the helper's call order and boolean renderer-init result; accept native size/mode arguments as advisory browser-host requests. |
 | Scheduling/input | The current Web runner uses callbacks; native uses `nextFrame` and `ReadKeyboard` | Supply one animation-frame scheduler returning `{closed, dtNs}` with BigInt nanoseconds; snapshot input before resolving it. Map native keyboard tokens to DOM input internally. |
 | Resource paths | `AddAssetsFolder('resources_compiled')` assumes a local compiled folder | Register a logical mount backed by a preloaded Web manifest and its package base URL. Do not interpret it as arbitrary local filesystem access. |
 | Pipeline/resources | `CreateForwardPipeline`, `DestroyForwardPipeline`, `PipelineResources`, `GetForwardPipelineInfo` are absent | Native-shaped descriptors and resource registries over Web rendering services. Implement ownership and reference validity, not only names. |
@@ -128,11 +144,11 @@ The authoritative sources for this table are the native
 | Procedural sphere | `CreateCubeModel` exists; `CreateSphereModel` is absent | Port the actual native sphere algorithm and validate topology, radius, normals, winding and bounds. Avoid a visually similar primitive with different tessellation. |
 | Scene helper functions | Component methods exist, but top-level `CreateCamera`, `CreateObject`, `CreateSpotLight` do not | Compose node, transform and component creation with native argument order/defaults. Each object call creates its own component; render batching must not change observable object/material mutation behavior. |
 | Scene update | No `Scene.Update(dt)` | Establish the transform-update contract and world-matrix cache; match the behavior required by this scene. Do not advertise support for native animation systems merely because this method exists. |
-| Submission | No `IntRect` or `SubmitSceneToPipeline` | Implement the exact used overload: view ID, rectangle, horizontal-FOV flag, current camera, pipeline and resources. Preserve native output conventions even though this entry ignores the result. |
+| Submission | No `IntRect` or `SubmitSceneToPipeline` | Implement the used overload: view ID, rectangle, horizontal-FOV flag, current camera, pipeline and resources. Adapt this tutorial's full-window rectangle to the effective browser buffer as described in section 5. Preserve native output conventions even though this entry ignores the result. |
 | Shadow settings | No `LST_Map`, shadow fields or shadow rendering | Add a declared spotlight-shadow capability and its real depth/render passes. Reject unavailable required shadows in strict mode. |
-| Reset flags | `RF_*` are absent; canvas currently requests generic antialiasing | Export compatible numeric flags and implement negotiated presentation/MSAA policy with observable effective settings. |
+| Reset flags | `RF_*` are absent; canvas currently requests generic antialiasing | Export compatible numeric flags; accept browser-controlled presentation. MSAA may be ignored with a Web console warning and recorded effective settings. No custom multisample path is required initially. |
 | Cleanup | Web scene disposal is terminal; resource lifetimes differ | Implement reusable `Scene.Clear`; implement `DestroyAllTextures/Models/Programs` and pipeline destruction with generation-safe references and GPU release. |
-| Optional host branches | `WV_Hidden`, screenshot API, framebuffer sentinel and explicit renderer selection are absent | Support or clearly reject each option when requested. Default execution need not provide native disk screenshot writing. The test harness can capture the canvas externally. |
+| Optional host branches | `WV_Hidden`, screenshot API, framebuffer sentinel and explicit renderer selection are absent | Window-mode requests may be ignored under section 2. Support or clearly reject other options when requested. Default execution need not provide native disk screenshot writing. The test harness can capture the canvas externally. |
 
 Do not report export presence as overload or semantic conformance. Constructors,
 constants, argument defaults, return shapes and ownership need separate cases.
@@ -226,17 +242,30 @@ inject identical delta sequences for comparison tests. A deterministic clock sea
 in both test hosts is additional work; the current native `runWindow` options do
 not offer it. Add this outside the copied tutorial modules.
 
-Initially keep the drawing buffer at the helper's requested 1280 x 720 and scale
-presentation with CSS. The unchanged helper passes its original `width/height`
-to every draw; silently resizing the buffer with device pixel ratio would produce
-a viewport/camera discrepancy. Responsive logical resizing is a later common-host
-contract, not an implicit change in this experiment.
+Let the browser layout determine the canvas size. Record CSS dimensions, device
+pixel ratio and effective drawing-buffer dimensions, and update the viewport and
+camera aspect ratio when that buffer changes. Neither `NewWindow` nor `RenderReset`
+must force the native requested dimensions onto the browser window.
 
-`frameLimit` should work on both hosts. Treat native `hidden`, `renderer` and
-`capturePath` options explicitly: a headless validation session is not an ordinary
-hidden browser tab, native renderer choices do not select WebGL backends, and a
-browser cannot silently write to a native filesystem path. Report unsupported
-option use rather than successfully ignoring it.
+The unchanged helper still passes its original `width/height` to every draw. The
+compatibility host must therefore recognize this tutorial's default-framebuffer,
+full-window rectangle, matching the session's requested extent, and map it to the
+effective canvas extent at submission. Compute projection from the effective
+aspect ratio while preserving the authored camera transform and horizontal FOV.
+Document this adapter rule and keep actual dimensions observable. Do not apply
+the override indiscriminately to sub-viewports or offscreen render targets; those
+need their own contract when supported. This adaptation keeps both copied modules
+unchanged without fixing the browser buffer at 1280 x 720.
+
+`frameLimit` should work on both hosts. Fullscreen, chromeless, windowed and hidden
+requests do not require desktop-style emulation; the browser host owns presentation
+and may ignore them. Do not hide the canvas or stop scheduling merely to imitate
+`WV_Hidden`. Use a headless browser for automated capture instead.
+
+Treat `renderer` and `capturePath` separately: native renderer choices do not select
+WebGL backends, and a browser cannot silently write to a native filesystem path.
+Report unsupported use of these options. The accepted window-mode and antialiasing
+concessions do not imply that every unsupported host option may be ignored.
 
 ### Lower-cost intermediate alternative
 
@@ -352,19 +381,34 @@ the current `gpuStaticBytes` counter covers meshes/textures, not this new cost.
 If 4096 is unavailable, strict mode fails explicitly. A reported 2048/no-shadow
 fallback is a separate adapted result.
 
-### MSAA requires more than `antialias: true`
+### Antialiasing is optional for the first implementation
 
-The current canvas creation only requests generic antialiasing. Exact four-sample
-rendering needs supported multisample attachments and a resolve path, or evidence
-that the actual drawing buffer provides the requested sample count. Query supported
-sample counts for the selected formats and report the effective result. WebGL 2
-provides these operations through
+Keep `RF_MSAA4X` accepted so the original source runs, but do not make exact MSAA4X
+support a prerequisite. The current generic canvas antialiasing request can remain;
+running without antialiasing is also accepted. When ignoring the native request or
+using a different/unverified sample count, emit a clear `console.warn`, for example:
+
+```text
+[HARFANG Web] RF_MSAA4X is not honored by this host; using browser-selected antialiasing.
+```
+
+If antialiasing is disabled, say so in the warning. Include requested/effective
+settings in the report, using `unknown` when an exact count has not been established.
+Avoid repeated warnings every frame. A reported antialiasing downgrade is an
+accepted initial behavior, including for E3; it is not a rendering initialization
+failure or a separate reduced-scene result.
+
+Exact sample-count support is a later enhancement. Generic `antialias: true` alone
+does not establish four-sample parity. If that enhancement is undertaken, use
+supported multisample attachments and a resolve path, or verify the actual default
+drawing-buffer sample count. WebGL 2 provides the relevant operations through
 [multisample storage](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/renderbufferStorageMultisample),
 [format queries](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext/getInternalformatParameter)
 and [framebuffer resolve](https://developer.mozilla.org/en-US/docs/Web/API/WebGL2RenderingContext).
 
-Browser-controlled presentation is an explicit adaptation of `RF_VSync`.
-Unsupported four-sample rendering must not be reported as exact MSAA4X conformance.
+Browser-controlled presentation is an explicit adaptation of `RF_VSync`. Initial
+acceptance must describe effective antialiasing without claiming exact MSAA4X
+conformance when the request is ignored.
 
 ### Node count and CPU/GPU cost
 
@@ -397,8 +441,10 @@ Record initialization time, first visible frame, update/submission time, frame-t
 median/p95, draw calls, triangles, live resources and accounted GPU bytes. Use a
 named hardware/browser configuration and a sustained run, not the existing software
 renderer capture timings as a hardware claim. A provisional usability target is
-30 FPS at 1280 x 720 on a declared desktop baseline; confirm the budget with actual
-measurements before making a performance commitment.
+30 FPS at a recorded browser canvas resolution on a declared desktop baseline;
+1280 x 720 may be a comparison fixture, but is not a required runtime window size.
+Record effective antialiasing and confirm the budget with actual measurements
+before making a performance commitment.
 
 ## 8. Common Surface to Promote
 
@@ -409,7 +455,7 @@ measurements before making a performance commitment.
 | Scene | Nodes, transforms, camera, object/light helpers, update/clear semantics | Internal storage, caching and budgets |
 | Rendering intent | Pipeline creation, resource references, material values, scene submission | bgfx native backend versus reviewed WebGL 2 passes |
 | Assets | Same source tree, logical paths and visible loading result types | Native compiled assets versus Web descriptors/payloads and asynchronous preload |
-| Frame host | `nextFrame` result and stop/error behavior | Desktop event pump versus browser scheduling, visibility and input |
+| Frame host | `nextFrame` result and stop/error behavior; accepted native presentation arguments | Desktop event pump versus browser scheduling, visibility, input and effective canvas size/mode/antialiasing |
 
 Start with reviewed overloads actually used here, with capability/error tests.
 Promote reusable implementations from the experiment into `src/`; keep the
@@ -483,7 +529,7 @@ the concrete host module and dependency graph when that milestone is implemented
 | E0: baseline | Preserve sources and measure current gaps | Exact source hashes, export/semantic probe, reproducible report. Completed for the inspected baseline. |
 | E1: host and API | Resolve the exact module pair; implement used overloads, resource ownership, scheduling and preload boundary | Byte-identical entry/helper; deterministic short host tests; errors identify unsupported required features. Import success alone is insufficient. |
 | E2: full unshadowed diagnostic | Runtime sphere, scene capacity/update, forward submission, minimal compiled program asset | All 10,204 nodes and full wave motion; original camera/materials; declared `full.no_shadows` adaptation. This does not close original visual parity. |
-| E3: original shadowed workload | Spotlight W3 subset, 4096 map, effective MSAA policy, measured scaling | Original source pair, full population, shadow/light state and captures compared with native; lifecycle/resource tests pass. Any fallback gets a separate result. |
+| E3: original shadowed workload | Spotlight W3 subset, 4096 map, browser-driven presentation, optional antialiasing with warnings, measured scaling | Original source pair, full population, shadow/light state and captures compared with native; lifecycle/resource tests pass. Section 2 host concessions are accepted in this result. Reduced scene/shadow fidelity gets a separate result. |
 | E4: reusable contract | Promote APIs, finish isolated packaging, extend neighboring tutorial gates | No source edits for accepted cases; source assets shared; Web loads only Web compiled output; capability/profile and compiler versions recorded. |
 
 For E2, an explicitly selected diagnostic host policy may suppress requested
@@ -505,24 +551,32 @@ Acceptance should cover the following independent dimensions:
    camera/light/shadow state and material values. Inject equal delta sequences;
    compare sampled corner/center sphere positions at several cumulative times.
    Start with `1e-4` absolute tolerance for float32 state, refined from evidence.
-3. **Images:** run native HG JS with matching compiled shaders and the browser at
-   the same logical resolution, FOV, time and declared sample count. Capture
-   foreground, ground and shadow regions; record image differences with separately
-   justified edge/PCF tolerances. Set thresholds from baselines before declaring a
-   pass. A visually judged single screenshot is insufficient.
+3. **Images:** use matching native compiled shaders and compare at the browser's
+   effective buffer dimensions, FOV and time, configuring the native reference to
+   that capture size. Match antialiasing where practical, including disabling it
+   on both hosts. Otherwise record the difference and justify edge tolerances
+   separately from material/shadow tolerances; exact sample-count parity is not
+   an initial gate. Capture foreground, ground and shadow regions. Set thresholds
+   from baselines before declaring a pass. A visually judged single screenshot
+   is insufficient.
 4. **Lifecycle:** finite `frameLimit`, Escape, host stop, suspend/resume, repeated
    restart, failed preload and context loss. Confirm pending waits settle, scene
    resources release, GPU counts return to baseline, and initialization failures
-   do not leak a partially constructed pipeline/models.
+   do not leak a partially constructed pipeline/models. Exercise browser resizing
+   and advisory window modes: viewport/projection must follow the effective buffer
+   without requiring native dimensions or presentation controls.
 5. **Assets/package:** verify no native shader binaries, source shaders awaiting
    runtime conversion, source textures bypassing assetc, Wasm or Python dependency
    enter the browser package. Serve from the isolated release folder with the
    HARFANG source checkout unavailable and test missing/corrupted dependencies.
 6. **Scale/device limits:** sustained full-grid measurements with the requested
-   4096 map; resource budgets and MSAA support recorded. Unsupported device limits
-   produce actionable diagnostics, not a silent smaller grid or shadow map.
+   4096 map; resource budgets, effective resolution and antialiasing recorded.
+   Confirm that ignored antialiasing requests emit a console warning without
+   preventing execution. Unsupported scene/shadow limits produce actionable
+   diagnostics, not a silent smaller grid or shadow map.
 
 There is no architectural need to edit this tutorial's application logic for the
-recommended path. Whether its original settings are practical on each browser/GPU
-remains an implementation and measurement question. The experiment makes that
-question testable while growing a reusable native/Web JavaScript contract.
+recommended path. Whether its full scene and shadow workload is practical on each
+browser/GPU remains an implementation and measurement question. The accepted
+presentation concessions remove native window and exact antialiasing parity from
+the initial critical path while preserving the reusable native/Web JS objective.
