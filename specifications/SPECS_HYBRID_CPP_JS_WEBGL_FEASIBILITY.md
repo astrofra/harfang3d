@@ -8,22 +8,24 @@ Baseline: HARFANG `27edc9be6a0454efdae4abd85c8f1fcb220d152b`; FABGen `3b8fd28b1f
 
 All new module names, command-line options, schemas, package names, profiles, and code examples below are **proposals**, unless explicitly identified as existing repository behavior. Estimates are planning ranges, not benchmark results or delivery commitments.
 
-Scope refinement: the browser target is **pure JavaScript + WebGL, with no C++ engine or service ported to WebAssembly and no Wasm codecs**. Physics and video playback/replay are excluded from the current product and estimates. Audio and a portable UI subset are independent delivery slices. UI uses Dear ImGui on desktop and a pure-JS DOM/CSS backend on the web. Native C++ tools may still run offline. The feature-by-feature plan is in [Hybrid HARFANG Delivery Slices](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md).
+Scope refinement: the browser target is **pure JavaScript + WebGL, with no C++ engine or service ported to WebAssembly and no Wasm codecs**. Physics and video playback/replay are excluded from the initial web profile and its estimates. These exclusions do not restrict native HG JS. Audio and a portable UI subset are independent delivery slices. UI uses Dear ImGui on desktop and a pure-JS DOM/CSS backend on the web. Native C++ tools may still run offline. The feature-by-feature plan is in [Hybrid HARFANG Delivery Slices](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md).
+
+**Compatibility precedence: HG Lua -> native HG JS -> web HG JS.** Native HG JS prioritizes conformity with HG Lua for the same build options. Web HG JS adapts on a best-effort basis to run those native projects, with documented adaptations and limitations. The [normative compatibility precedence](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md#compatibility-precedence) overrides earlier proposals that would restrict native functionality to a portable web subset. Portable-facade requirements below concern optional cross-host adaptation, not the default native API.
 
 Validation policy: use the existing `tutorials/` scenarios as the primary per-slice acceptance suite. The [Tutorial-Based Validation Matrix](SPECS_HYBRID_CPP_JS_WEBGL_TUTORIAL_VALIDATION.md) inventories the corpus, records exclusions/adaptations, and identifies remaining coverage gaps.
 
 ## 1. Feasibility Verdict
 
-**The hybrid is feasible if the product promises a shared JavaScript application contract and a defined portable subset of HARFANG.** It requires two runtime implementations: the existing C++ engine exposed to JavaScript, and a smaller JavaScript engine that renders through WebGL 2. The browser implementation is a substantial engine project; FABGen cannot generate it from the C++ binding declarations.
+**Native HG JS targets HG Lua conformity; the browser runtime supports a defined subset of native HG JS projects on a best-effort basis.** This requires two runtime implementations: the existing C++ engine exposed to JavaScript, and a smaller JavaScript engine that renders through WebGL 2. The browser implementation is a substantial engine project; FABGen cannot generate it from the C++ binding declarations.
 
 The recommended architecture is:
 
-1. **Native:** HARFANG C++ and bgfx remain responsible for rendering and engine services. QuickJS provides the first JavaScript host and scene scripting implementation. JavaScript becomes the primary API for new portable projects.
+1. **Native:** HARFANG C++ and bgfx remain responsible for rendering and engine services. QuickJS provides the external JavaScript host and binding, with HG Lua as the conformity reference. Existing Lua scene systems remain available; JavaScript scene components are separate work.
 2. **Web:** browser JavaScript runs the same application modules against a JavaScript implementation of the portable API. A WebGL 2 forward renderer replaces bgfx. The browser package contains no C++ engine, QuickJS, or WebAssembly; GPU shaders remain GLSL as required by WebGL.
 3. **Assets:** the same editable source tree feeds a native asset target and a web asset target. Extend `assetc` with a web backend; keep it as an offline desktop/build tool.
 4. **Scenes:** directly support HARFANG's existing JSON scene representation for the agreed feature subset. Compile geometry, textures, shader descriptions, and dependency metadata into explicit web formats.
-5. **Application lifecycle:** use the same `init`, `update`, `render`, and `dispose` callbacks on both targets. On desktop, **`main.js` replaces `main.lua` and explicitly owns the loop and calls those functions**. The browser bootstrap schedules them through `requestAnimationFrame`.
-6. **Compatibility:** publish and test a versioned portable profile. Native-only APIs stay available through an explicit extension surface. Unsupported scene requirements fail during asset compilation instead of silently disappearing.
+5. **Application lifecycle:** on desktop, **`main.js` replaces `main.lua` and owns the native loop**. Shared `init`, `update`, `render`, and `dispose` callbacks are an optional project structure for browser adaptation; the browser bootstrap schedules them through `requestAnimationFrame`.
+6. **Compatibility:** derive and test a versioned web profile from the native API. Native APIs remain available through `harfang`, including features unsupported on the web. Unsupported required web features fail during web compilation or loading instead of silently disappearing.
 
 Four qualifications determine the project's scope:
 
@@ -98,9 +100,9 @@ Three layers should be independently versioned:
 | Portable feature profile | Required engine features and permitted approximations | `web-lite/1` |
 | Compiled asset schema | Manifest, mesh layout, material descriptors, dependencies | `harfang-web-assets/1` |
 
-The same application imports `harfang`. Native module resolution maps that name to a JS facade over generated C++ bindings; browser resolution maps it to the web implementation. Browser import maps or build-time bundling can resolve the bare module name. The browser import-map mechanism is defined by the [HTML module specification](https://html.spec.whatwg.org/multipage/webappapis.html#import-maps).
+The same application imports `harfang`. Native module resolution maps that name to the generated C++ binding; browser resolution maps it to the web implementation and its compatibility adapters. Browser import maps or build-time bundling can resolve the bare module name. The browser import-map mechanism is defined by the [HTML module specification](https://html.spec.whatwg.org/multipage/webappapis.html#import-maps).
 
-Use an internal module such as `harfang-native` for the generated native exports and a separate public extension module such as `harfang/native` for APIs outside the portable contract. Names are provisional; the important property is that application dependencies reveal when code has left the portable subset.
+Keep the native engine API in `harfang`. A web capability inventory identifies unsupported calls and content; a native project does not need to move its APIs into a separate extension module merely because the browser cannot implement them. Any portable facade or native portability checker is opt-in.
 
 A shared JS facade can implement convenience functions, lifecycle helpers, validation, and behavioral glue. Desktop `main.js` remains responsible for explicitly calling application lifecycle functions. Keep expensive scene and math operations in C++ on native targets, with equivalent JavaScript implementations in the browser. Avoid reducing the native engine to a WebGL-shaped abstraction merely to achieve file-for-file code sharing.
 
@@ -197,7 +199,7 @@ The existing bound `LoadSceneFromAssets` is synchronous and returns a boolean. T
 
 Add a shared asynchronous entry point, provisionally `LoadSceneFromAssetsAsync`, that resolves only when required dependencies are available and the scene can be attached safely. On native platforms it may wrap existing readers and staged work; wrapping a blocking load in a Promise alone does not make it nonblocking.
 
-Retain synchronous native loading as a native extension. If a synchronous browser compatibility call is offered, it must operate exclusively on already-preloaded resources and fail clearly on a cache miss. It must never simulate blocking network I/O.
+Retain synchronous loading in the native API, as in HG Lua. If a synchronous browser compatibility call is offered, it must operate exclusively on already-preloaded resources and fail clearly on a cache miss. It must never simulate blocking network I/O.
 
 This is one of the acceptable “almost the same” differences relative to today's Lua/C++ API. New portable JS projects should use the shared async API from their first sample.
 

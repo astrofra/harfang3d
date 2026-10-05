@@ -10,13 +10,28 @@ Primary acceptance suite: [Tutorial-Based Validation Matrix](SPECS_HYBRID_CPP_JS
 
 ## 1. Fixed Constraints
 
+### Compatibility precedence
+
+The following order of constraints governs every slice and acceptance gate:
+
+1. **Native HG JS prioritizes conformity with HG Lua.** For the same engine build options, HG Lua is the reference for engine functionality, API behavior, scene systems and resource handling. JavaScript language conventions may differ, but browser limitations must not reduce or redefine the native API.
+2. **Web HG JS adapts on a best-effort basis to run native HG JS projects.** The validated native project is the starting point. The web implementation should preserve its code and behavior as far as browser capabilities allow, with explicit adapters, documented approximations and identified unsupported features.
+
+The direction of compatibility is **HG Lua -> native HG JS -> web HG JS**. Squirrel and Python provide additional references; HG Lua takes priority when language bindings differ. Web parity is an adaptation goal, not a prerequisite for native functionality or a promise that every native project runs unchanged in a browser.
+
+Portable profiles, browser resource budgets and the web exclusions below apply to web delivery and explicitly selected portability checks. They do not constrain the default native runtime. Unsupported required web features must produce clear diagnostics; approximations must not be reported as full equivalence. Native conformity and web compatibility are separate validation gates.
+
+This precedence supersedes any earlier proposal in the related specifications that would make native HG JS conform to a browser-defined subset.
+
+### Target constraints
+
 - The native product uses HARFANG C++ with a JavaScript API, initially through QuickJS.
 - The browser engine is **pure JavaScript + WebGL 2**. There is no C++ engine/service ported to Wasm and no shipped Wasm codec dependency.
 - Native C++ tools, including `assetc` and offline encoders, remain permitted in the build pipeline.
 - Shared application behavior is written in JavaScript. Essential project-specific C++ behavior needs a JS implementation.
-- Desktop `main.js` replaces `main.lua` and explicitly calls `init`, `update`, `render`, and `dispose` around its own loop. Browser scheduling uses `requestAnimationFrame` with the same application functions.
+- Desktop `main.js` replaces `main.lua` and owns its native loop. Portable applications may expose `init`, `update`, `render`, and `dispose` for reuse with browser `requestAnimationFrame` scheduling.
 - The authoring scene remains a HARFANG scene. Web-specific assets are generated offline and addressed through stable logical names.
-- **Physics and video playback/replay are excluded.** Audio is included as an independently deliverable slice. Navigation, VR, AAA effects, and general shader transpilation are also outside the initial portable profile.
+- **Physics and video playback/replay are excluded from the initial web profile.** Audio is included as an independently deliverable web slice. Navigation, VR, AAA effects, and general shader transpilation are also outside that profile. Native HG JS retains the corresponding HG Lua functionality when enabled by the build.
 - A portable UI subset uses Dear ImGui through native bindings on desktop and JavaScript with DOM/CSS in the browser; full ImGui emulation and Wasm UI libraries are excluded.
 - Each completed slice adds declared capabilities. Unimplemented required features are build/load errors, not successful no-ops.
 
@@ -24,11 +39,12 @@ The goal is to release useful subsets progressively. Static scenes, scene instan
 
 ## 2. Workstreams And Dependency Graph
 
-`C` defines the shared contract. `N` implements the native JS target. `W0` through `W10` build the browser engine, its assets, and the portable UI. These identifiers describe work packages, not existing repository modules.
+`N` implements the native JS target against HG Lua. `C` records the portable contract and adaptations derived from that native reference. `W0` through `W10` build the browser engine, its assets, and the portable UI. These identifiers describe work packages, not existing repository modules. Native and web work may progress in parallel; the arrows establish which contract is authoritative.
 
 ```mermaid
 flowchart LR
-    C[C: portable contract] --> N[N: native JS integration]
+    Lua[HG Lua reference] --> N[N: native JS integration]
+    N --> C[C: portable contract and adaptations]
     C --> W0[W0: JS foundations]
     W0 --> W1[W1: static scenes]
     W1 --> W2[W2: materials and lights]
@@ -100,7 +116,7 @@ Engineer-weeks for a supported first release, subject to the feasibility study's
 | Hybrid integration contingency | 8-12 | Toolchain, content, driver, and cross-target surprises |
 | **Hybrid V1 total** | **58-96** | C + N + W0-W10 + contingency |
 
-N retains the conservative range from the QuickJS study. Its physics-specific callback combinations are no longer a requirement, but no unmeasured schedule discount is assumed. The 4-6 engineer-week feasibility spike is the first portion of these packages, not an additional line item.
+N retains the conservative planning range from the QuickJS study. Native physics-specific bindings remain part of HG Lua conformity when physics is enabled; their exclusion from the web profile does not remove this requirement. No unmeasured schedule discount is assumed. The 4-6 engineer-week feasibility spike is the first portion of these packages, not an additional line item.
 
 W9 includes the portable UI facade on both hosts. N supplies the underlying generated Dear ImGui calls, while C specifies the generic lifecycle; their estimates do not duplicate W9's widget implementation and tests.
 
@@ -118,7 +134,7 @@ Deliver:
 - Explicit desktop bootstrap ownership: the launcher provides runtime/events/jobs, while `main.js` invokes lifecycle functions and owns loop sequencing.
 - Module resolution for `harfang`, native extensions, and scene-referenced behaviors.
 - A versioned profile describing supported scene components, material families, light/shadow limits, and resource budgets.
-- Native portable-mode validation so desktop development catches unsupported calls/content early.
+- Optional native portability checks so desktop development can identify unsupported web calls/content without restricting normal native execution.
 
 Acceptance:
 
@@ -132,23 +148,23 @@ The contract should be ratified by executable fixtures. Generated declarations a
 
 ## 5. N: Native JS Integration
 
-**Result:** a native HARFANG application and scene behaviors can run JavaScript while the C++ engine retains its rendering and resource work.
+**Result:** native HG JS exposes the HG Lua engine functionality through JavaScript while the C++ engine retains its rendering, resources and existing Lua scene systems.
 
-Follow the QuickJS reference for the FABGen backend, value ownership, class registry, overload conversion, launcher, module loading, job scheduling, and Windows toolchain gate. Scope scene integration to the non-physics lifecycle for this product.
+Follow the QuickJS reference for the FABGen backend, value ownership, class registry, overload conversion, launcher, module loading, job scheduling, and Windows toolchain gate. Validate against HG Lua for the same build options, including physics when enabled. The web profile does not set the native feature scope.
 
 Sequence the native work:
 
 1. Build the pinned runtime and a generated class/module in the actual Windows configuration.
-2. Expose the subset needed by C/W0/W1 and render a native scene from a desktop `main.js` that owns its loop and explicitly calls application lifecycle functions.
-3. Add factory-created scene-script instances and non-physics attach/update/detach/destroy dispatch.
-4. Complete the advertised native binding surface, tests, release packaging, and docs.
-5. Isolate VM-specific dependencies so a C++ host can use its own compatible runtime or disable scene scripting.
+2. Generate the native binding from the same declarations as HG Lua and render a native scene from a desktop `main.js` that owns its loop.
+3. Preserve access to existing Lua scene components and systems from JavaScript, including value exchange and physics integration when enabled.
+4. Complete native conformity tests, release packaging and docs independently of web coverage.
+5. Keep QuickJS in the external language layer. A future JS scene dispatcher or portable facade is separate work and must preserve the native reference API.
 
-Acceptance includes repeated VM creation/destruction, owned/borrowed object safety, retained callback cleanup, script parameters, useful errors, compiled-asset imports, and bounded Promise-job service. A Node addon is not part of N.
+Acceptance includes repeated VM creation/destruction, owned/borrowed object safety, retained callback cleanup, script parameters, useful errors, filesystem JS imports, explicit asset mounts from application code, and bounded Promise-job service. A Node addon is not part of N.
 
 For the async asset example, a proposed `await ctx.nextFrame()` yields between explicit loop iterations. The native launcher services I/O/jobs while JS is yielded and settles frame waits on close. It must not secretly dispatch application callbacks or run pending jobs reentrantly from arbitrary bindings. Verify startup-await, window-close-during-await, and rejected-entry-module completion.
 
-Switching the default language and removing Lua are separate decisions. Keep legacy Lua support while JS examples and portable scenes become the primary path. Do not load the same scene component into two language VMs by accident.
+The native engine retains its embedded Lua VM. QuickJS provides the external JavaScript binding; adding JavaScript scene components is separate work. Do not load the same scene component into two language VMs by accident.
 
 ## 6. W0: Browser Foundations
 

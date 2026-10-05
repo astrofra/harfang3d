@@ -1,3 +1,7 @@
+if(HG_BUILD_HG_JS)
+	add_subdirectory(hg_quickjs)
+endif()
+
 if(HG_BUILD_HG_LUA)
 	add_subdirectory(hg_lua)
 endif()

@@ -49,6 +49,7 @@ option(HG_BUILD_STATIC_DOCS "Harfang: Build static HTML documentation" OFF)
 option(HG_BUILD_DOCS_WITH_DOXYGEN "Harfang: Require Doxygen for documentation builds" OFF)
 option(HG_BUILD_LAUNCHER_TESTS "Harfang: Build launcher regression tests" OFF)
 
+option(HG_BUILD_HG_JS "Harfang: Build HarfangJs (external QuickJS binding and launcher)" OFF)
 option(HG_BUILD_HG_LUA "Harfang: Build Harfang Lua extension" OFF)
 option(HG_BUILD_HG_SQUIRREL "Harfang: Build Harfang Squirrel 3.2+ extension" OFF)
 option(HG_BUILD_HG_PYTHON "Harfang: Build Harfang CPython 3.2+ extension" OFF)
@@ -468,6 +469,7 @@ message(STATUS "Build documentation: " ${HG_BUILD_DOCS})
 message(STATUS "Build static documentation: " ${HG_BUILD_STATIC_DOCS})
 message(STATUS "Enable XMP audio plugin: " ${HG_ENABLE_XMP_AUDIO})
 
+message(STATUS "Build HarfangJs: " ${HG_BUILD_HG_JS})
 message(STATUS "Build Lua extension: " ${HG_BUILD_HG_LUA})
 message(STATUS "Build Squirrel extension: " ${HG_BUILD_HG_SQUIRREL})
 

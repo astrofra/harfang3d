@@ -129,6 +129,11 @@ install_cppsdk_external_target(squish)
 install_cppsdk_external_target(nvtt)
 install_cppsdk_external_target(pvrtc)
 
+# QuickJS is a language target dependency; the engine always retains Lua.
+if(HG_BUILD_HG_JS)
+	add_subdirectory(quickjs)
+endif()
+
 # Lua
 if(UNIX AND NOT APPLE AND NOT (CMAKE_SYSTEM_NAME STREQUAL "Emscripten"))
 	# lua links against libreadline but does not check for its availability.

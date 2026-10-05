@@ -16,6 +16,24 @@ def route_lambda(name):
 	return lambda args: '%s(%s);' % (name, ', '.join(args))
 
 
+def js_value_default(gen, ctype, value):
+	# C++ may leave POD math values uninitialized; the JS contract never does.
+	return {'route': lambda args: 'new %s(%s);' % (ctype, value)} if gen.get_language() == 'QuickJS' else []
+
+
+def js_value_constants(gen):
+	# Writable JS values must not point into the engine's static const storage.
+	return {'copy_obj': True} if gen.get_language() == 'QuickJS' else []
+
+
+def js_vector_constructors(gen, ctype, dimensions, scalar='float'):
+	if gen.get_language() != 'QuickJS':
+		return []
+	return [([scalar + ' ' + axis for axis in 'xyzw'[:count]],
+		{'route': lambda args, dimensions=dimensions: 'new %s(%s);' %
+			(ctype, ', '.join(args + [args[0]] * (dimensions - len(args))))}) for count in range(1, dimensions)]
+
+
 def bind_std_vector(gen, T_conv, bound_name=None):
 	if gen.get_language() == 'CPython':
 		PySequence_T_type = 'PySequenceOf%s' % T_conv.bound_name
@@ -23,6 +41,9 @@ def bind_std_vector(gen, T_conv, bound_name=None):
 	elif gen.get_language() == 'Lua':
 		LuaTable_T_type = 'LuaTableOf%s' % T_conv.bound_name
 		gen.bind_type(lib.lua.stl.LuaTableToStdVectorConverter(LuaTable_T_type, T_conv))
+	elif gen.get_language() == 'QuickJS':
+		QuickJSArray_T_type = 'QuickJSArrayOf%s' % T_conv.bound_name
+		gen.bind_type(lib.quickjs.stl.QuickJSArrayToStdVectorConverter(QuickJSArray_T_type, T_conv))
 	elif gen.get_language() == 'Squirrel':
 		SquirrelArray_T_type = 'SquirrelArrayOf%s' % T_conv.bound_name
 		gen.bind_type(lib.squirrel.stl.SquirrelArrayToStdVectorConverter(SquirrelArray_T_type, T_conv))
@@ -33,11 +54,17 @@ def bind_std_vector(gen, T_conv, bound_name=None):
 	if bound_name is None:
 		bound_name = '%sList' % T_conv.bound_name
 
-	conv = gen.begin_class('std::vector<%s>' % T_conv.ctype, bound_name=bound_name, features={'sequence': lib.std.VectorSequenceFeature(T_conv)})
+	converter_class = None
+	if gen.get_language() == 'QuickJS' and str(T_conv.ctype) == 'hg::LuaObject':
+		from quickjs_lua import LuaReferenceConverter
+		converter_class = LuaReferenceConverter
+	conv = gen.begin_class('std::vector<%s>' % T_conv.ctype, converter_class=converter_class, bound_name=bound_name, features={'sequence': lib.std.VectorSequenceFeature(T_conv)})
 	if gen.get_language() == 'CPython':
 		gen.bind_constructor(conv, ['?%s sequence' % PySequence_T_type])
 	elif gen.get_language() == 'Lua':
 		gen.bind_constructor(conv, ['?%s sequence' % LuaTable_T_type])
+	elif gen.get_language() == 'QuickJS':
+		gen.bind_constructor(conv, ['?%s sequence' % QuickJSArray_T_type])
 	elif gen.get_language() == 'Squirrel':
 		gen.bind_constructor(conv, ['?%s sequence' % SquirrelArray_T_type])
 	elif gen.get_language() == 'Go':
@@ -62,12 +89,14 @@ def bind_std_vector(gen, T_conv, bound_name=None):
 def expand_std_vector_proto(gen, protos, is_constructor_proto=False):
 	prefix = {
 		'CPython' : 'PySequenceOf',
+		'QuickJS' : 'QuickJSArrayOf',
 		'Lua' : 'LuaTableOf',
 		'Squirrel' : 'SquirrelArrayOf',
 		'Go' : 'GoSliceOf'
 	}
 	name_prefix = {
 		'CPython' : 'SequenceOf',
+		'QuickJS' : 'ArrayOf',
 		'Lua' : 'TableOf',
 		'Squirrel' : 'ArrayOf',
 		'Go' : 'SliceOf'
@@ -863,7 +892,11 @@ inline int %s(lua_State *L, void *obj, OwnershipPolicy) {
 
 		bind_std_vector(gen, lua_object)
 	else:
-		lua_object = gen.begin_class('hg::LuaObject')
+		converter_class = None
+		if gen.get_language() == 'QuickJS':
+			from quickjs_lua import LuaReferenceConverter
+			converter_class = LuaReferenceConverter
+		lua_object = gen.begin_class('hg::LuaObject', converter_class=converter_class)
 		gen.end_class(lua_object)
 
 		bind_std_vector(gen, lua_object)
@@ -1149,6 +1182,23 @@ def bind_scene(gen):
 
 	gen.bind_method(script, 'GetPath', 'std::string', [])
 	gen.bind_method(script, 'SetPath', 'void', ['const std::string &path'])
+	if gen.get_language() == 'QuickJS':
+		gen.insert_binding_code('''
+static bool hg_js_script_param(hg::Script *script, const std::string &name, int value) {
+    hg::ScriptParam p{hg::SPT_Int}; p.iv = value; return script->SetParam(name, p);
+}
+static bool hg_js_script_param(hg::Script *script, const std::string &name, float value) {
+    hg::ScriptParam p{hg::SPT_Float}; p.fv = value; return script->SetParam(name, p);
+}
+static bool hg_js_script_param(hg::Script *script, const std::string &name, bool value) {
+    hg::ScriptParam p{hg::SPT_Bool}; p.bv = value; return script->SetParam(name, p);
+}
+static bool hg_js_script_param(hg::Script *script, const std::string &name, const std::string &value) {
+    hg::ScriptParam p{hg::SPT_String}; p.sv = value; return script->SetParam(name, p);
+}
+''')
+		gen.bind_method_overloads(script, 'SetParam', [('bool', ['const std::string &name', type + ' value'], {'route': route_lambda('hg_js_script_param')})
+			for type in ['bool', 'int', 'float', 'const std::string &']])
 
 	gen.end_class(script)
 
@@ -2109,6 +2159,9 @@ static FABGenSquirrelValue __LuaObjectToSquirrelObject(hg::SceneLuaVM *vm, const
 
 		gen.bind_method(vm, 'Pack', 'hg::LuaObject', ['const FABGenSquirrelValue &o'], {'route': route_lambda('__SquirrelObjectToLuaObject')})
 		gen.bind_method(vm, 'Unpack', 'FABGenSquirrelValue', ['const hg::LuaObject &o'], {'route': route_lambda('__LuaObjectToSquirrelObject')})
+	elif gen.get_language() == 'QuickJS':
+		from quickjs_lua import bind_scene_lua_values
+		bind_scene_lua_values(gen, vm)
 
 	gen.end_class(vm)
 
@@ -2290,6 +2343,8 @@ def bind_render(gen):
 		('hg::Window *', ['const char *window_title', 'int width', 'int height', 'bgfx::RendererType::Enum type', '?uint32_t reset_flags', '?bgfx::TextureFormat::Enum format', '?uint32_t debug_flags'], {'constants_group': {'reset_flags': 'ResetFlags', 'debug_flags': 'DebugFlags'}})
 	])
 	gen.bind_function('hg::RenderShutdown', 'void', [])
+	if gen.get_language() == 'QuickJS':
+		gen.bind_function('bgfx::requestScreenShot', 'void', ['bgfx::FrameBufferHandle handle', 'const char *path'], bound_name='RequestScreenShot')
 
 	gen.bind_function('hg::RenderResetToWindow', 'bool', ['hg::Window *win', 'int &width', 'int &height', '?uint32_t reset_flags'], {'arg_in_out': ['width', 'height']})
 
@@ -3128,15 +3183,15 @@ def bind_color(gen):
 	color = gen.begin_class('hg::Color')
 	color._inline = True  # use inline alloc where possible
 
-	gen.bind_static_members(color, ['const hg::Color Zero', 'const hg::Color One', 'const hg::Color White', 'const hg::Color Grey', 'const hg::Color Black', 'const hg::Color Red', 'const hg::Color Green', 'const hg::Color Blue', 'const hg::Color Yellow', 'const hg::Color Orange', 'const hg::Color Purple', 'const hg::Color Transparent'])
+	gen.bind_static_members(color, ['const hg::Color Zero', 'const hg::Color One', 'const hg::Color White', 'const hg::Color Grey', 'const hg::Color Black', 'const hg::Color Red', 'const hg::Color Green', 'const hg::Color Blue', 'const hg::Color Yellow', 'const hg::Color Orange', 'const hg::Color Purple', 'const hg::Color Transparent'], js_value_constants(gen))
 	gen.bind_members(color, ['float r', 'float g', 'float b', 'float a'])
 
 	gen.bind_constructor_overloads(color, [
-		([], []),
+		([], js_value_default(gen, 'hg::Color', '0, 0, 0, 1')),
 		(['const hg::Color &color'], []),
 		(['float r', 'float g', 'float b'], []),
 		(['float r', 'float g', 'float b', 'float a'], [])
-	])
+	] + ([(['float gray'], {'route': lambda args: 'new hg::Color(%s, %s, %s, 1);' % (args[0], args[0], args[0])})] if gen.get_language() == 'QuickJS' else []))
 
 	gen.bind_arithmetic_ops_overloads(color, ['+', '-', '/', '*'], [('hg::Color', ['const hg::Color &color'], []), ('hg::Color', ['float k'], [])])
 	gen.bind_inplace_arithmetic_ops_overloads(color, ['+=', '-=', '*=', '/='], [
@@ -3312,17 +3367,19 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 		vector2 = gen.begin_class('hg::tVec2<%s>'%T, bound_name=bound_name)
 		vector2._inline = True
 
-		gen.bind_static_members(vector2, ['const hg::tVec2<%s> Zero'%T, 'const hg::tVec2<%s> One'%T])
+		gen.bind_static_members(vector2, ['const hg::tVec2<%s> Zero'%T, 'const hg::tVec2<%s> One'%T], js_value_constants(gen))
 
 		gen.bind_members(vector2, ['%s x'%T, '%s y'%T])
 
 		gen.bind_constructor_overloads(vector2, [
-			([], []),
+			([], js_value_default(gen, 'hg::tVec2<%s>'%T, '0, 0')),
 			(['%s x'%T, '%s y'%T], []),
 			(['const hg::tVec2<%s> &v'%T], []),
 			(['const hg::Vec3 &v'], []),
 			(['const hg::Vec4 &v'], [])
-		])
+		] + js_vector_constructors(gen, 'hg::tVec2<%s>'%T, 2, T))
+		if gen.get_language() == 'QuickJS':
+			gen.bind_comparison_ops(vector2, ['==', '!='], ['const hg::tVec2<%s> &v'%T])
 
 		gen.bind_arithmetic_ops_overloads(vector2, ['+', '-', '/'], [
 			('hg::tVec2<%s>'%T, ['const hg::tVec2<%s> &v'%T], []),
@@ -3371,13 +3428,15 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 	gen.bind_members(vector4, ['float x', 'float y', 'float z', 'float w'])
 
 	gen.bind_constructor_overloads(vector4, [
-		([], []),
-		(['float x', 'float y', 'float z', '?float w'], []),
+		([], js_value_default(gen, 'hg::Vec4', '0, 0, 0, 0')),
+		(['float x', 'float y', 'float z', 'float w' if gen.get_language() == 'QuickJS' else '?float w'], []),
 		(['const hg::tVec2<float> &v'], []),
 		(['const hg::tVec2<int> &v'], []),
 		(['const hg::Vec3 &v'], []),
 		(['const hg::Vec4 &v'], [])
-	])
+	] + js_vector_constructors(gen, 'hg::Vec4', 4))
+	if gen.get_language() == 'QuickJS':
+		gen.bind_comparison_ops(vector4, ['==', '!='], ['const hg::Vec4 &v'])
 
 	gen.bind_arithmetic_ops_overloads(vector4, ['+', '-', '/'], [
 		('hg::Vec4', ['hg::Vec4 &v'], []),
@@ -3461,7 +3520,7 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 	gen.add_include('foundation/matrix3.h')
 
 	matrix3 = gen.begin_class('hg::Mat3')
-	gen.bind_static_members(matrix3, ['const hg::Mat3 Zero', 'const hg::Mat3 Identity'])
+	gen.bind_static_members(matrix3, ['const hg::Mat3 Zero', 'const hg::Mat3 Identity'], js_value_constants(gen))
 
 	gen.bind_constructor_overloads(matrix3, [
 		([], []),
@@ -3558,12 +3617,12 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 	gen.add_include('foundation/matrix4.h')
 
 	matrix4 = gen.begin_class('hg::Mat4')
-	gen.bind_static_members(matrix4, ['const hg::Mat4 Zero', 'const hg::Mat4 Identity'])
+	gen.bind_static_members(matrix4, ['const hg::Mat4 Zero', 'const hg::Mat4 Identity'], js_value_constants(gen))
 	
 	gen.insert_binding_code('static hg::Mat4 *_Mat4_Copy(const hg::Mat4 &m) { return new hg::Mat4(m); }')
 
 	gen.bind_constructor_overloads(matrix4, [
-		([], []),
+		([], js_value_default(gen, 'hg::Mat4', 'hg::Mat4::Identity')),
 		(['const hg::Mat4 &m'], {'route': route_lambda('_Mat4_Copy')}),
 		(['float m00', 'float m10', 'float m20', 'float m01', 'float m11', 'float m21', 'float m02', 'float m12', 'float m22', 'float m03', 'float m13', 'float m23'], []),
 		(['const hg::Mat3 &m'], [])
@@ -3644,15 +3703,17 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 	gen.add_include('foundation/matrix44.h')
 
 	matrix44 = gen.begin_class('hg::Mat44')
-	gen.bind_static_members(matrix44, ['const hg::Mat44 Zero', 'const hg::Mat44 Identity'])
+	gen.bind_static_members(matrix44, ['const hg::Mat44 Zero', 'const hg::Mat44 Identity'], js_value_constants(gen))
 	
 	gen.bind_constructor_overloads(matrix44, [
-		([], []),
+		([], js_value_default(gen, 'hg::Mat44', 'hg::Mat44::Identity')),
 		(['float m00', 'float m10', 'float m20', 'float m30',
 		'float m01', 'float m11', 'float m21', 'float m31',
 		'float m02', 'float m12', 'float m22', 'float m32',
 		'float m03', 'float m13', 'float m23', 'float m33'], [])
-	])
+	] + ([(['const hg::Mat44 &m'], []), (['const hg::Mat4 &m'], [])] if gen.get_language() == 'QuickJS' else []))
+	if gen.get_language() == 'QuickJS':
+		gen.bind_comparison_ops(matrix44, ['==', '!='], ['const hg::Mat44 &m'])
 
 	gen.bind_arithmetic_op_overloads(matrix44, '*', [
 		('hg::Mat44', ['const hg::Mat4 &m'], []),
@@ -3676,17 +3737,17 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 	vector3 = gen.begin_class('hg::Vec3')
 	vector3._inline = True
 
-	gen.bind_static_members(vector3, ['const hg::Vec3 Zero', 'const hg::Vec3 One', 'const hg::Vec3 Left', 'const hg::Vec3 Right', 'const hg::Vec3 Up', 'const hg::Vec3 Down', 'const hg::Vec3 Front', 'const hg::Vec3 Back'])
+	gen.bind_static_members(vector3, ['const hg::Vec3 Zero', 'const hg::Vec3 One', 'const hg::Vec3 Left', 'const hg::Vec3 Right', 'const hg::Vec3 Up', 'const hg::Vec3 Down', 'const hg::Vec3 Front', 'const hg::Vec3 Back'], js_value_constants(gen))
 	gen.bind_members(vector3, ['float x', 'float y', 'float z'])
 
 	gen.bind_constructor_overloads(vector3, [
-		([], []),
+		([], js_value_default(gen, 'hg::Vec3', '0, 0, 0')),
 		(['float x', 'float y', 'float z'], []),
 		(['const hg::tVec2<float> &v'], []),
 		(['const hg::tVec2<int> &v'], []),
 		(['const hg::Vec3 &v'], []),
 		(['const hg::Vec4 &v'], [])
-	])
+	] + js_vector_constructors(gen, 'hg::Vec3', 3))
 
 	gen.bind_function('hg::MakeVec3', 'hg::Vec3', ['const hg::Vec4 &v'])
 

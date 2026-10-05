@@ -10,13 +10,15 @@ Tutorial baseline: HARFANG `6a683714fa208d3791a76abc51aa88570e463373`. The top-l
 
 ## 1. Decision
 
+**Validation follows HG Lua -> native HG JS -> web HG JS**, as defined by the [compatibility precedence](SPECS_HYBRID_CPP_JS_WEBGL_DELIVERY_SLICES.md#compatibility-precedence). First validate the native JS port against HG Lua with equivalent engine build options. Then adapt the web runtime to run that native project as far as feasible. A browser limitation must not weaken the native conformity requirement.
+
 **Use the existing HARFANG tutorials as the primary acceptance suite for the web port's delivery slices.** Port the relevant scenarios to shared JavaScript and run them on native HARFANG and the pure-JS/WebGL backend. Add focused fixtures only where the tutorials do not cover a promised feature or failure mode.
 
 Keep their observable purpose, source assets, and important operations. A port may adapt host setup, asynchronous loading, named math operations, output values, and the portable UI API. It must not remove the feature being tested merely to make the scenario pass.
 
-The desktop entry remains `main.js`, which explicitly calls `init`, `update`, `render`, and `dispose`. The browser entry uses the same tutorial/application module through animation-frame scheduling. Browser code and dependencies remain pure JS, without Wasm. Physics and video remain excluded.
+The desktop entry remains `main.js` and owns its native loop. A shared application may expose `init`, `update`, `render`, and `dispose` for browser animation-frame scheduling. Browser code and dependencies remain pure JS, without Wasm. Physics and video remain excluded from this initial web profile, while native HG JS retains the corresponding HG Lua APIs when enabled.
 
-“Excluded” means excluded from the hybrid acceptance suite. Existing native tutorials remain in the repository.
+“Excluded” means excluded from this web compatibility suite. The retained/deferred/excluded classification does not limit native HG JS functionality or its conformity tests. Existing native tutorials remain in the repository.
 
 ## 2. Classification And Counting Rules
 
@@ -24,12 +26,12 @@ The desktop entry remains `main.js`, which explicitly calls `init`, `update`, `r
 | --- | ---: | --- |
 | Retained | 25 | Mandatory for the specified slice/profile once its declared prerequisites ship; adaptation or staged variants may be necessary |
 | Deferred | 12 | Relevant concepts, but an additional capability beyond the current minimum profile; not silently counted as validated |
-| Excluded | 19 | Outside the selected product or dependent on explicitly excluded native services |
+| Excluded | 19 | Outside the selected web profile or dependent on services unavailable in that profile |
 | **Total** | **56** | Every inspected top-level tutorial family is accounted for |
 
 Execution status is separate from this classification. Record `not-ported`, `not-run`, `blocked`, `pass`, `fail`, or `not-applicable-to-profile`. An unsupported required feature is a failure, not a skip. A conditional case is not applicable only when the release profile explicitly omits its optional capability.
 
-Lua is the preferred starting reference because it matches the existing `main.lua` workflow. Inspect the Python/Squirrel versions when resolving discrepancies; do not assume their return handling and behavior are identical. For example, `CreateInstanceFromAssets` results are unpacked differently across the existing language variants.
+HG Lua is the priority reference for native HG JS conformity. Inspect the Python/Squirrel versions as additional evidence when resolving discrepancies; do not assume their return handling and behavior are identical. For example, `CreateInstanceFromAssets` results are unpacked differently across the existing language variants.
 
 ## 3. Retained Tutorials
 
@@ -192,13 +194,13 @@ Prefer deriving these from existing tutorial resources and hosts. The skinning m
 
 For each retained family, keep:
 
-1. The pinned original native Lua/Python/Squirrel source and its intended behavior.
-2. The shared JS port running against native C++ HARFANG, with explicit desktop `main.js` lifecycle calls.
-3. The same shared JS port running against the pure-JS/WebGL engine.
+1. The pinned original HG Lua source and its intended behavior; Python/Squirrel variants supply additional evidence.
+2. The native HG JS port running against C++ HARFANG with equivalent build options and a desktop `main.js` owning its loop.
+3. The web adaptation of that validated native JS project, with any required code changes, approximations and unsupported features recorded.
 
-First establish that the JS-native port preserves the original intent. Then compare JS-native with JS-web under the same profile. Agreement between two identically simplified ports is not enough if both dropped the tutorial's defining feature.
+First establish that native HG JS preserves the HG Lua scenario. Then evaluate how far web HG JS can run that native project. Agreement between two identically simplified ports is not enough if both dropped the tutorial's defining feature. Report native conformity separately from web compatibility; a web failure does not invalidate a conforming native implementation.
 
-Use the portable profile on the native run, including matching light limits, supported material families, and shadow quality. Keep any full-native comparison as a separate reference. Rendering reductions are documented expected differences; scene transforms, material state transitions, resource IDs, and lifecycle counts are behavioral assertions.
+Keep the full native run as the conformity reference. For controlled native/web comparisons, an additional explicitly named derivative may use matching light limits, supported material families and shadow quality. That derivative does not replace the native reference or impose web limits on native HG JS. Rendering reductions are documented expected differences; scene transforms, material state transitions, resource IDs, and lifecycle counts are behavioral assertions.
 
 ### 9.2 Assets And Determinism
 
