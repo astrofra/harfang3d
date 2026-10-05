@@ -22,7 +22,7 @@ The recommended architecture is:
 
 1. **Native:** HARFANG C++ and bgfx remain responsible for rendering and engine services. QuickJS provides the external JavaScript host and binding, with HG Lua as the conformity reference. Existing Lua scene systems remain available; JavaScript scene components are separate work.
 2. **Web:** browser JavaScript runs the same application modules against a JavaScript implementation of the portable API. A WebGL 2 forward renderer replaces bgfx. The browser package contains no C++ engine, QuickJS, or WebAssembly; GPU shaders remain GLSL as required by WebGL.
-3. **Assets:** the same editable source tree feeds a native asset target and a web asset target. Extend `assetc` with a web backend; keep it as an offline desktop/build tool.
+3. **Assets:** the same uncompiled source tree feeds existing native `assetc` and a separate native desktop Web compiler. Native compiled outputs are shared by Lua, Python and JS native; the Web compiler produces WebGL 2 assets. Its CLI follows `assetc` with fewer options. See the [standalone compiler contract](SPECS_HARFANG_WEB_ASSETC.md) for the Windows/macOS/Linux x86-64/ARM64 requirement and scene/model/texture/HDR-probe scope.
 4. **Scenes:** directly support HARFANG's existing JSON scene representation for the agreed feature subset. Compile geometry, textures, shader descriptions, and dependency metadata into explicit web formats.
 5. **Application lifecycle:** on desktop, **`main.js` replaces `main.lua` and owns the native loop**. Shared `init`, `update`, `render`, and `dispose` callbacks are an optional project structure for browser adaptation; the browser bootstrap schedules them through `requestAnimationFrame`.
 6. **Compatibility:** derive and test a versioned web profile from the native API. Native APIs remain available through `harfang`, including features unsupported on the web. Unsupported required web features fail during web compilation or loading instead of silently disappearing.
@@ -78,16 +78,18 @@ flowchart TB
     CPP[HARFANG C++ and bgfx]
     Web[JavaScript scene engine and WebGL 2 renderer]
     Source[Editable HARFANG scenes and source assets]
-    AssetC[Host assetc with shared frontend]
+    AssetC[Existing native assetc]
+    WebAssetC[Separate native desktop Web assetc]
     NativeAssets[Native compiled assets]
-    WebAssets[Web scenes, buffers, images and manifest]
+    WebAssets[Web scenes, buffers, textures, HDR probes and manifest]
     Logic --> API
     API --> Native
     API --> Web
     Native --> CPP
     Source --> AssetC
     AssetC --> NativeAssets
-    AssetC --> WebAssets
+    Source --> WebAssetC
+    WebAssetC --> WebAssets
     NativeAssets --> CPP
     WebAssets --> Web
 ```
@@ -304,13 +306,13 @@ Use fixtures with asymmetric geometry, labeled axes, nonuniform and negative sca
 
 ## 8. The Role Of assetc
 
-**Keep `assetc`, add a web target, and separate its input interpretation from output encoding.** It remains a host executable used during authoring and CI. The browser downloads compiled content; it does not need a browser port of the compiler.
+**Keep native `assetc` and deliver a separate native desktop asset compiler for Web.** Both consume the same uncompiled source tree. Native Lua/Python/JS continue to share native compiled assets; the browser downloads the Web compiler's output. The [2026-10-05 compiler contract](SPECS_HARFANG_WEB_ASSETC.md) supersedes the earlier shared-executable web-target proposal: the separate product must run on Windows/macOS/Linux on x86-64 and ARM64, with an assetc-compatible CLI, fixed WebGL 2 output and scene/model/texture/HDR-probe support.
 
 ### 8.1 Existing Work Worth Reusing
 
 Current `assetc` already classifies scenes, geometry, textures, shaders/pipeline shaders, scripts, physics, and navigation inputs. It tracks dependencies and compilation context, processes texture metadata, emits shader variants, generates environment data, and copies unprocessed files. Its scene and geometry handlers preserve logical paths while changing file content.
 
-Add target-specific writers behind shared asset discovery and preprocessing. A temporary `assetc_web` helper is acceptable for the spike, but duplicated scene parsing and independent conversion rules would become a maintenance problem. Merge the proven path into the common tool or a shared library.
+Keep Web discovery, preprocessing, conversion and encoding in the separate compiler at **`harfangjs/tools/native/`**, with its native sources and CMake target owned by that repository; these rules may diverge substantially from native compilation. Reusing stable readers or libraries is optional. Do not require a common conversion pipeline or schedule a future merger into native `assetc`. The temporary Python `assetc_web` helper and external C++ bridge can inform implementation, but they are not the independently distributed native desktop product.
 
 The existing `-api`/`-platform` switches select native compilation behavior. A GLES shader target still emits assets for the native bgfx runtime. It does not establish that plain WebGL can consume them. Also, the source's internal metadata `profile` variable is not evidence of an already complete selectable web build profile.
 
@@ -321,7 +323,6 @@ project/
   src/                         shared application JS modules
   assets/                      editable scenes, geometry, images, behaviors
   generated/                   offline-generated source inputs
-  asset-targets.json            proposed target and quality configuration
   build/
     assets-native/             native runtime assets
     assets-web/                web runtime assets and dependency manifest
@@ -332,12 +333,15 @@ project/
 
 Both runtime targets read only their compiled output namespace. Fonts, JSON configuration, and other pass-through assets are propagated by the build, not copied ad hoc by runtime code. The application bundler and `assetc` need one coordinated dependency graph or a clear handoff for scene-referenced JS modules.
 
-Illustrative future commands, **not existing CLI syntax**:
+Existing native syntax and the required future Web CLI (the `assetc-web` executable is **not yet delivered**):
 
 ```text
-assetc --target native --config asset-targets.json assets build/assets-native
-assetc --target webgl2 --profile web-lite/1 --config asset-targets.json assets build/assets-web
+assetc assets build/assets-native
+assetc-web assets build/assets-web
+assetc-web -j 4 -progress assets build/assets-web
 ```
+
+Retain native positional syntax and supported option spellings/aliases. The Web compiler has no `-api`, native `-platform`, or `--target` selection: the host package determines where the tool executes, and WebGL 2 is the initial output target. See the compiler contract for the reduced option inventory and six-host acceptance matrix.
 
 ### 8.3 Target Outputs
 
@@ -566,7 +570,7 @@ Floating-point render targets are optional quality features. For example, [EXT_c
 
 A constant ambient contribution is sufficient for the first proof, but metallic materials need an environment to look convincing. Add a separately budgeted prefiltered environment path: irradiance approximation, roughness-indexed radiance mip chain, and the relevant BRDF lookup.
 
-Precompute it offline. Do not load native probe binaries and assume their formats, cube-face orientation, mip interpretation, or HDR encodings match WebGL. Start with one environment and omit parallax-corrected local probe volumes until there is an authored fixture requiring them.
+Precompute it offline in the separate native Web asset compiler, using the same authored HDR source as native `assetc`. HDR probe generation is required compiler scope: diffuse irradiance, prefiltered radiance/roughness mips and the BRDF dependency must be emitted with explicit orientation and HDR encoding metadata. Retaining probe paths or using ambient color does not satisfy this gate. Do not load native probe binaries and assume their formats, cube-face orientation, mip interpretation, or HDR encodings match WebGL. Start with one environment and omit parallax-corrected local probe volumes until there is an authored fixture requiring them.
 
 ### 10.7 Resource Lifetime And Context Loss
 
@@ -911,7 +915,7 @@ If a gate fails, revise the corresponding choice within the pure-JS constraint: 
 
 ### 15.4 Recommended Decision
 
-Proceed with a gated hybrid spike and make **portable JS + native HARFANG scenes + target-specific compiled assets** the product contract. Keep `assetc` central, start with a small forward renderer, and grow through independent feature slices.
+Proceed with a gated hybrid spike and make **portable JS + the same uncompiled HARFANG assets + destination-specific compiled outputs** the product contract. Keep existing native `assetc` for all native bindings and deliver the separate desktop Web compiler, start with a small forward renderer, and grow through independent feature slices.
 
 For textures, prioritize **offline ASTC 6x6 where supported**, retain capability-selected GPU variants and an ordinary-image fallback, and parse/upload them in JS. Keep **XUASTC/Basis** as separate research until a practical pure-JS decoder is established. No browser-side Wasm dependency is part of the recommendation.
 

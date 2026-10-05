@@ -28,6 +28,8 @@ This precedence supersedes any earlier proposal in the related specifications th
 - The native product uses HARFANG C++ with a JavaScript API, initially through QuickJS.
 - The browser engine is **pure JavaScript + WebGL 2**. There is no C++ engine/service ported to Wasm and no shipped Wasm codec dependency.
 - Native C++ tools, including `assetc` and offline encoders, remain permitted in the build pipeline.
+- The shared content is the same **uncompiled** asset tree. Existing native `assetc` output is shared by HG Lua, Python and HG JS native. Web uses a **separate standalone native desktop compiler in `harfangjs/tools/native/`**, with its own compilation logic and release lifecycle, to produce WebGL 2 assets. No merger into native `assetc` is planned.
+- The Web compiler must cover scenes, models, textures and HDR probes, and ship for Windows/macOS/Linux on x86-64 and ARM64. Keep `assetc` positional syntax and retained option aliases, with no graphics-backend selection initially. The [compiler contract](SPECS_HARFANG_WEB_ASSETC.md) defines packaging, CLI and acceptance; the Python/C++ prototype does not fulfill those release requirements.
 - Shared application behavior is written in JavaScript. Essential project-specific C++ behavior needs a JS implementation.
 - Desktop `main.js` replaces `main.lua` and owns its native loop. Portable applications may expose `init`, `update`, `render`, and `dispose` for reuse with browser `requestAnimationFrame` scheduling.
 - The authoring scene remains a HARFANG scene. Web-specific assets are generated offline and addressed through stable logical names.
@@ -49,7 +51,7 @@ flowchart LR
     W0 --> W1[W1: static scenes]
     W1 --> W2[W2: materials and lights]
     W2 --> W3[W3: shadow maps]
-    W1 --> W4[W4: GPU texture delivery]
+    W1 --> W4[W4: textures and HDR probe delivery]
     W1 --> W5[W5: scene instances]
     W1 --> W6[W6: authored animation]
     W6 --> W7[W7: skinning]
@@ -83,7 +85,7 @@ The detailed matrix classifies **25 retained, 12 deferred, and 19 excluded famil
 | W1 | `draw_model_no_pipeline`, `filesystem_assets`, `picture_load`, structural stage of `scene_pbr` | Small direct-drawing/program subset; malformed/missing dependencies and rollback |
 | W2 | `scene_pbr`, `material_update_value`, `scene_light_priority` | Support the used `default.hps` family as well as PBR; retain material texture/variant transitions |
 | W3 | `scene_spot_shadow_clip`, shadow-enabled retained scenes | Spot case is conditional on declared spot support; add directional/cascade and alpha-cut fixtures |
-| W4 | `filesystem_assets`, `picture_load`, `scene_pbr`, `material_update_value` across texture routes | Add known-size compressed mip/fallback/color-space cases |
+| W4 | `filesystem_assets`, `picture_load`, `scene_pbr`, `material_update_value` across texture routes | Add compressed mip/fallback/color-space cases and actual HDR probe sampling |
 | W5 | Static stage of `scene_instances`, `game_mouse_flight`, full `mouse_scene_projection` | The projection scene contains an instance; add nesting/cycle/destruction cases |
 | W6 | Animated stage of `scene_instances` using authored idle/walk/run clips | Fixed-time interpolation, seek/loop, and timestamp fixtures |
 | W7 | No existing tutorial establishes weighted skinning | Add a two-bone weighted mesh and representative character; the current biped scene lacks object/material skinning markers |
@@ -102,10 +104,10 @@ Engineer-weeks for a supported first release, subject to the feasibility study's
 | C: portable contract and native facade | 3-5 | API/profile manifest, async host contract, cross-backend fixtures |
 | N: native QuickJS binding and scene execution | 12-20 | Native launcher, generated bindings, script lifecycle, packaging |
 | W0: browser foundations | 3-5 | Math, handles, scheduler, resources, JS script dispatcher |
-| W1: static scenes and initial web asset path | 4-6 | Native JSON scene reader, mesh buffers, initial `assetc` target |
+| W1: static scenes and initial web asset path | 4-6 | Native JSON scene reader, mesh buffers, separate native Web compiler and assetc-compatible CLI |
 | W2: material families and forward lights | 3-5 | Approved PBR/unlit families and bounded light rig |
 | W3: shadow maps | 2-3 | Directional shadows, then agreed cascade/spot quality tier |
-| W4: GPU texture delivery | 2-4 | Offline compressed variants, pure-JS container reader, capability selection |
+| W4: GPU texture and HDR probe delivery | 2-4 | Offline texture/probe processing, pure-JS container reader, capability selection and environment sampling |
 | W5: scene instances | 2-4 | Nested subscenes, reference remapping, isolated mutable state |
 | W6: authored animation | 3-5 | Transform/property tracks, playback, seeking, loop semantics |
 | W7: skinning | 3-5 | Joint palettes, weight/bind-pose support, animated color/shadow passes |
@@ -119,6 +121,12 @@ Engineer-weeks for a supported first release, subject to the feasibility study's
 N retains the conservative planning range from the QuickJS study. Native physics-specific bindings remain part of HG Lua conformity when physics is enabled; their exclusion from the web profile does not remove this requirement. No unmeasured schedule discount is assumed. The 4-6 engineer-week feasibility spike is the first portion of these packages, not an additional line item.
 
 W9 includes the portable UI facade on both hosts. N supplies the underlying generated Dear ImGui calls, while C specifies the generic lifecycle; their estimates do not duplicate W9's widget implementation and tests.
+
+The 2026-10-05 standalone compiler clarification assigns CLI/independent tooling
+to W1, texture/HDR processing to W2/W4, and all six desktop host packages to W10.
+The ranges above predate that explicit packaging matrix and have not been
+re-estimated. Review W1/W4/W10 effort after the host and encoder portability work;
+no revised effort total is claimed here.
 
 If only a viewer is needed first, stop at the corresponding release below. The total is not a prerequisite to seeing useful output.
 
@@ -203,7 +211,7 @@ Supported content:
 - A simple unlit material and ordinary JPEG/PNG images before W2/W4.
 - Core scene metadata and compiled dependency references.
 
-Deliver a JS reader for the existing JSON scene representation. Introduce `assetc` web writers for scene JSON, explicit mesh descriptors/buffers, and a manifest. Existing native compiled `.geo` files are not passed through as browser mesh buffers.
+Deliver a JS reader for the existing JSON scene representation and the first content slice of the separate native Web compiler: scene JSON, explicit mesh descriptors/buffers, and a manifest. The compiler follows the [assetc CLI contract](SPECS_HARFANG_WEB_ASSETC.md#4-assetc-compatible-cli), discovers the source tree without a required per-scene Python command, and runs independently of an installed HARFANG build. Existing native compiled `.geo` files are not passed through as browser mesh buffers. Basic W1 content alone does not complete the required texture/HDR or six-host compiler gates.
 
 Acceptance fixture: a room with two cameras, a parented prop, a negative-scale object, UV seams, multiple material slots, and a disabled node. Build it from one source tree into native and web asset directories. Both targets must reproduce hierarchy, transforms, material assignment, visibility, and camera selection.
 
@@ -225,7 +233,7 @@ Inert physics authoring metadata may be explicitly stripped by the compiler with
 
 Deliver approved unlit, historical `default.hps`, and HARFANG PBR program adapters, with the channel/parameter mapping documented in the feasibility study. The default-family subset preserves the diffuse/specular/self values and diffuse-map toggling used by retained tutorials; do not silently replace it with PBR. Support base opacity, ORM, normal and self/emissive inputs in the PBR family; alpha cut; depth/culling/write controls; and agreed blend modes.
 
-Start with one directional light and two points. Extend to the agreed eight-slot profile with spot attenuation, priorities, diffuse/specular intensities, and a stable overflow policy. Add fog and one environment-lighting path by the supported V1 gate; an explicit ambient approximation is acceptable in the first pilot.
+Start with one directional light and two points. Extend to the agreed eight-slot profile with spot attenuation, priorities, diffuse/specular intensities, and a stable overflow policy. Add fog and one environment-lighting path by the supported V1 gate, consuming HDR probes prepared by the separate desktop compiler in W4. An explicit ambient approximation is acceptable in the first pilot but does not fulfill the HDR compiler/runtime requirement.
 
 Acceptance fixture: material spheres/planes under a controllable light rig, including metal/dielectric extremes, roughness variation, a normal map, foliage alpha cut, emissive content, and transparent overlaps.
 
@@ -251,7 +259,7 @@ Count all shadow submissions separately from main-pass draws. Verify depth frame
 
 **Release opportunity:** the shared-JS interactive static-scene pilot, with native/web comparison and measured rendering/transfer budgets.
 
-## 10. W4: GPU-Friendly Texture Delivery
+## 10. W4: GPU-Friendly Textures And HDR Probe Delivery
 
 **Result:** web content can use smaller resident GPU textures without adding a Wasm transcoder.
 
@@ -263,6 +271,8 @@ Deliver:
 - JPEG/PNG fallback with a memory-aware resolution policy.
 - Explicit color space, alpha, channel, orientation, sampler, and mip metadata.
 - Reproducible encoder settings/cache keys and a size/quality report per asset.
+- Offline HDR probe generation by the separate native Web compiler: diffuse irradiance, prefiltered radiance/roughness mips and BRDF data/reference, with HDR encoding and cube-face orientation metadata. Compile from the same uncompiled environment source used by native `assetc`.
+- Browser loading and sampling of those probe outputs; ambient-only replacement or preserved native probe paths cannot count as completion.
 
 Use the main study's texture corpus and memory arithmetic. Select quality per usage: albedo and normals need different criteria; alpha coverage and material-channel error matter independently of color metrics.
 
@@ -274,6 +284,7 @@ Acceptance:
 4. Upload, context restoration, and material sampling preserve orientation and color-space behavior.
 5. The browser bundle contains no Wasm texture/mesh decoder.
 6. Measured render quality justifies the selected ASTC presets; lower bpp is not the sole pass condition.
+7. An HDR source with values above 1 survives compilation and browser sampling; face-direction, roughness-mip and metal/dielectric fixtures validate the environment path.
 
 XUASTC/Basis comparisons may be run offline to inform a later pure-JS codec proposal. Such a codec needs its own feasibility/effort estimate. The current tranche does not assume that a JS wrapper around a Wasm transcoder satisfies the requirement.
 
@@ -398,10 +409,12 @@ Complete:
 - Cold-start and sustained performance measurements using the agreed pilot budgets.
 - Samples showing the same JS application on native/browser, with explicit profile limitations.
 - A release manifest that records engine/profile/asset-schema versions and proves the absence of Wasm runtime dependencies.
+- Independent native Web compiler packages for all six Windows/macOS/Linux and x86-64/ARM64 combinations, tested on clean hosts without Python, Node.js or an existing HARFANG installation. Each compiles the same scene/model/texture/HDR-probe corpus with the assetc-compatible CLI; the browser loads the resulting assets.
 
 The same retained tutorial ports and supplemental conformance fixtures must run after changes to native bindings, JS math, scene formats, shader families, or asset encoders. Release notes identify intentional rendering changes and asset rebuild requirements. Report original-native, JS-native, and JS-web results separately, with the adaptation record and exact content/quality settings; no missing required feature can be counted as a successful skip.
 
-Suggested repository areas, not created by this study:
+Repository areas: the Web compiler location is fixed by the current contract;
+the other entries retain the study's proposed layout.
 
 ```text
 languages/hg_quickjs/           native launcher/package
@@ -413,7 +426,8 @@ web/src/audio/                 browser audio adapter
 web/src/ui/                    keyed DOM/CSS UI backend
 shared/ui/                     portable UI contract and host-neutral helpers
 web/conformance/               shared fixtures and browser harness
-tools/assetc/                   common graph plus web target writers
+tools/assetc/                   existing compiler for all native runtime bindings
+../harfangjs/tools/native/      separate native Web compiler sources/CMake target
 ```
 
 Keep the public profile inventory and fixtures close to both implementations. Follow-up detailed specs can be created per slice when implementation starts; this document already supplies their boundaries and acceptance gates without inventing empty placeholder specifications.

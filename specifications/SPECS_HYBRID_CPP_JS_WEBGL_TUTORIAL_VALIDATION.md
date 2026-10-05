@@ -204,7 +204,21 @@ Keep the full native run as the conformity reference. For controlled native/web 
 
 ### 9.2 Assets And Determinism
 
-Build the tutorial source resources through `assetc` into separate native and web output trees. The existing `_build_assets.bat` invokes a native compiler and is not a web build path. A proposed harness can use `build/tutorials/assets-native` and `build/tutorials/assets-web`, without reusing a stale `resources_compiled` directory.
+The common input is the same uncompiled tutorial resource tree and metadata.
+Existing native `assetc` produces one native output shared by HG Lua, Python and
+HG JS native; the separate native desktop Web compiler produces the Web output.
+Native JS does not require different assets or a second native compilation.
+The existing `_build_assets.bat` invokes the native compiler and is not a Web
+build path. A deterministic harness can use `build/tutorials/assets-native` and
+`build/tutorials/assets-web`; reuse compatible native output when its provenance
+matches, rather than recompiling merely because the application language changed.
+
+The [standalone Web compiler gates](SPECS_HARFANG_WEB_ASSETC.md) require native
+execution on Windows/macOS/Linux, x86-64 and ARM64, an assetc-compatible CLI with
+fixed WebGL 2 output, and scene/model/texture/HDR-probe compilation from those
+same sources. Validate HDR environment sampling separately from the existing
+ambient-only PBR derivative. Python prototype or single-host results cannot close
+the standalone compiler release gate.
 
 Record the engine/tutorial revision, source asset hashes, compiler/encoder configuration, API/profile/schema versions, random seed, update times, input sequence, viewport, pixel ratio, and quality tier. All runtime asset access uses compiled logical IDs, including examples whose originals directly open `resources/...` or `resources_compiled/...` filesystem paths.
 
