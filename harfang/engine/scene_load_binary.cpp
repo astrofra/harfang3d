@@ -165,14 +165,15 @@ void LoadComponent(Scene::Light_ *data_, const Reader &ir, const Handle &h) {
 	Read(ir, h, data_->shadow_far);
 }
 
-void LoadComponent(Scene::RigidBody_ *data_, const Reader &ir, const Handle &h) {
+void LoadComponent(Scene::RigidBody_ *data_, const Reader &ir, const Handle &h, uint32_t version) {
 	Read(ir, h, data_->type);
 	Read(ir, h, data_->linear_damping);
 	Read(ir, h, data_->angular_damping);
 	Read(ir, h, data_->restitution);
 	Read(ir, h, data_->friction);
 	Read(ir, h, data_->rolling_friction);
-	Read(ir, h, data_->continuous_collision_detection);
+	// Version 10 has no CCD flag; do not consume the next component's data.
+	data_->continuous_collision_detection = version >= 11 ? Read<uint8_t>(ir, h) : 0;
 }
 
 void LoadComponent(Scene::Collision_ *data_, const Reader &ir, const Handle &h) {
@@ -577,7 +578,7 @@ bool Scene::Load_binary(const Reader &ir, const Handle &h, const char *name, con
 	}
 
 	const auto version = Read<uint32_t>(ir, h);
-	if (version != GetSceneBinaryFormatVersion()) {
+	if (version != 10 && version != GetSceneBinaryFormatVersion()) {
 		if (!silent)
 			warn(format("Cannot load scene '%1', unsupported binary version %2").arg(name).arg(version));
 		return false;
@@ -624,7 +625,7 @@ bool Scene::Load_binary(const Reader &ir, const Handle &h, const char *name, con
 		rigid_body_refs.resize(rigid_body_count);
 		for (size_t i = 0; i < rigid_body_count; ++i) {
 			const auto ref = rigid_body_refs[i] = CreateRigidBody().ref;
-			LoadComponent(&rigid_bodies[ref.idx], ir, h);
+			LoadComponent(&rigid_bodies[ref.idx], ir, h, version);
 		}
 
 		const auto collision_count = Read<uint32_t>(ir, h);

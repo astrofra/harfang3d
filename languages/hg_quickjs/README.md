@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Three native tutorial ports are
+rendering, file access and Lua scene systems. Six native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -70,16 +70,23 @@ for Linux/macOS is present but unvalidated. No QuickJS bytecode is shipped.
 ## Tutorials
 
 See [the JavaScript tutorial guide](../../tutorials/README_JS.md).
-From the workspace root, with native assetc already built:
+Use the same `tutorials/resources_compiled` directory as HG Lua. No separate
+JavaScript asset preparation is required. From the workspace root:
 
 ```powershell
-python harfang3d/languages/hg_quickjs/prepare_tutorials.py
-Push-Location build/hgjs-tutorials
-../../install/js_bullet/hgjs/hgjs.exe source/draw_lines.js
-../../install/js_bullet/hgjs/hgjs.exe source/draw_model_no_pipeline.js
-../../install/js_bullet/hgjs/hgjs.exe source/filesystem_assets.js
+Push-Location harfang3d/tutorials
+../../install/js_bullet/hgjs/hgjs.exe draw_lines.js
+../../install/js_bullet/hgjs/hgjs.exe draw_model_no_pipeline.js
+../../install/js_bullet/hgjs/hgjs.exe filesystem_assets.js
+../../install/js_bullet/hgjs/hgjs.exe game_mouse_flight.js
+../../install/js_bullet/hgjs/hgjs.exe scene_many_nodes.js
+../../install/js_bullet/hgjs/hgjs.exe scene_pbr.js
 Pop-Location
 ```
+
+`prepare_tutorials.py` is an optional helper for isolated test fixtures. It uses
+the same native assets and compiler as Lua; it is not a prerequisite for running
+the tutorials.
 
 ## Host and packaging
 
@@ -97,8 +104,11 @@ import * as hg from 'harfang';
 hg.AddAssetsFolder('resources_compiled');
 ```
 
-Shaders, models and textures still use the native asset compiler. JavaScript
-code itself does not need asset compilation. The tutorials mount
+Native JavaScript consumes exactly the same compiled assets as HG Lua: scenes,
+models, textures and shaders share the native formats and the same asset compiler.
+Existing Lua compiled assets can be reused directly with the matching renderer.
+Web-format assets are specific to HG JS Web. JavaScript code itself does not
+need asset compilation. The tutorials mount
 `resources_compiled` in `js/window.js`, relative to the caller's working directory.
 An entry can run ordinary top-level code, export `async function main()`, or
 export a `completion` Promise. If `main` exists, the host calls and awaits it;
@@ -165,6 +175,6 @@ From `harfangjs`:
 
 This checks 19 shared math/scene contract groups against Chromium, Lua scene
 components driven from JavaScript, module/Promise errors, window handling, the
-three tutorial ports, and native room/lighting/PBR rendering. The portable web
+six tutorial ports, and native room/lighting/PBR rendering. The portable web
 facade, strict portable conversion rules and complete cross-host compatibility
 remain separate work; the native binding exposes the wider HARFANG API.

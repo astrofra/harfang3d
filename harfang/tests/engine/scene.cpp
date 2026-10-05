@@ -211,6 +211,65 @@ static void test_LoadSaveEmptySceneBinary() {
 	}
 }
 
+static void test_LoadSceneBinaryVersion10() {
+	// Saved by the version 10 Lua runtime: two rigid bodies followed by a cube
+	// collision and named nodes. Neither body contains the version 11 CCD byte.
+	const uint8_t legacy_scene[] = {
+		0x48, 0x47, 0x46, 0x46, 0x01, 0x0a, 0x00, 0x00, 0x00, 0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00,
+		0x00, 0x00, 0x40, 0x80, 0xbf, 0x9f, 0x20, 0x01, 0x00, 0x00, 0x00, 0x60, 0x00, 0x01, 0x00, 0x00,
+		0x00, 0x01, 0x00, 0x00, 0xe0, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x80, 0x3f, 0x00, 0x00, 0x00, 0x00,
+		0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x64, 0x79, 0x6e, 0x61, 0x6d, 0x69,
+		0x63, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x09, 0x00, 0x6b, 0x69, 0x6e, 0x65, 0x6d,
+		0x61, 0x74, 0x69, 0x63, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0xff, 0xff, 0xff, 0xff,
+	};
+	Data data(legacy_scene, sizeof(legacy_scene));
+	data.Rewind();
+	PipelineResources resources;
+	Scene scene;
+	LoadSceneContext ctx;
+	TEST_ASSERT(LoadSceneBinaryFromData(data, "version10", scene, g_assets_reader, g_assets_read_provider, resources, GetForwardPipelineInfo(), ctx));
+	TEST_CHECK(scene.GetAllNodeCount() == 2);
+	const auto dynamic = scene.GetNode("dynamic");
+	const auto body = dynamic.GetRigidBody();
+	TEST_ASSERT(body.IsValid());
+	TEST_CHECK(body.GetType() == RBT_Dynamic);
+	TEST_CHECK(AlmostEqual(body.GetLinearDamping(), 0.25f, 0.005f));
+	TEST_CHECK(AlmostEqual(body.GetAngularDamping(), 0.5f, 0.005f));
+	TEST_CHECK(AlmostEqual(body.GetRestitution(), 0.75f, 0.005f));
+	TEST_CHECK(AlmostEqual(body.GetFriction(), 0.625f, 0.005f));
+	TEST_CHECK(AlmostEqual(body.GetRollingFriction(), 0.125f, 0.005f));
+	TEST_CHECK(!body.GetContinuousCollisionDetection());
+	TEST_ASSERT(dynamic.GetCollision(0).IsValid());
+	TEST_CHECK(dynamic.GetCollision(0).GetType() == CT_Cube);
+	TEST_CHECK(dynamic.GetCollision(0).GetMass() == 7.f);
+	const auto other = scene.GetNode("kinematic").GetRigidBody();
+	TEST_ASSERT(other.IsValid());
+	TEST_CHECK(other.GetType() == RBT_Kinematic);
+	TEST_CHECK(AlmostEqual(other.GetFriction(), 0.375f, 0.005f));
+	TEST_CHECK(!other.GetContinuousCollisionDetection());
+	TEST_CHECK(data.GetCursor() == data.GetSize());
+
+	// Accepting the previous version must not accept older or future layouts.
+	for (uint32_t version : {9u, GetSceneBinaryFormatVersion() + 1}) {
+		Data unsupported(legacy_scene, sizeof(legacy_scene));
+		unsupported.SetCursor(sizeof(uint32_t) + sizeof(uint8_t));
+		Write(unsupported, version);
+		unsupported.Rewind();
+		Scene rejected;
+		LoadSceneContext rejected_ctx;
+		TEST_CHECK(!LoadSceneBinaryFromData(unsupported, "unsupported", rejected, g_assets_reader, g_assets_read_provider, resources,
+			GetForwardPipelineInfo(), rejected_ctx, LSSF_All | LSSF_Silent));
+		TEST_CHECK(rejected.GetAllNodeCount() == 0);
+	}
+}
+
 static void test_LoadSaveRigidBodyContinuousCollisionDetection() {
 	PipelineResources resources;
 
@@ -865,6 +924,7 @@ void test_scene() {
 	test_DisableObjectNodes();
 	test_LoadSaveEmptyScene();
 	test_LoadSaveEmptySceneBinary();
+	test_LoadSceneBinaryVersion10();
 	test_LoadSaveRigidBodyContinuousCollisionDetection();
 	test_PlayNodeSceneAnimWithoutSceneAnimTrack();
 	test_LoadSaveObject();

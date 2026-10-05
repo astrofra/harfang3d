@@ -888,7 +888,7 @@ private:
 	friend void LoadComponent(Object_ *data_, const Reader &ir, const Handle &h, const Reader &deps_ir, const ReadProvider &deps_ip,
 		PipelineResources &resources, const PipelineInfo &pipeline, bool queue_model_loads, bool queue_texture_loads, bool do_not_load_resources, bool silent);
 	friend void LoadComponent(Light_ *data_, const Reader &ir, const Handle &h);
-	friend void LoadComponent(RigidBody_ *data_, const Reader &ir, const Handle &h);
+	friend void LoadComponent(RigidBody_ *data_, const Reader &ir, const Handle &h, uint32_t version);
 	friend void LoadComponent(Collision_ *data_, const Reader &ir, const Handle &h);
 	friend void LoadComponent(Instance_ *data_, const Reader &ir, const Handle &h);
 	friend void LoadComponent(Script_ *data_, const Reader &ir, const Handle &h);

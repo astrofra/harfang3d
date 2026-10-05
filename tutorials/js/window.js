@@ -9,10 +9,10 @@ export async function runWindow(title, create, {
   frameLimit = Infinity,
   capturePath,
   renderer,
+  width = 1280,
+  height = 720,
+  resetFlags,
 } = {}) {
-  const width = 1280;
-  const height = 720;
-
   // As in the Lua/Squirrel tutorials, the application chooses its compiled assets.
   hg.AddAssetsFolder('resources_compiled');
 
@@ -35,6 +35,12 @@ export async function runWindow(title, create, {
     }
 
     initialized = true;
+
+    // Preserve each Lua tutorial's resolution and anti-aliasing settings.
+    if (resetFlags !== undefined) {
+      hg.RenderReset(width, height, resetFlags);
+    }
+
     app = create();
 
     // main loop
