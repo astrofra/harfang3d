@@ -2,10 +2,17 @@
 
 Date: 2026-10-05
 
-Status: required product contract and acceptance gates. The standalone compiler
-and host matrix below are not implemented or validated by this documentation
-change. The current Python/C++ prototype is described separately in
+Status: required product contract and acceptance gates, with implemented
+experimental slices listed below. The full compiler and host matrix are not yet
+validated. The historical Python/C++ prototype is described separately in
 [harfangjs static assets](../../harfangjs/docs/static-assets.md).
+
+Standalone native compiler slices now support the
+[Many Nodes](SPECS_HARFANGJS_WEB_NATIVE_SCENE_MANY_NODES_FEASIBILITY.md) and
+[Mouse Flight](SPECS_HARFANGJS_WEB_NATIVE_GAME_MOUSE_FLIGHT.md) experiments on
+Windows x64, including original scene/geometry inputs, textures and CPU HDR probe
+generation. The full feature set and six-platform distribution specified below
+remain acceptance targets.
 
 This contract clarifies and supersedes the earlier single-executable
 `assetc --target web` proposal in the [feasibility study](SPECS_HYBRID_CPP_JS_WEBGL_FEASIBILITY.md).

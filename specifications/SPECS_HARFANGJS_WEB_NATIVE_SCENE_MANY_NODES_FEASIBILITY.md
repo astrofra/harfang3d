@@ -2,14 +2,15 @@
 
 Date: 2026-10-05
 
-Status: feasibility study and proposed implementation plan. A dedicated experiment
-and executable baseline probe are provided; the compatibility runtime, original
-shadowed tutorial and standalone Web compiler are **not implemented by this work**.
+Status: the full shadowed tutorial now runs in the dedicated Web experiment with
+its entry copied byte for byte. A standalone native program compiler and an
+executable native/Web API comparison are implemented. See section 11 for measured
+results and remaining scope. Sections 3-7 retain the feasibility baseline and
+design rationale; their baseline gaps are not the current experiment status.
 
 ## 1. Decision
 
-**The target is feasible in principle, but copying the file into today's Web
-runtime is insufficient.** The work spans native-shaped API adapters, browser
+**The target is demonstrated in the experimental Web runtime.** The work spans native-compatible API adapters, browser
 hosting, Web program assets, spotlight shadows and scene/rendering performance.
 Recompiling assets alone cannot close these gaps.
 
@@ -25,6 +26,13 @@ The useful common surface is **application source, API semantics and logical ass
 names**, backed by different host services, renderers and compiled asset formats.
 It is neither identical implementation machinery nor every native API at once.
 
+**Public HG JS Native/Web API compatibility is a hard constraint.** Preserve the
+native signatures, defaults, types, value/reference behavior and return values
+for each supported overload. Explicitly reject unsupported requirements. The user
+does not require preserving `js/window.js`; the selected implementation replaces
+that host helper while keeping the scene entry unchanged. This supersedes the
+initial preference for an unchanged module pair in the feasibility design.
+
 The dedicated workspace is
 [`harfangjs/experiments/native-scene-many-nodes/`](../../harfangjs/experiments/native-scene-many-nodes/README.md).
 It is separate from the existing Web tutorial gallery and its reduced examples.
@@ -36,7 +44,7 @@ There are three distinct claims to validate:
 | Claim | Acceptance |
 | --- | --- |
 | Unchanged entry | The copied `scene_many_nodes.js` has exactly the original bytes. Its imports and `main(options)` remain unchanged. No rewriting, transpilation or injected application branches. |
-| Unchanged module pair | The imported `js/window.js` also has exactly the original bytes. Browser implementations of `harfang` and `harfang-host` supply the required services. This is the recommended final experiment target. |
+| Unchanged module pair | Optional, not required by the user. The implemented experiment replaces `js/window.js` with a browser host adapter and preserves the entry exactly. Emulating the native helper remains a possible later host extension. |
 | Equivalent tutorial behavior | All 10,201 spheres, the original camera, ground, materials, wave motion and requested spotlight shadows are retained. Host timing/presentation differences are documented, and rendering is compared within declared tolerances. |
 
 ### Accepted initial host concessions
@@ -162,7 +170,10 @@ after creation, but a reusable facade must not introduce cross-object mutations.
 
 ## 5. Recommended Host Architecture
 
-### Preferred: preserve both native modules
+### Original alternative: preserve both native modules
+
+The following host-emulation design was the original preference. The implemented
+choice is the browser helper described below, following the user's clarification.
 
 Use the native entry and window helper unchanged. A browser bootstrap owns the
 asynchronous preparation and maps `harfang` to the compatibility facade and
@@ -267,16 +278,16 @@ WebGL backends, and a browser cannot silently write to a native filesystem path.
 Report unsupported use of these options. The accepted window-mode and antialiasing
 concessions do not imply that every unsupported host option may be ignored.
 
-### Lower-cost intermediate alternative
+### Selected implementation: browser window helper
 
 An entry-only pilot can place a browser-specific `js/window.js` beside the exact
 copied entry. This adapter can call the existing Web runner, avoiding immediate
 emulation of every desktop window call. It still needs the scene/pipeline API,
 assets, shadows and performance work described above.
 
-Use this only as a labeled intermediate result if host work delays rendering.
-It changes the helper dependency and therefore passes only the unchanged-entry
-gate. A source rewrite, a smaller grid, or silent removal of `LST_Map` cannot pass
+This changes the helper dependency and satisfies the user-approved unchanged-entry
+gate. It is an accepted host boundary, not an API compatibility concession.
+A source rewrite, a smaller grid, or silent removal of `LST_Map` cannot pass
 the original tutorial gate. A Wasm engine/QuickJS port would also contradict the
 established pure-JavaScript/WebGL 2 runtime constraint.
 
@@ -335,7 +346,7 @@ recursively scans the entire tutorial resource corpus will encounter unrelated
 unsupported content. A declared subset makes the pilot reproducible without
 silently skipping those errors or creating separately authored Web assets.
 
-Illustrative **future** commands, after that native compiler exists:
+Commands now supported by the native program compiler slice:
 
 ```text
 assetc -api GL build/experiments/native-scene-many-nodes/asset-input build/experiments/native-scene-many-nodes/assets-native
@@ -475,12 +486,19 @@ surface or prove complete binding parity.
 
 ## 9. Experiment Space and Reproduction
 
-Created now:
+Experiment sources:
 
 ```text
 harfangjs/experiments/native-scene-many-nodes/
   README.md
-  probe.py
+  probe.py          # historical W2/module-pair baseline
+  build.py
+  serve.py
+  validate.py
+  contract.js       # identical native/Web public API fixture
+  index.html
+  main.js
+  window.js         # browser host adapter
 ```
 
 From `harfangjs/`, the executed baseline command is:
@@ -516,7 +534,7 @@ harfangjs/
 ```
 
 Only the README/probe and generated probe outputs exist at this stage. The future
-packager must include both copied modules and the host import-map dependencies.
+packager includes the unchanged entry, selected browser helper and import-map dependencies.
 Today's [`build.py`](../../harfangjs/tools/build.py) packages a fixed gallery file
 list and only recognizes `harfang` and `harfang/browser` as bare imports; it neither
 packages this experiment nor accepts `harfang-host`. Extend package auditing for
@@ -527,9 +545,9 @@ the concrete host module and dependency graph when that milestone is implemented
 | Milestone | Work | Required evidence |
 | --- | --- | --- |
 | E0: baseline | Preserve sources and measure current gaps | Exact source hashes, export/semantic probe, reproducible report. Completed for the inspected baseline. |
-| E1: host and API | Resolve the exact module pair; implement used overloads, resource ownership, scheduling and preload boundary | Byte-identical entry/helper; deterministic short host tests; errors identify unsupported required features. Import success alone is insufficient. |
+| E1: host and API | Resolve the exact entry with the selected browser helper; implement used overloads, resource ownership, scheduling and preload boundary | Byte-identical entry; documented helper adaptation; deterministic native/Web API tests; errors identify unsupported required features. Import success alone is insufficient. |
 | E2: full unshadowed diagnostic | Runtime sphere, scene capacity/update, forward submission, minimal compiled program asset | All 10,204 nodes and full wave motion; original camera/materials; declared `full.no_shadows` adaptation. This does not close original visual parity. |
-| E3: original shadowed workload | Spotlight W3 subset, 4096 map, browser-driven presentation, optional antialiasing with warnings, measured scaling | Original source pair, full population, shadow/light state and captures compared with native; lifecycle/resource tests pass. Section 2 host concessions are accepted in this result. Reduced scene/shadow fidelity gets a separate result. |
+| E3: original shadowed workload | Spotlight W3 subset, 4096 map, browser-driven presentation, optional antialiasing with warnings, measured scaling | Original entry, full population, shadow/light state and captures compared with native; lifecycle/resource tests pass. Section 2 host concessions are accepted in this result. Reduced scene/shadow fidelity gets a separate result. |
 | E4: reusable contract | Promote APIs, finish isolated packaging, extend neighboring tutorial gates | No source edits for accepted cases; source assets shared; Web loads only Web compiled output; capability/profile and compiler versions recorded. |
 
 For E2, an explicitly selected diagnostic host policy may suppress requested
@@ -545,7 +563,8 @@ whole release matrix, and do not claim the matrix is delivered by this pilot.
 
 Acceptance should cover the following independent dimensions:
 
-1. **Source integrity:** compare both staged modules byte for byte on every build;
+1. **Source integrity:** compare the staged entry byte for byte on every build;
+   identify the browser helper separately rather than claiming native helper parity;
    record source/asset/compiler/adapter hashes. Preserve the original native files.
 2. **State:** assert 10,204 nodes, 10,202 object components, model parameters,
    camera/light/shadow state and material values. Inject equal delta sequences;
@@ -580,3 +599,113 @@ recommended path. Whether its full scene and shadow workload is practical on eac
 browser/GPU remains an implementation and measurement question. The accepted
 presentation concessions remove native window and exact antialiasing parity from
 the initial critical path while preserving the reusable native/Web JS objective.
+
+## 11. Implemented Experiment and Evidence
+
+Implemented on 2026-10-05 under
+[`harfangjs/experiments/native-scene-many-nodes/`](../../harfangjs/experiments/native-scene-many-nodes/README.md).
+The original native entry is copied automatically, hashed and compared byte for
+byte on every package build. `js/window.js` re-exports the browser host's
+`runWindow`; the native source files are not edited.
+
+### Public API and host boundary
+
+The import map binds `harfang` to
+[`src/compat/harfang.js`](../../harfangjs/src/compat/harfang.js) and
+`harfang/browser` to
+[`src/compat/browser.js`](../../harfangjs/src/compat/browser.js).
+The facade reuses the shared math/scene/model implementation and supplies native
+pipeline/resource/material/node helpers. It implements the overloads needed by
+this entry, including synchronous asset loads after host preloading, typed model
+and program references, independent material copies, reusable scene clearing and
+the native opaque pass-view return type.
+
+The same [`contract.js`](../../harfangjs/experiments/native-scene-many-nodes/contract.js)
+runs in native HG JS and Chromium. It compares constructor defaults, native light
+and reset constants, time types, reference types and resource names, duplicate
+model registration, transform copy/hierarchy behavior, counts, pipeline return
+values and clearing/reuse. The exercise identified and corrected numeric light
+enums and `BigInt` count results in the shared Web scene implementation.
+Float state comparison uses a 1e-5 tolerance; exact integral/type fields must agree.
+
+The browser host prepares and verifies compiled assets before calling `main`,
+then supplies `requestAnimationFrame` scheduling, effective canvas dimensions,
+input, stop/pause/restart and cleanup. Normal timing starts at zero and clamps
+deltas at 100 ms, resetting after suspension. Tests inject 16,666,667 ns on both
+hosts. Canvas DPR is capped at 2 and either buffer dimension at 4096. MSAA is
+disabled with a console warning. Native renderer/capture-path options are rejected.
+
+### Renderer and compiler
+
+The separate `web-native-forward/1` profile permits 16,384 nodes, eight light
+slots, one spotlight shadow map and 128 MiB of accounted GPU storage. Models with
+identical material state are drawn with GPU instancing. Scene components and
+per-object materials remain independently editable; material changes split batches.
+The original 10,204-node workload uses two forward and two shadow draws.
+
+The depth target is D16 at 4096 with the authored bias, native spotlight projection
+and four-tap PCF. There is no resolution downgrade. Device/allocation/budget failures
+are errors. Untextured, opaque, unskinned `default.hps` is the compiled variant;
+other material variants and unsupported shadow configurations fail explicitly.
+
+[`tools/native/assetc_web.cpp`](../../harfangjs/tools/native/assetc_web.cpp) builds
+as an independent native executable. The validated Windows x64 binary has a static
+MSVC runtime and embedded adapters, with no HARFANG DLL/Python/shaderc runtime
+dependency. It consumes the same six source dependencies as native assetc, checks
+reviewed source hashes, and emits content-addressed forward/depth program data.
+The browser checks lengths and SHA-256 before starting the application.
+
+This compiler is deliberately the program slice: changed shader sources require
+an adapter review; arbitrary shaders, scenes, file meshes, textures, HDR probes
+and the six-platform distribution matrix remain outside the delivered slice.
+The full [Web assetc product contract](SPECS_HARFANG_WEB_ASSETC.md) remains in force.
+
+### Observed results
+
+Measured with Chromium 154.0.8037.97, ANGLE/D3D11 on NVIDIA RTX 4060, against the
+installed native HG JS executable using bgfx OpenGL. Both captures use frame 4,
+960 x 625 pixels, fixed time steps and no antialiasing.
+
+| Check | Observed result |
+| --- | --- |
+| Entry integrity | Native and packaged JavaScript bytes identical |
+| Workload | 10,204 nodes, 10,202 object components, 2 shared models, 1 camera, 1 light |
+| Draw work | 2 forward + 2 shadow calls; 2,937,900 triangles in each pass |
+| GPU accounting | 34,614,632 bytes including the D16 shadow; zero after cleanup |
+| Mean absolute RGB error | 0.7524 / 255, below the threshold of 2 |
+| Pixels with any channel error above 16 | 1.672%, below the threshold of 3% |
+| 60-frame CPU draw measurement | Median 20.30 ms; P95 32.40 ms on this run |
+| Compiler validation | 11 scenarios pass, including hashes, unicode paths, overlap protection, missing/changed content and previous-output preservation |
+| Browser integration | Shader startup failure, material rebatching, limits, resize, pause/resume, restart, Escape, paused stop, corrupt preload and context loss pass |
+| Existing regression checks | 66 browser cases and 10 prototype asset-writer tests pass |
+
+CPU draw time includes wave updates and WebGL submission, and is not a GPU timer
+or a frame-rate guarantee. Default framebuffer/driver allocations are outside the
+byte counter. A separate SwiftShader run passes functional/lifecycle checks but
+shows D16 shadow artifacts and much lower speed; visual parity is established for
+the tested hardware backend, not every browser/GPU.
+
+### Reproduction and remaining work
+
+From `harfangjs/`:
+
+```powershell
+python experiments/native-scene-many-nodes/build.py
+python experiments/native-scene-many-nodes/serve.py
+.venv/Scripts/python.exe experiments/native-scene-many-nodes/validate.py --skip-build --native ../install/js_bullet/hgjs/hgjs.exe
+.venv/Scripts/python.exe tools/validate.py --source
+```
+
+Open `http://127.0.0.1:8001/`. The isolated HTTP package is under
+`dist/experiments/native-scene-many-nodes/`; it needs no source checkout or native
+tool at runtime. Captures, compiler/native logs, resource metrics, API snapshots
+and executable hashes are in `build/experiments/native-scene-many-nodes/reports/`.
+The validator forbids WebAssembly access and verifies that browser requests stay
+within the release package and only fetch compiled program assets.
+
+E1 and the user-approved E3 workload are demonstrated on this machine. E4 remains
+open: extend the same API and compiler surface to neighboring native tutorials,
+textures, scene assets and HDR. The older W2 gallery keeps its separate asset
+profile; its documented adaptations must not be mistaken for full native binding
+parity. The next portability gate should reuse these native public APIs instead
+of adding tutorial-specific application branches.
