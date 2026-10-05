@@ -24,6 +24,7 @@ not required to run these JavaScript ports.
 | `game_mouse_flight.js` | `game_mouse_flight.lua`, `.nut` | Mouse-controlled paper plane with a chase camera and a 2D cursor |
 | `scene_many_nodes.js` | `scene_many_nodes.lua`, `.nut` | Animate 10,201 spheres with a spotlight and a 4096x4096 shadow map |
 | `scene_pbr.js` | `scene_pbr.lua`, `.nut` | Display the original PBR material scene at 940x720 |
+| `scene_aaa.js` | `scene_aaa.lua` | Rotate the Toyota engine with AAA; `main({aaa:false})` selects forward |
 
 Build instructions are in [HarfangJs](../languages/hg_quickjs/README.md).
 Run directly from `tutorials`, using the same `resources_compiled` directory as
@@ -34,6 +35,7 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe game_mouse_flight.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_many_nodes.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_pbr.js
+../../install/js_bullet/hgjs/hgjs.exe scene_aaa.js
 Pop-Location
 ```
 
@@ -45,7 +47,10 @@ Move the mouse to steer in `game_mouse_flight.js`. The scene tutorials use the
 original playground, paper plane, PBR materials, lighting probe and pipeline
 shaders. `scene_many_nodes.js` preserves the Lua
 grid size and animation phase, accounting for JavaScript's zero-based arrays.
-The three scene ports also keep the Lua window sizes and MSAA settings.
+The scene ports also keep the Lua window sizes and MSAA settings.
+`scene_aaa.js` uses real AAA on native. Its separate Web experiment uses explicit
+AAA and animation stubs with forward rendering; see the
+[port specification](../specifications/SPECS_HARFANGJS_WEB_NATIVE_SCENE_AAA.md).
 
 Shader binaries and the selected renderer must match. The comparison harness
 explicitly compiles with `-api GL` and passes `renderer: hg.RT_OpenGL` to the

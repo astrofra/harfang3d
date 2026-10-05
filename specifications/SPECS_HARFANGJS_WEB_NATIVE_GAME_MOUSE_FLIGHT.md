@@ -53,9 +53,18 @@ input, not a separately maintained Web asset tree.
 
 `harfangjs/tools/native/assetc_web.cpp` now has a `web-native-scene/1` profile in
 addition to the Many Nodes program profile. Its manifest contains logical IDs,
-dependencies, byte sizes and SHA-256 hashes. Asset objects are content-addressed;
-the manifest is published after conversion and validation. Failed compilation
-preserves the previous manifest.
+dependencies, byte sizes and SHA-256 hashes. Compiled assets preserve their
+original relative paths and filenames, including extensions. For example,
+`playground/Plane.geo` and `playground/grid_baseColor.png` retain those names;
+their Web encodings are described by the manifest. Generated probe maps retain
+the native logical `.hdr.irradiance` / `.hdr.radiance` names. Hashes are metadata
+only, not filesystem names; there is no hashed `objects/` directory.
+
+After conversion and validation, a complete staged tree replaces the compiler's
+marked output directory. Failed compilation preserves the previous assets and
+manifest. Successful publication and packaging remove obsolete generated files.
+Browser preload bypasses the HTTP cache; restarting or reloading the demo after
+a build picks up the changed bytes at their original paths.
 
 The implementation links CMFT statically and does not launch an external image
 converter. A private build copy fixes CMFT's uninitialized memory-reader cursor,
@@ -92,10 +101,10 @@ Validated on Chrome 154, Windows x64, NVIDIA RTX 4060 through ANGLE D3D11:
 | Shared API fixture | Pass |
 | Capture at frame 4 | Mean RGB error 0.0073 / 255 |
 | Capture at frame 60 | Mean RGB error 0.2807 / 255; 0.172% pixels exceed 16 in any channel |
-| Native compiler checks | 9 pass |
+| Native compiler checks | 11 pass, including original filenames and recompilation at stable paths |
 | Browser lifecycle/input/integrity checks | 8 pass |
 | Final tracked GPU allocations | Zero, including line buffers/programs |
-| Many Nodes regression | Native contract, image comparison, 11 compiler checks and 10 lifecycle checks pass |
+| Many Nodes regression | Native contract, image comparison, 13 compiler checks and 10 lifecycle checks pass |
 | Existing W0/W1/W2 regression | 66 browser cases and 10 writer tests pass |
 
 Image acceptance uses a mean RGB error below 2/255 and fewer than 3% of pixels

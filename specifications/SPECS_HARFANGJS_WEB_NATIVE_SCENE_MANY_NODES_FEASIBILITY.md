@@ -652,8 +652,11 @@ other material variants and unsupported shadow configurations fail explicitly.
 as an independent native executable. The validated Windows x64 binary has a static
 MSVC runtime and embedded adapters, with no HARFANG DLL/Python/shaderc runtime
 dependency. It consumes the same six source dependencies as native assetc, checks
-reviewed source hashes, and emits content-addressed forward/depth program data.
-The browser checks lengths and SHA-256 before starting the application.
+reviewed source hashes, and emits forward/depth program data at the original
+`core/shader/default.hps` path. Hashes remain in the manifest for integrity;
+compiled filenames and folders retain their original names for debugging.
+The browser checks lengths and SHA-256 before starting the application and
+bypasses its HTTP cache when preloading rebuilt assets.
 
 This compiler is deliberately the program slice: changed shader sources require
 an adapter review; arbitrary shaders, scenes, file meshes, textures, HDR probes
@@ -675,7 +678,7 @@ installed native HG JS executable using bgfx OpenGL. Both captures use frame 4,
 | Mean absolute RGB error | 0.7524 / 255, below the threshold of 2 |
 | Pixels with any channel error above 16 | 1.672%, below the threshold of 3% |
 | 60-frame CPU draw measurement | Median 20.30 ms; P95 32.40 ms on this run |
-| Compiler validation | 11 scenarios pass, including hashes, unicode paths, overlap protection, missing/changed content and previous-output preservation |
+| Compiler validation | 13 scenarios pass, including original paths, hashes, unicode paths, overlap protection, missing/changed content, previous-output preservation and obsolete-output cleanup |
 | Browser integration | Shader startup failure, material rebatching, limits, resize, pause/resume, restart, Escape, paused stop, corrupt preload and context loss pass |
 | Existing regression checks | 66 browser cases and 10 prototype asset-writer tests pass |
 

@@ -8,11 +8,20 @@ validated. The historical Python/C++ prototype is described separately in
 [harfangjs static assets](../../harfangjs/docs/static-assets.md).
 
 Standalone native compiler slices now support the
-[Many Nodes](SPECS_HARFANGJS_WEB_NATIVE_SCENE_MANY_NODES_FEASIBILITY.md) and
-[Mouse Flight](SPECS_HARFANGJS_WEB_NATIVE_GAME_MOUSE_FLIGHT.md) experiments on
+[Many Nodes](SPECS_HARFANGJS_WEB_NATIVE_SCENE_MANY_NODES_FEASIBILITY.md),
+[Mouse Flight](SPECS_HARFANGJS_WEB_NATIVE_GAME_MOUSE_FLIGHT.md) and
+[Engine Scene](SPECS_HARFANGJS_WEB_NATIVE_SCENE_AAA.md) experiments on
 Windows x64, including original scene/geometry inputs, textures and CPU HDR probe
 generation. The full feature set and six-platform distribution specified below
 remain acceptance targets.
+
+The Engine Scene slice adds tangent frames, normal/ORM maps, recursive scene
+dependencies and zero-parallax environment probes. `--animation-stubs` explicitly
+retains animation tracks without playback; `--max-texture-size N` optionally
+resizes PNGs before generating mipmaps. Source filenames and source data remain
+unchanged. Native BC3 metadata is reported and represented as portable RGBA8 in
+the compiled Web output. These options and adaptations are documented in the
+Engine Scene specification; they do not constrain native HARFANG.
 
 This contract clarifies and supersedes the earlier single-executable
 `assetc --target web` proposal in the [feasibility study](SPECS_HYBRID_CPP_JS_WEBGL_FEASIBILITY.md).
@@ -128,6 +137,20 @@ workflow; users do not have to enumerate every scene with prototype-only
 `--scene`, `--forward-scene` or `--bridge` arguments. Unsupported switches and
 required content features fail explicitly. Success returns zero; compilation
 failure returns nonzero and identifies the input and failing dependency.
+
+### Compiled filenames
+
+Preserve the source directory structure and original filenames, including
+extensions, in compiled Web output. This makes the output directly traceable to
+its source while debugging. For example, `playground/Plane.geo` remains at that
+relative path. Derived assets use readable native logical names, such as
+`core/pbr/probe.hdr.irradiance` and `.radiance`.
+
+The manifest records the Web payload encoding, dependencies, byte size and
+SHA-256. Hashes provide integrity and incremental-build metadata; they must not
+replace asset filenames with GUIDs or content hashes. Successful rebuilds update
+the existing asset paths and remove obsolete generated output. Browser preload
+must fetch current bytes at these stable paths when an application is restarted.
 
 ## 5. Required Content
 
