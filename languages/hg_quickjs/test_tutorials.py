@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from prepare_tutorials import CONSOLE_TUTORIALS, PHYSICS_TUTORIALS
+from prepare_tutorials import NON_RENDER_TUTORIALS, PHYSICS_TUTORIALS
 
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIALS = (
@@ -17,6 +17,8 @@ TUTORIALS = (
     'model_builder', 'physics_manual_setup',
     'imgui_mouse_capture', 'render_resize_to_window', 'input_list_devices',
     'physics_overrides_matrix', 'scene_spot_shadow_clip',
+    'scene_dof', 'physics_kapla', 'input_read_gamepad',
+    'audio_play_sound_stereo', 'filesystem_recursive_directory_listing',
 )
 
 
@@ -31,6 +33,7 @@ def main():
     parser.add_argument('--renderer', choices=['default', 'GL'], default='default')
     parser.add_argument('--frames', type=int, default=120)
     parser.add_argument('--skip-physics', action='store_true', help='For builds without Bullet')
+    parser.add_argument('--skip-audio', action='store_true', help='For machines without an audio device')
     parser.add_argument('--only', choices=TUTORIALS, nargs='+', help='Run only these tutorials')
     args = parser.parse_args()
     if args.frames < 6:
@@ -40,7 +43,9 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     selected = args.only or TUTORIALS
-    cases = [(name, {}) for name in selected if not (args.skip_physics and name in PHYSICS_TUTORIALS)]
+    cases = [(name, {}) for name in selected
+             if not (args.skip_physics and name in PHYSICS_TUTORIALS)
+             and not (args.skip_audio and name == 'audio_play_sound_stereo')]
     if not args.skip_physics and 'physics_impulse' in selected:
         cases.append(('physics_impulse', {'useForce': False}))
 
@@ -53,13 +58,15 @@ def main():
                 capture = Path(capture_dir) / 'frame'
                 options = dict(hidden=True, frameLimit=args.frames, capturePath=capture.as_posix(),
                                captureFrame=args.frames - 3, **extra)
+                if name == 'audio_play_sound_stereo':
+                    options['volume'] = 0  # Exercise native playback silently.
                 module = (args.tutorials.resolve() / (name + '.js')).as_posix()
                 screenshot_check = (
                     "  const picture = new hg.Picture();\n"
                     f"  if (!hg.LoadPicture(picture, {json.dumps(capture.as_posix() + '.tga')}) ||\n"
                     f"      !hg.SavePNG(picture, {json.dumps((output / (label + '.png')).as_posix())}))\n"
                     "    throw Error('Missing tutorial capture');\n"
-                ) if name not in CONSOLE_TUTORIALS else ''
+                ) if name not in NON_RENDER_TUTORIALS else ''
                 entry.write_text(
                     "import * as hg from 'harfang';\n"
                     f"import {{main as run}} from {json.dumps(module)};\n"

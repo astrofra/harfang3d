@@ -15,15 +15,18 @@ TUTORIALS = (
     'scene_draw_to_texture', 'scene_instances',
     'draw_text_over_models', 'imgui_edit', 'scene_light_priority', 'model_builder',
     'imgui_mouse_capture', 'render_resize_to_window', 'scene_spot_shadow_clip',
+    'scene_dof',
 )
-CONSOLE_TUTORIALS = ('scene_lua_script', 'input_list_devices')
+CONSOLE_TUTORIALS = ('scene_lua_script', 'input_list_devices', 'filesystem_recursive_directory_listing')
+# These examples drive input/audio without a renderer or screenshot.
+NON_RENDER_TUTORIALS = CONSOLE_TUTORIALS + ('input_read_gamepad', 'audio_play_sound_stereo')
 # Staged as well, but kept separate for validators using a build without Bullet.
-PHYSICS_TUTORIALS = ('physics_impulse', 'physics_manual_setup', 'physics_overrides_matrix')
+PHYSICS_TUTORIALS = ('physics_impulse', 'physics_manual_setup', 'physics_overrides_matrix', 'physics_kapla')
 
 
 def stage_tutorials(source):
     source.mkdir(parents=True, exist_ok=True)
-    for name in TUTORIALS + PHYSICS_TUTORIALS + CONSOLE_TUTORIALS:
+    for name in TUTORIALS + PHYSICS_TUTORIALS + NON_RENDER_TUTORIALS:
         shutil.copy2(ROOT / 'tutorials' / (name + '.js'), source / (name + '.js'))
     (source / 'js').mkdir(exist_ok=True)
     shutil.copy2(ROOT / 'tutorials/js/window.js', source / 'js/window.js')
@@ -37,17 +40,12 @@ def stage_tutorials(source):
 
     # Scene tutorials share the original Lua models, materials and lighting probe.
     resources = ROOT / 'tutorials/resources'
-    for name in ['playground', 'paper_plane', 'materials', 'biped']:
+    for name in ['playground', 'paper_plane', 'materials', 'biped', 'car_engine', 'primitives', 'cyclo']:
         shutil.copytree(resources / name, source / name, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('*.editor', 'fbx_importer_cfg.txt'))
 
-    (source / 'core/shader').mkdir(parents=True, exist_ok=True)
-    for pattern in ['default*', 'pbr*', 'font_*', 'imgui_*', 'forward_pipeline.sh', 'bgfx_shader.sh']:
-        for path in (resources / 'core/shader').glob(pattern):
-            shutil.copy2(path, source / 'core/shader' / path.name)
-
     (source / 'core/pbr').mkdir(parents=True, exist_ok=True)
-    for name in ['brdf.dds', 'probe.hdr', 'probe.hdr.meta']:
+    for name in ['brdf.dds', 'probe.hdr', 'probe.hdr.meta', 'blue_sky.hdr', 'blue_sky.hdr.meta']:
         shutil.copy2(resources / 'core/pbr' / name, source / 'core/pbr' / name)
 
     (source / 'font').mkdir(exist_ok=True)
@@ -58,6 +56,13 @@ def stage_tutorials(source):
 
     (source / 'probe_scene').mkdir(exist_ok=True)
     shutil.copy2(resources / 'probe_scene/pbr.scn', source / 'probe_scene/pbr.scn')
+
+    # AAA needs the complete post-processing shader set and noise textures.
+    shutil.copytree(resources / 'core/shader', source / 'core/shader', dirs_exist_ok=True)
+    shutil.copytree(resources / 'core/noise', source / 'core/noise', dirs_exist_ok=True)
+    (source / 'sounds').mkdir(exist_ok=True)
+    for name in ['metro_announce.wav', 'metro_announce_license.txt']:
+        shutil.copy2(resources / 'sounds' / name, source / 'sounds' / name)
 
 
 def main():

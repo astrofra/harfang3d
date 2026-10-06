@@ -45,6 +45,11 @@ not required to run these JavaScript ports.
 | `input_list_devices.js` | `input_list_devices.lua`, `.nut` | Print native mouse, keyboard and gamepad device names without a window |
 | `physics_overrides_matrix.js` | `physics_overrides_matrix.lua`, `.nut` | Inspect transforms versus physics matrices, edit positions and remove/recreate a rigid body |
 | `scene_spot_shadow_clip.js` | `scene_spot_shadow_clip.lua`, `.nut` | Animate a spot light's shadow near plane and display the near/far values |
+| `scene_dof.js` | `scene_dof.lua` | Rotate the Toyota engine with AAA and smoothly changing depth of field |
+| `physics_kapla.js` | `physics_kapla.lua`, `.nut` | Build two Bullet towers; Space fires a sphere from the FPS camera |
+| `input_read_gamepad.js` | `input_read_gamepad.lua`, `.nut` | Report connections, face buttons and left-stick axes |
+| `audio_play_sound_stereo.js` | `audio_play_sound_stereo.lua`, `.nut` | Loop a mono WAV with animated stereo panning |
+| `filesystem_recursive_directory_listing.js` | `filesystem_recursive_directory_listing.lua`, `.nut` | Recursively list directory entries and their types |
 
 Build instructions are in [HarfangJs](../languages/hg_quickjs/README.md).
 Run directly from `tutorials`, using the same `resources_compiled` directory as
@@ -76,6 +81,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe input_list_devices.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_overrides_matrix.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_spot_shadow_clip.js
+../../install/js_bullet/hgjs/hgjs.exe scene_dof.js
+../../install/js_bullet/hgjs/hgjs.exe physics_kapla.js
+../../install/js_bullet/hgjs/hgjs.exe input_read_gamepad.js
+../../install/js_bullet/hgjs/hgjs.exe audio_play_sound_stereo.js
+../../install/js_bullet/hgjs/hgjs.exe filesystem_recursive_directory_listing.js
 Pop-Location
 ```
 
@@ -160,6 +170,23 @@ actual physics shape. `scene_spot_shadow_clip.js` animates the shadow near plane
 between 0.1 and 7.5 while keeping the far plane at 18; close objects progressively
 stop casting shadows, and an overlay displays the current distances.
 
+`scene_dof.js` keeps the Lua engine scene, attribution and AAA settings. Every
+250 frames it selects new focus distance and length targets, interpolating
+toward them each frame. `physics_kapla.js` builds two twelve-level towers with
+Bullet. Use the FPS camera to move, hold Shift to move faster, and press Space
+to launch a sphere into the towers.
+
+`input_read_gamepad.js` opens a small input window without initializing a renderer.
+It reports connection changes, A/B/X/Y presses and left-stick axes outside a 0.1
+dead zone. Close the window or press Escape to exit. Without a connected gamepad,
+the loop remains active until stopped.
+`audio_play_sound_stereo.js` loops the original mono WAV while moving its stereo
+pan between left and right. It runs without a window; Escape stops playback.
+The sound's original license is included when preparing isolated assets.
+`filesystem_recursive_directory_listing.js` prints each entry's name and type,
+then exits. Its default directory is `resources_compiled`; an importing script
+can select another directory with `main({path: 'resources'})`.
+
 Shader binaries and the selected renderer must match. The comparison harness
 explicitly compiles with `-api GL` and passes `renderer: hg.RT_OpenGL` to the
 tutorial's `main()`; normal launches do not force OpenGL.
@@ -195,7 +222,7 @@ Pop-Location
 Use `--api GL` only when testing with `renderer: hg.RT_OpenGL`; compiled shader
 binaries must always match the selected renderer.
 
-Validate the twenty additional tutorials directly against the existing Lua
+Validate the twenty-five additional tutorials directly against the existing Lua
 compiled assets (from the workspace root):
 
 ```powershell
@@ -203,16 +230,18 @@ python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/h
 ```
 
 This runs each graphical `main()` for 120 frames in a hidden window, including
-both force/impulse modes, checks the Lua VM example's assertions and lists
-input devices in the console,
+both force/impulse modes, checks the Lua VM example's assertions, lists
+input devices and directory entries, and runs the gamepad and audio loops,
 and saves logs and PNG captures under
 `build/hgjs-tutorials/additional-validation`. Use `--skip-physics` for a build
-without Bullet, or `--renderer GL` when using GL-compiled assets. To check the
+without Bullet, `--skip-audio` on machines without an audio device, or
+`--renderer GL` when using GL-compiled assets. Audio is tested at zero volume;
+gamepad button and axis interaction requires a connected controller. To check the
 isolated fixtures, add `--tutorials build/hgjs-tutorials/source
---cwd build/hgjs-tutorials`. The preparation helper stages the physics example
+--cwd build/hgjs-tutorials`. The preparation helper stages the physics examples
 separately from its renderer-only `TUTORIALS` list so existing validators can
-still run with physics disabled. Console examples are staged through the
-separate `CONSOLE_TUTORIALS` list and do not require a screenshot.
+still run with physics disabled. Console, gamepad and audio examples are staged
+through `NON_RENDER_TUTORIALS` and do not require a screenshot.
 Captures are requested three frames before the end of each run so animations
 and physics have time to progress. Direct callers can choose `captureFrame`;
 the shared window helper keeps frame 3 as its default for other validators.
@@ -230,8 +259,14 @@ python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/h
 install/js_bullet/hgjs/hgjs.exe harfang3d/languages/hg_quickjs/test_model_builder.js
 ```
 
-To validate only the latest five ports:
+To validate only the fourth batch of five ports:
 
 ```powershell
 python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only imgui_mouse_capture render_resize_to_window input_list_devices physics_overrides_matrix scene_spot_shadow_clip
+```
+
+To validate only the latest five ports:
+
+```powershell
+python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only scene_dof physics_kapla input_read_gamepad audio_play_sound_stereo filesystem_recursive_directory_listing
 ```

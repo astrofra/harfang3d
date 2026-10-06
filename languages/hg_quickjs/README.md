@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Twenty-seven native tutorial ports are
+rendering, file access and Lua scene systems. Thirty-two native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -102,6 +102,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe input_list_devices.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_overrides_matrix.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_spot_shadow_clip.js
+../../install/js_bullet/hgjs/hgjs.exe scene_dof.js
+../../install/js_bullet/hgjs/hgjs.exe physics_kapla.js
+../../install/js_bullet/hgjs/hgjs.exe input_read_gamepad.js
+../../install/js_bullet/hgjs/hgjs.exe audio_play_sound_stereo.js
+../../install/js_bullet/hgjs/hgjs.exe filesystem_recursive_directory_listing.js
 Pop-Location
 ```
 
@@ -115,14 +120,21 @@ multiple viewports, ModelBuilder, material updates, animated scene instances,
 render-to-texture, Lua VM communication, text overlays, ImGui editing, light
 priority, manual rigid bodies, an animated procedural grid, ImGui mouse capture,
 window resizing, input device enumeration, physics/transform interaction and
-spot shadow clipping. Validate these twenty additions with
+spot shadow clipping, AAA depth of field, Kapla towers, gamepad input, stereo
+panning and recursive directory listing. Validate these twenty-five additions with
 `python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe`
 from the workspace root; this also checks both physics modes and saves captures.
 Use `--only` followed by tutorial names to select a subset. `scene_lua_script.js`
 runs without assets or a window and checks its typed value transfers directly.
 `physics_manual_setup.js` and `physics_overrides_matrix.js` also require Bullet;
-`--skip-physics` excludes all three physics tutorials. `input_list_devices.js`
+`physics_kapla.js` also requires Bullet; `--skip-physics` excludes all four
+physics tutorials. `input_list_devices.js`
 prints registered input devices without assets or a window.
+`input_read_gamepad.js` opens an input window and reports connected gamepad events.
+`audio_play_sound_stereo.js` loops the original WAV with animated panning; Escape
+stops playback. The validator mutes it with `volume: 0`; use `--skip-audio` on
+machines without an audio device. The recursive listing defaults to
+`resources_compiled`; callers can override it with `main({path: 'resources'})`.
 `test_model_builder.js` checks grid topology, winding and
 normals through the native binding without initializing a renderer.
 
