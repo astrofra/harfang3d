@@ -11,20 +11,23 @@ TUTORIALS = (
     'game_mouse_flight', 'scene_many_nodes', 'scene_pbr',
     'draw_lines_starfield', 'draw_text', 'imgui_basic',
     'scene_draw_to_multiple_viewports',
+    'draw_and_create_model_no_pipeline', 'material_update_value',
+    'scene_draw_to_texture', 'scene_instances',
 )
+CONSOLE_TUTORIALS = ('scene_lua_script',)
 # Staged as well, but kept separate for validators using a build without Bullet.
 PHYSICS_TUTORIALS = ('physics_impulse',)
 
 
 def stage_tutorials(source):
     source.mkdir(parents=True, exist_ok=True)
-    for name in TUTORIALS + PHYSICS_TUTORIALS:
+    for name in TUTORIALS + PHYSICS_TUTORIALS + CONSOLE_TUTORIALS:
         shutil.copy2(ROOT / 'tutorials' / (name + '.js'), source / (name + '.js'))
     (source / 'js').mkdir(exist_ok=True)
     shutil.copy2(ROOT / 'tutorials/js/window.js', source / 'js/window.js')
     (source / 'shaders').mkdir(exist_ok=True)
     shaders = ROOT / 'tutorials/resources/shaders'
-    for pattern in ['white_*', 'mdl_*', 'pos_rgb_*', 'bgfx_shader.sh']:
+    for pattern in ['white_*', 'mdl_*', 'pos_rgb_*', 'texture_*', 'bgfx_shader.sh']:
         for path in shaders.glob(pattern):
             shutil.copy2(path, source / 'shaders' / path.name)
     (source / 'pictures').mkdir(exist_ok=True)
@@ -32,7 +35,7 @@ def stage_tutorials(source):
 
     # Scene tutorials share the original Lua models, materials and lighting probe.
     resources = ROOT / 'tutorials/resources'
-    for name in ['playground', 'paper_plane', 'materials']:
+    for name in ['playground', 'paper_plane', 'materials', 'biped']:
         shutil.copytree(resources / name, source / name, dirs_exist_ok=True,
                         ignore=shutil.ignore_patterns('*.editor', 'fbx_importer_cfg.txt'))
 
@@ -47,6 +50,9 @@ def stage_tutorials(source):
 
     (source / 'font').mkdir(exist_ok=True)
     shutil.copy2(resources / 'font/default.ttf', source / 'font/default.ttf')
+
+    (source / 'textures').mkdir(exist_ok=True)
+    shutil.copy2(resources / 'textures/squares.png', source / 'textures/squares.png')
 
 
 def main():

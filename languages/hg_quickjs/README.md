@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Twelve native tutorial ports are
+rendering, file access and Lua scene systems. Seventeen native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -87,6 +87,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe imgui_basic.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_multiple_viewports.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_impulse.js
+../../install/js_bullet/hgjs/hgjs.exe draw_and_create_model_no_pipeline.js
+../../install/js_bullet/hgjs/hgjs.exe material_update_value.js
+../../install/js_bullet/hgjs/hgjs.exe scene_instances.js
+../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_texture.js
+../../install/js_bullet/hgjs/hgjs.exe scene_lua_script.js
 Pop-Location
 ```
 
@@ -95,10 +100,13 @@ the same native assets and compiler as Lua; it is not a prerequisite for running
 the tutorials.
 
 `physics_impulse.js` needs the Bullet profile and uses Space to switch between
-force and impulse. The other four new examples cover star trails, text, ImGui,
-and rendering a scene into four viewports. Validate these five additions with
+force and impulse. The additional examples cover star trails, text, ImGui,
+multiple viewports, ModelBuilder, material updates, animated scene instances,
+render-to-texture and Lua VM communication. Validate these ten additions with
 `python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe`
 from the workspace root; this also checks both physics modes and saves captures.
+Use `--only` followed by tutorial names to select a subset. `scene_lua_script.js`
+runs without assets or a window and checks its typed value transfers directly.
 
 ## Host and packaging
 

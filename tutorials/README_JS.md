@@ -30,6 +30,11 @@ not required to run these JavaScript ports.
 | `imgui_basic.js` | `imgui_basic.lua`, `.nut` | ImGui frame lifecycle, a draggable window and resize handling |
 | `scene_draw_to_multiple_viewports.js` | `scene_draw_to_multiple_viewports.lua`, `.nut` | Four views of one animated scene, sharing shadow-map preparation |
 | `physics_impulse.js` | `physics_impulse.lua`, `.nut` | Bullet cube suspension using force or impulse; Space switches mode |
+| `draw_and_create_model_no_pipeline.js` | `draw_and_create_model_no_pipeline.lua`, `.nut` | Build a cube vertex by vertex with ModelBuilder and draw it without a pipeline |
+| `material_update_value.js` | `material_update_value.lua`, `.nut` | Toggle a material texture every second and update the pipeline shader variant |
+| `scene_instances.js` | `scene_instances.lua`, `.nut` | Twenty animated biped instances; S spawns an actor, D removes one |
+| `scene_draw_to_texture.js` | `scene_draw_to_texture.lua`, `.nut` | Render a PBR scene to a 512x512 texture displayed on a rotating cube |
+| `scene_lua_script.js` | `scene_lua_script.lua`, `.nut` | Exchange values and call functions in a SceneLuaVM, without a window |
 
 Build instructions are in [HarfangJs](../languages/hg_quickjs/README.md).
 Run directly from `tutorials`, using the same `resources_compiled` directory as
@@ -46,6 +51,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe imgui_basic.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_multiple_viewports.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_impulse.js
+../../install/js_bullet/hgjs/hgjs.exe draw_and_create_model_no_pipeline.js
+../../install/js_bullet/hgjs/hgjs.exe material_update_value.js
+../../install/js_bullet/hgjs/hgjs.exe scene_instances.js
+../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_texture.js
+../../install/js_bullet/hgjs/hgjs.exe scene_lua_script.js
 Pop-Location
 ```
 
@@ -76,6 +86,24 @@ viewport's preparation and submission. Each view uses its own aspect ratio.
 the active mode when Space is pressed. The exported `main({useForce:false})`
 starts in impulse mode for automated checks. Its fixed physics step is 1/60 s;
 frame deltas are capped at 50 ms to limit catch-up after a pause.
+
+The next five ports retain the original tutorials' variable names, section
+order and comments. `draw_and_create_model_no_pipeline.js` spells out the six
+cube faces, including positions, normals, UVs and triangle indices.
+`material_update_value.js` uses the original `textures/squares.png` and refreshes
+the shader variant whenever the texture is attached or removed.
+
+`scene_instances.js` starts twenty independent instances of `biped/biped.scn`
+in the playground. Each actor switches between idle, walk and run, with its own
+animation and movement. Press S to add an actor and D to remove the oldest;
+removal also stops its animation and destroys the instance content.
+`scene_draw_to_texture.js` renders the materials scene into a 4x MSAA framebuffer
+and samples its color texture using `shaders/texture` on a rotating cube.
+
+`scene_lua_script.js` runs in the console without assets or a renderer. It reads
+and writes a Lua variable, passes a native Script object to Lua, checks a missing
+function, and retrieves a string result. `Pack`/`Unpack` transfer the values;
+Lua integers return as JavaScript BigInt and native result lists use `at(0)`.
 
 Shader binaries and the selected renderer must match. The comparison harness
 explicitly compiles with `-api GL` and passes `renderer: hg.RT_OpenGL` to the
@@ -112,18 +140,26 @@ Pop-Location
 Use `--api GL` only when testing with `renderer: hg.RT_OpenGL`; compiled shader
 binaries must always match the selected renderer.
 
-Validate the five additional tutorials directly against the existing Lua
+Validate the ten additional tutorials directly against the existing Lua
 compiled assets (from the workspace root):
 
 ```powershell
 python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe
 ```
 
-This runs each exported `main()` for 120 frames in a hidden window, including
-both physics modes, and saves logs and PNG captures under
+This runs each graphical `main()` for 120 frames in a hidden window, including
+both physics modes, checks the Lua VM example's assertions in the console,
+and saves logs and PNG captures under
 `build/hgjs-tutorials/additional-validation`. Use `--skip-physics` for a build
 without Bullet, or `--renderer GL` when using GL-compiled assets. To check the
 isolated fixtures, add `--tutorials build/hgjs-tutorials/source
 --cwd build/hgjs-tutorials`. The preparation helper stages the physics example
 separately from its renderer-only `TUTORIALS` list so existing validators can
-still run with physics disabled.
+still run with physics disabled. Console examples are staged through the
+separate `CONSOLE_TUTORIALS` list and do not require a screenshot.
+
+To validate only the latest five ports:
+
+```powershell
+python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only draw_and_create_model_no_pipeline material_update_value scene_instances scene_draw_to_texture scene_lua_script
+```
