@@ -13,10 +13,11 @@ TUTORIALS = (
     'scene_draw_to_multiple_viewports',
     'draw_and_create_model_no_pipeline', 'material_update_value',
     'scene_draw_to_texture', 'scene_instances',
+    'draw_text_over_models', 'imgui_edit', 'scene_light_priority', 'model_builder',
 )
 CONSOLE_TUTORIALS = ('scene_lua_script',)
 # Staged as well, but kept separate for validators using a build without Bullet.
-PHYSICS_TUTORIALS = ('physics_impulse',)
+PHYSICS_TUTORIALS = ('physics_impulse', 'physics_manual_setup')
 
 
 def stage_tutorials(source):
@@ -53,6 +54,9 @@ def stage_tutorials(source):
 
     (source / 'textures').mkdir(exist_ok=True)
     shutil.copy2(resources / 'textures/squares.png', source / 'textures/squares.png')
+
+    (source / 'probe_scene').mkdir(exist_ok=True)
+    shutil.copy2(resources / 'probe_scene/pbr.scn', source / 'probe_scene/pbr.scn')
 
 
 def main():

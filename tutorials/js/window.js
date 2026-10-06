@@ -8,6 +8,7 @@ export async function runWindow(title, create, {
   hidden = false,
   frameLimit = Infinity,
   capturePath,
+  captureFrame = 3,
   renderer,
   width = 1280,
   height = 720,
@@ -59,7 +60,7 @@ export async function runWindow(title, create, {
 
       app.draw(state.dtNs, width, height);
 
-      if (capturePath && frame === 3) {
+      if (capturePath && frame === captureFrame) {
         hg.RequestScreenShot(hg.InvalidFrameBufferHandle, capturePath);
       }
 

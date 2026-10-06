@@ -5,12 +5,16 @@ from pathlib import Path
 import subprocess
 import tempfile
 
+from prepare_tutorials import PHYSICS_TUTORIALS
+
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIALS = (
     'draw_lines_starfield', 'draw_text', 'imgui_basic',
     'scene_draw_to_multiple_viewports', 'physics_impulse',
     'draw_and_create_model_no_pipeline', 'material_update_value',
     'scene_draw_to_texture', 'scene_instances', 'scene_lua_script',
+    'draw_text_over_models', 'imgui_edit', 'scene_light_priority',
+    'model_builder', 'physics_manual_setup',
 )
 
 
@@ -34,7 +38,7 @@ def main():
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     selected = args.only or TUTORIALS
-    cases = [(name, {}) for name in selected if not (args.skip_physics and name == 'physics_impulse')]
+    cases = [(name, {}) for name in selected if not (args.skip_physics and name in PHYSICS_TUTORIALS)]
     if not args.skip_physics and 'physics_impulse' in selected:
         cases.append(('physics_impulse', {'useForce': False}))
 
@@ -45,7 +49,8 @@ def main():
             # A fresh directory prevents old captures from satisfying the check.
             with tempfile.TemporaryDirectory(prefix=label + '-', dir=output) as capture_dir:
                 capture = Path(capture_dir) / 'frame'
-                options = dict(hidden=True, frameLimit=args.frames, capturePath=capture.as_posix(), **extra)
+                options = dict(hidden=True, frameLimit=args.frames, capturePath=capture.as_posix(),
+                               captureFrame=args.frames - 3, **extra)
                 module = (args.tutorials.resolve() / (name + '.js')).as_posix()
                 screenshot_check = (
                     "  const picture = new hg.Picture();\n"

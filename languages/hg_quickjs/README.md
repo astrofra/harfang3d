@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Seventeen native tutorial ports are
+rendering, file access and Lua scene systems. Twenty-two native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -92,6 +92,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe scene_instances.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_texture.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_lua_script.js
+../../install/js_bullet/hgjs/hgjs.exe draw_text_over_models.js
+../../install/js_bullet/hgjs/hgjs.exe imgui_edit.js
+../../install/js_bullet/hgjs/hgjs.exe scene_light_priority.js
+../../install/js_bullet/hgjs/hgjs.exe physics_manual_setup.js
+../../install/js_bullet/hgjs/hgjs.exe model_builder.js
 Pop-Location
 ```
 
@@ -102,11 +107,16 @@ the tutorials.
 `physics_impulse.js` needs the Bullet profile and uses Space to switch between
 force and impulse. The additional examples cover star trails, text, ImGui,
 multiple viewports, ModelBuilder, material updates, animated scene instances,
-render-to-texture and Lua VM communication. Validate these ten additions with
+render-to-texture, Lua VM communication, text overlays, ImGui editing, light
+priority, manual rigid bodies and an animated procedural grid. Validate these
+fifteen additions with
 `python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe`
 from the workspace root; this also checks both physics modes and saves captures.
 Use `--only` followed by tutorial names to select a subset. `scene_lua_script.js`
 runs without assets or a window and checks its typed value transfers directly.
+`physics_manual_setup.js` also requires Bullet; `--skip-physics` excludes both
+physics tutorials. `test_model_builder.js` checks grid topology, winding and
+normals through the native binding without initializing a renderer.
 
 ## Host and packaging
 

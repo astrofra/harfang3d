@@ -35,6 +35,11 @@ not required to run these JavaScript ports.
 | `scene_instances.js` | `scene_instances.lua`, `.nut` | Twenty animated biped instances; S spawns an actor, D removes one |
 | `scene_draw_to_texture.js` | `scene_draw_to_texture.lua`, `.nut` | Render a PBR scene to a 512x512 texture displayed on a rotating cube |
 | `scene_lua_script.js` | `scene_lua_script.lua`, `.nut` | Exchange values and call functions in a SceneLuaVM, without a window |
+| `draw_text_over_models.js` | `draw_text_over_models.lua`, `.nut` | Draw centered 2D text over a rotating 3D cube, clearing only the overlay's depth buffer |
+| `imgui_edit.js` | `imgui_edit.lua`, `.nut` | Edit the clear color with presets and a color picker, and change the ImGui output view |
+| `scene_light_priority.js` | `scene_light_priority.lua`, `.nut` | Animate sixteen lights and prioritize those closest to a sphere |
+| `physics_manual_setup.js` | `physics_manual_setup.lua`, `.nut` | Manually attach a dynamic rigid body and a cube collision shape |
+| `model_builder.js` | `model_builder.lua`, `.nut` | Rebuild an animated 40x40 grid, computing triangle indices and vertex normals |
 
 Build instructions are in [HarfangJs](../languages/hg_quickjs/README.md).
 Run directly from `tutorials`, using the same `resources_compiled` directory as
@@ -56,6 +61,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe scene_instances.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_texture.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_lua_script.js
+../../install/js_bullet/hgjs/hgjs.exe draw_text_over_models.js
+../../install/js_bullet/hgjs/hgjs.exe imgui_edit.js
+../../install/js_bullet/hgjs/hgjs.exe scene_light_priority.js
+../../install/js_bullet/hgjs/hgjs.exe physics_manual_setup.js
+../../install/js_bullet/hgjs/hgjs.exe model_builder.js
 Pop-Location
 ```
 
@@ -105,6 +115,24 @@ and writes a Lua variable, passes a native Script object to Lua, checks a missin
 function, and retrieves a string result. `Pack`/`Unpack` transfer the values;
 Lua integers return as JavaScript BigInt and native result lists use `at(0)`.
 
+`draw_text_over_models.js` uses view 0 for the models and view 1 for text; the
+second view preserves the first view's color buffer. `imgui_edit.js` retains the
+original controls and unpacks native multiple returns as JavaScript arrays,
+including the visibility result from `ImGuiBegin` with an open flag.
+
+`scene_light_priority.js` preserves the Lua animation phase and assigns each
+light a priority equal to the negative distance from the sphere. The native
+pipeline selects lights for its available slots. `physics_manual_setup.js`
+requires Bullet and demonstrates the RigidBody and Collision components directly;
+its cube falls onto the static ground using a 1/60 s physics step.
+
+`model_builder.js` uses the original `probe_scene/pbr.scn` lighting environment.
+It builds 1,681 vertices and 3,200 triangles, accumulates area-weighted normals,
+and replaces the model as its wave changes. Grid indices are zero-based in JS.
+The animation accumulates the host's frame delta because `runWindow` does not
+advance the global `TickClock` used by the Lua example. The original helper
+functions, comments and optional rotation example remain visible in the port.
+
 Shader binaries and the selected renderer must match. The comparison harness
 explicitly compiles with `-api GL` and passes `renderer: hg.RT_OpenGL` to the
 tutorial's `main()`; normal launches do not force OpenGL.
@@ -140,7 +168,7 @@ Pop-Location
 Use `--api GL` only when testing with `renderer: hg.RT_OpenGL`; compiled shader
 binaries must always match the selected renderer.
 
-Validate the ten additional tutorials directly against the existing Lua
+Validate the fifteen additional tutorials directly against the existing Lua
 compiled assets (from the workspace root):
 
 ```powershell
@@ -157,9 +185,19 @@ isolated fixtures, add `--tutorials build/hgjs-tutorials/source
 separately from its renderer-only `TUTORIALS` list so existing validators can
 still run with physics disabled. Console examples are staged through the
 separate `CONSOLE_TUTORIALS` list and do not require a screenshot.
+Captures are requested three frames before the end of each run so animations
+and physics have time to progress. Direct callers can choose `captureFrame`;
+the shared window helper keeps frame 3 as its default for other validators.
 
-To validate only the latest five ports:
+To validate only the second batch of five ports:
 
 ```powershell
 python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only draw_and_create_model_no_pipeline material_update_value scene_instances scene_draw_to_texture scene_lua_script
+```
+
+To validate only the latest five ports and the grid's geometric invariants:
+
+```powershell
+python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only draw_text_over_models imgui_edit scene_light_priority physics_manual_setup model_builder
+install/js_bullet/hgjs/hgjs.exe harfang3d/languages/hg_quickjs/test_model_builder.js
 ```
