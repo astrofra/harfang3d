@@ -12,6 +12,7 @@ export async function runWindow(title, create, {
   width = 1280,
   height = 720,
   resetFlags,
+  resizeToWindow = false,
 } = {}) {
   // As in the Lua/Squirrel tutorials, the application chooses its compiled assets.
   hg.AddAssetsFolder('resources_compiled');
@@ -48,6 +49,12 @@ export async function runWindow(title, create, {
       const state = await nextFrame(window);
       if (state.closed || hg.ReadKeyboard().Key(hg.K_Escape)) {
         break;
+      }
+
+      if (resizeToWindow) {
+        const [, newWidth, newHeight] = hg.RenderResetToWindow(window, width, height, resetFlags ?? hg.RF_VSync);
+        width = newWidth;
+        height = newHeight;
       }
 
       app.draw(state.dtNs, width, height);

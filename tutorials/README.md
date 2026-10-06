@@ -1,6 +1,9 @@
 # HARFANG® Tutorials
 
-These **tutorials** demonstrate the usage of the HARFANG API in **Python**, **Lua** and **Squirrel**.
+These **tutorials** demonstrate the usage of the HARFANG API in **Python**, **Lua**, **Squirrel** and **native JavaScript (QuickJS)**.
+
+For the twelve native JavaScript ports, launch commands and validation, see
+[the JavaScript tutorial guide](README_JS.md).
 
 To run the tutorials:
 

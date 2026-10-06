@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Six native tutorial ports are
+rendering, file access and Lua scene systems. Twelve native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -81,12 +81,24 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe game_mouse_flight.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_many_nodes.js
 ../../install/js_bullet/hgjs/hgjs.exe scene_pbr.js
+../../install/js_bullet/hgjs/hgjs.exe scene_aaa.js
+../../install/js_bullet/hgjs/hgjs.exe draw_lines_starfield.js
+../../install/js_bullet/hgjs/hgjs.exe draw_text.js
+../../install/js_bullet/hgjs/hgjs.exe imgui_basic.js
+../../install/js_bullet/hgjs/hgjs.exe scene_draw_to_multiple_viewports.js
+../../install/js_bullet/hgjs/hgjs.exe physics_impulse.js
 Pop-Location
 ```
 
 `prepare_tutorials.py` is an optional helper for isolated test fixtures. It uses
 the same native assets and compiler as Lua; it is not a prerequisite for running
 the tutorials.
+
+`physics_impulse.js` needs the Bullet profile and uses Space to switch between
+force and impulse. The other four new examples cover star trails, text, ImGui,
+and rendering a scene into four viewports. Validate these five additions with
+`python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe`
+from the workspace root; this also checks both physics modes and saves captures.
 
 ## Host and packaging
 
@@ -175,6 +187,7 @@ From `harfangjs`:
 
 This checks 19 shared math/scene contract groups against Chromium, Lua scene
 components driven from JavaScript, module/Promise errors, window handling, the
-six tutorial ports, and native room/lighting/PBR rendering. The portable web
+renderer-only tutorials staged by `prepare_tutorials.py`, and native
+room/lighting/PBR rendering. The portable web
 facade, strict portable conversion rules and complete cross-host compatibility
 remain separate work; the native binding exposes the wider HARFANG API.

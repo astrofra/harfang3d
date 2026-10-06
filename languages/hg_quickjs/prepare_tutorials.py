@@ -9,12 +9,16 @@ ROOT = Path(__file__).resolve().parents[2]
 TUTORIALS = (
     'draw_lines', 'draw_model_no_pipeline', 'filesystem_assets',
     'game_mouse_flight', 'scene_many_nodes', 'scene_pbr',
+    'draw_lines_starfield', 'draw_text', 'imgui_basic',
+    'scene_draw_to_multiple_viewports',
 )
+# Staged as well, but kept separate for validators using a build without Bullet.
+PHYSICS_TUTORIALS = ('physics_impulse',)
 
 
 def stage_tutorials(source):
     source.mkdir(parents=True, exist_ok=True)
-    for name in TUTORIALS:
+    for name in TUTORIALS + PHYSICS_TUTORIALS:
         shutil.copy2(ROOT / 'tutorials' / (name + '.js'), source / (name + '.js'))
     (source / 'js').mkdir(exist_ok=True)
     shutil.copy2(ROOT / 'tutorials/js/window.js', source / 'js/window.js')
@@ -33,13 +37,16 @@ def stage_tutorials(source):
                         ignore=shutil.ignore_patterns('*.editor', 'fbx_importer_cfg.txt'))
 
     (source / 'core/shader').mkdir(parents=True, exist_ok=True)
-    for pattern in ['default*', 'pbr*', 'forward_pipeline.sh', 'bgfx_shader.sh']:
+    for pattern in ['default*', 'pbr*', 'font_*', 'imgui_*', 'forward_pipeline.sh', 'bgfx_shader.sh']:
         for path in (resources / 'core/shader').glob(pattern):
             shutil.copy2(path, source / 'core/shader' / path.name)
 
     (source / 'core/pbr').mkdir(parents=True, exist_ok=True)
     for name in ['brdf.dds', 'probe.hdr', 'probe.hdr.meta']:
         shutil.copy2(resources / 'core/pbr' / name, source / 'core/pbr' / name)
+
+    (source / 'font').mkdir(exist_ok=True)
+    shutil.copy2(resources / 'font/default.ttf', source / 'font/default.ttf')
 
 
 def main():
