@@ -9,8 +9,9 @@ validated. The historical Python/C++ prototype is described separately in
 
 Standalone native compiler slices now support the
 [Many Nodes](SPECS_HARFANGJS_WEB_NATIVE_SCENE_MANY_NODES_FEASIBILITY.md),
-[Mouse Flight](SPECS_HARFANGJS_WEB_NATIVE_GAME_MOUSE_FLIGHT.md) and
-[Engine Scene](SPECS_HARFANGJS_WEB_NATIVE_SCENE_AAA.md) experiments on
+[Mouse Flight](SPECS_HARFANGJS_WEB_NATIVE_GAME_MOUSE_FLIGHT.md),
+[Engine Scene](SPECS_HARFANGJS_WEB_NATIVE_SCENE_AAA.md) and
+[PBR Scene](SPECS_HARFANGJS_WEB_NATIVE_SCENE_PBR.md) experiments on
 Windows x64, including original scene/geometry inputs, textures and CPU HDR probe
 generation. The full feature set and six-platform distribution specified below
 remain acceptance targets.
@@ -22,6 +23,14 @@ resizes PNGs before generating mipmaps. Source filenames and source data remain
 unchanged. Native BC3 metadata is reported and represented as portable RGBA8 in
 the compiled Web output. These options and adaptations are documented in the
 Engine Scene specification; they do not constrain native HARFANG.
+
+The PBR Scene slice adds offline JPEG decoding, optional PNG/JPEG resizing with
+authored `max-size` metadata, and opaque/alpha PBR materials. Native BC2/BC5/ETC1
+requests join BC3 as explicitly reported RGBA8 conversions. Original `.jpg` names
+remain, but compiled files contain mipmapped Web texture data, not JPEG images.
+No JPEG decoding is introduced in the browser runtime. The PBR experiment uses
+explicit 256 MiB asset/GPU budgets to retain original texture dimensions; existing
+experiments keep their 128 MiB defaults.
 
 This contract clarifies and supersedes the earlier single-executable
 `assetc --target web` proposal in the [feasibility study](SPECS_HYBRID_CPP_JS_WEBGL_FEASIBILITY.md).
