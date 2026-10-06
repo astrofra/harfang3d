@@ -43,7 +43,7 @@ export async function runWindow(title, create, {
       hg.RenderReset(width, height, resetFlags);
     }
 
-    app = create();
+    app = create(window);
 
     // main loop
     for (let frame = 0; frame < frameLimit; frame++) {

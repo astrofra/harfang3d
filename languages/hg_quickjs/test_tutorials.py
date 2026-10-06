@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from prepare_tutorials import PHYSICS_TUTORIALS
+from prepare_tutorials import CONSOLE_TUTORIALS, PHYSICS_TUTORIALS
 
 ROOT = Path(__file__).resolve().parents[2]
 TUTORIALS = (
@@ -15,6 +15,8 @@ TUTORIALS = (
     'scene_draw_to_texture', 'scene_instances', 'scene_lua_script',
     'draw_text_over_models', 'imgui_edit', 'scene_light_priority',
     'model_builder', 'physics_manual_setup',
+    'imgui_mouse_capture', 'render_resize_to_window', 'input_list_devices',
+    'physics_overrides_matrix', 'scene_spot_shadow_clip',
 )
 
 
@@ -57,7 +59,7 @@ def main():
                     f"  if (!hg.LoadPicture(picture, {json.dumps(capture.as_posix() + '.tga')}) ||\n"
                     f"      !hg.SavePNG(picture, {json.dumps((output / (label + '.png')).as_posix())}))\n"
                     "    throw Error('Missing tutorial capture');\n"
-                ) if name != 'scene_lua_script' else ''
+                ) if name not in CONSOLE_TUTORIALS else ''
                 entry.write_text(
                     "import * as hg from 'harfang';\n"
                     f"import {{main as run}} from {json.dumps(module)};\n"

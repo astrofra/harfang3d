@@ -40,6 +40,11 @@ not required to run these JavaScript ports.
 | `scene_light_priority.js` | `scene_light_priority.lua`, `.nut` | Animate sixteen lights and prioritize those closest to a sphere |
 | `physics_manual_setup.js` | `physics_manual_setup.lua`, `.nut` | Manually attach a dynamic rigid body and a cube collision shape |
 | `model_builder.js` | `model_builder.lua`, `.nut` | Rebuild an animated 40x40 grid, computing triangle indices and vertex normals |
+| `imgui_mouse_capture.js` | `imgui_mouse_capture.lua`, `.nut` | Distinguish ImGui mouse capture from clicks in the scene |
+| `render_resize_to_window.js` | `render_resize_to_window.lua`, `.nut` | Resize the render buffer to the window and report its dimensions |
+| `input_list_devices.js` | `input_list_devices.lua`, `.nut` | Print native mouse, keyboard and gamepad device names without a window |
+| `physics_overrides_matrix.js` | `physics_overrides_matrix.lua`, `.nut` | Inspect transforms versus physics matrices, edit positions and remove/recreate a rigid body |
+| `scene_spot_shadow_clip.js` | `scene_spot_shadow_clip.lua`, `.nut` | Animate a spot light's shadow near plane and display the near/far values |
 
 Build instructions are in [HarfangJs](../languages/hg_quickjs/README.md).
 Run directly from `tutorials`, using the same `resources_compiled` directory as
@@ -66,6 +71,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe scene_light_priority.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_manual_setup.js
 ../../install/js_bullet/hgjs/hgjs.exe model_builder.js
+../../install/js_bullet/hgjs/hgjs.exe imgui_mouse_capture.js
+../../install/js_bullet/hgjs/hgjs.exe render_resize_to_window.js
+../../install/js_bullet/hgjs/hgjs.exe input_list_devices.js
+../../install/js_bullet/hgjs/hgjs.exe physics_overrides_matrix.js
+../../install/js_bullet/hgjs/hgjs.exe scene_spot_shadow_clip.js
 Pop-Location
 ```
 
@@ -133,6 +143,23 @@ The animation accumulates the host's frame delta because `runWindow` does not
 advance the global `TickClock` used by the Lua example. The original helper
 functions, comments and optional rotation example remain visible in the port.
 
+`imgui_mouse_capture.js` keeps the background black while ImGui captures the
+mouse; holding the left button outside the GUI turns it red. The text field
+demonstrates editing without triggering that scene interaction.
+`render_resize_to_window.js` starts at 512x512 and calls `RenderResetToWindow`
+directly, using the window passed to its setup callback by `runWindow`. Resize
+the window to see the viewport adapt and the new dimensions printed.
+
+`input_list_devices.js` prints the registered native device names and exits.
+Gamepad slots may be listed even when no controller is connected; names are not
+a connectivity test. Native string lists are read using `size()` and `at()`.
+`physics_overrides_matrix.js` requires Bullet. Its ImGui controls compare the
+Transform position to the physics-driven world matrix, reset the Transform,
+and destroy or recreate the cube's rigid body. Collision outlines show the
+actual physics shape. `scene_spot_shadow_clip.js` animates the shadow near plane
+between 0.1 and 7.5 while keeping the far plane at 18; close objects progressively
+stop casting shadows, and an overlay displays the current distances.
+
 Shader binaries and the selected renderer must match. The comparison harness
 explicitly compiles with `-api GL` and passes `renderer: hg.RT_OpenGL` to the
 tutorial's `main()`; normal launches do not force OpenGL.
@@ -168,7 +195,7 @@ Pop-Location
 Use `--api GL` only when testing with `renderer: hg.RT_OpenGL`; compiled shader
 binaries must always match the selected renderer.
 
-Validate the fifteen additional tutorials directly against the existing Lua
+Validate the twenty additional tutorials directly against the existing Lua
 compiled assets (from the workspace root):
 
 ```powershell
@@ -176,7 +203,8 @@ python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/h
 ```
 
 This runs each graphical `main()` for 120 frames in a hidden window, including
-both physics modes, checks the Lua VM example's assertions in the console,
+both force/impulse modes, checks the Lua VM example's assertions and lists
+input devices in the console,
 and saves logs and PNG captures under
 `build/hgjs-tutorials/additional-validation`. Use `--skip-physics` for a build
 without Bullet, or `--renderer GL` when using GL-compiled assets. To check the
@@ -195,9 +223,15 @@ To validate only the second batch of five ports:
 python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only draw_and_create_model_no_pipeline material_update_value scene_instances scene_draw_to_texture scene_lua_script
 ```
 
-To validate only the latest five ports and the grid's geometric invariants:
+To validate only the third batch and the grid's geometric invariants:
 
 ```powershell
 python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only draw_text_over_models imgui_edit scene_light_priority physics_manual_setup model_builder
 install/js_bullet/hgjs/hgjs.exe harfang3d/languages/hg_quickjs/test_model_builder.js
+```
+
+To validate only the latest five ports:
+
+```powershell
+python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe --only imgui_mouse_capture render_resize_to_window input_list_devices physics_overrides_matrix scene_spot_shadow_clip
 ```

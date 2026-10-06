@@ -14,10 +14,11 @@ TUTORIALS = (
     'draw_and_create_model_no_pipeline', 'material_update_value',
     'scene_draw_to_texture', 'scene_instances',
     'draw_text_over_models', 'imgui_edit', 'scene_light_priority', 'model_builder',
+    'imgui_mouse_capture', 'render_resize_to_window', 'scene_spot_shadow_clip',
 )
-CONSOLE_TUTORIALS = ('scene_lua_script',)
+CONSOLE_TUTORIALS = ('scene_lua_script', 'input_list_devices')
 # Staged as well, but kept separate for validators using a build without Bullet.
-PHYSICS_TUTORIALS = ('physics_impulse', 'physics_manual_setup')
+PHYSICS_TUTORIALS = ('physics_impulse', 'physics_manual_setup', 'physics_overrides_matrix')
 
 
 def stage_tutorials(source):

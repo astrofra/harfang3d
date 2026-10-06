@@ -9,7 +9,7 @@ Lua, Python and Squirrel targets can coexist in the same build configuration.
 The `harfang` ES module is generated from `binding/bind_harfang.py`, as are the
 other language bindings. The native target exposes the same engine API as Lua
 and Squirrel for the same build options, including physics, navigation, audio,
-rendering, file access and Lua scene systems. Twenty-two native tutorial ports are
+rendering, file access and Lua scene systems. Twenty-seven native tutorial ports are
 included. JavaScript scene components and a portable native/Web
 application facade are deferred. Existing Lua scene components remain available
 through the ordinary `SceneLuaVM` and `Scene*Systems` APIs.
@@ -97,6 +97,11 @@ Push-Location harfang3d/tutorials
 ../../install/js_bullet/hgjs/hgjs.exe scene_light_priority.js
 ../../install/js_bullet/hgjs/hgjs.exe physics_manual_setup.js
 ../../install/js_bullet/hgjs/hgjs.exe model_builder.js
+../../install/js_bullet/hgjs/hgjs.exe imgui_mouse_capture.js
+../../install/js_bullet/hgjs/hgjs.exe render_resize_to_window.js
+../../install/js_bullet/hgjs/hgjs.exe input_list_devices.js
+../../install/js_bullet/hgjs/hgjs.exe physics_overrides_matrix.js
+../../install/js_bullet/hgjs/hgjs.exe scene_spot_shadow_clip.js
 Pop-Location
 ```
 
@@ -108,14 +113,17 @@ the tutorials.
 force and impulse. The additional examples cover star trails, text, ImGui,
 multiple viewports, ModelBuilder, material updates, animated scene instances,
 render-to-texture, Lua VM communication, text overlays, ImGui editing, light
-priority, manual rigid bodies and an animated procedural grid. Validate these
-fifteen additions with
+priority, manual rigid bodies, an animated procedural grid, ImGui mouse capture,
+window resizing, input device enumeration, physics/transform interaction and
+spot shadow clipping. Validate these twenty additions with
 `python harfang3d/languages/hg_quickjs/test_tutorials.py install/js_bullet/hgjs/hgjs.exe`
 from the workspace root; this also checks both physics modes and saves captures.
 Use `--only` followed by tutorial names to select a subset. `scene_lua_script.js`
 runs without assets or a window and checks its typed value transfers directly.
-`physics_manual_setup.js` also requires Bullet; `--skip-physics` excludes both
-physics tutorials. `test_model_builder.js` checks grid topology, winding and
+`physics_manual_setup.js` and `physics_overrides_matrix.js` also require Bullet;
+`--skip-physics` excludes all three physics tutorials. `input_list_devices.js`
+prints registered input devices without assets or a window.
+`test_model_builder.js` checks grid topology, winding and
 normals through the native binding without initializing a renderer.
 
 ## Host and packaging
