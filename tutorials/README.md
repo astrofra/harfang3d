@@ -71,3 +71,7 @@ Alternatively, you can open the tutorial folder using [Visual Studio Code](https
 
 * Dear ImGui edition
 ![Dear ImGui edition](screenshots/imgui_edit.png)
+
+## Gaussian splatting (Lua, macOS/Metal)
+
+See [the Gaussian splatting tutorial](GAUSSIAN_SPLATTING.md) for a compute-assisted SH0 renderer, quaternion trackball, RGB axis gizmo, bundled CC BY sample and reproducible build/test commands. DirectX 11 qualification follows in the Windows phase.

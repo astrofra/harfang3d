@@ -3126,6 +3126,10 @@ def bind_path_tools(gen):
 
 
 def bind_compute(gen):
+	stats = gen.begin_class('hg::ComputeFrameStats')
+	gen.bind_members(stats, ['bool gpu_timing_available', 'int64_t gpu_timestamp', 'double gpu_ms', 'uint32_t draw_calls', 'uint32_t compute_calls'])
+	gen.end_class(stats)
+	gen.bind_function('hg::GetComputeFrameStats', 'hg::ComputeFrameStats', [])
 	gen.add_include('engine/compute.h')
 	gen.bind_named_enum('bgfx::Access::Enum', ['Read', 'Write', 'ReadWrite'], bound_name='Access', prefix='AC_')
 	gen.bind_named_enum('hg::ComputeBufferType', ['CBT_Float4', 'CBT_UInt4'])

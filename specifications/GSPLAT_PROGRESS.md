@@ -12,8 +12,14 @@ The user confirmed macOS-first implementation: advance as far as possible on Met
 | M0 DirectX | Deferred: no Windows runner available | Run the same probe with `--renderer dx11` on Windows. |
 | M1 C++/FabGen/Lua compute bridge | Validated on Metal | Generated Lua module: four pixel seeds, premultiplied blending, rejected invalid dispatches, binding-owned buffers and shutdown invalidation. |
 | M2 reproducible content | Validated | Bundled Houseplant (3,636,736 bytes, CC BY 4.0); pinned SHA-256, 19 converter tests, deterministic full/60k/30k presets. |
-| M3–M5 renderer and Lua viewer | Pending | Projection, GPU ordering, persistent draws, FPS camera. |
-| M6 performance/portability | Pending | Measure Metal; Windows validation in the second phase. |
+| M3–M5 renderer and Lua viewer | Validated on Metal | Anisotropic projection, all 131,072 sorted IDs checked against CPU ordering, pixel oracle, persistent batches, quaternion trackball and RGB DrawLines gizmo, resize and normal shutdown. |
+| M6 performance/portability | Metal measurements in progress; Windows deferred | Whole-frame GPU timing available; sustained route and preset results recorded below when complete. |
+
+## Interaction and implementation decisions
+
+The user replaced the FPS requirement with a trackball-only camera. The implementation has left-drag quaternion rotation, wheel dolly, right/middle-drag pan, reset and Escape. There is no FPS mode. A world XYZ orientation gizmo uses RGB `DrawLines`, drawn over the splats. [Guide and launch commands](../tutorials/GAUSSIAN_SPLATTING.md).
+
+The Metal prototype keeps GPU bitonic sorting (153 compare passes for full quality), exceeding the original radix scheduling target. Native/Lua dependencies, full-sized ordering and end-to-end color checks are validated. Radix is deferred while this measured small-data path meets the reference frame budget. The renderer does not claim exact volumetric ordering, SH beyond degree zero, or per-pass GPU timings.
 
 ## Duo review: GSPLAT-M0-AUDIT
 

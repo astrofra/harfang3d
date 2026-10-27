@@ -12,6 +12,15 @@ struct ComputeCaps {
 };
 ComputeCaps GetComputeCaps();
 
+// Latest completed backend timing; asynchronous and not necessarily the current frame.
+struct ComputeFrameStats {
+    bool gpu_timing_available{false};
+    int64_t gpu_timestamp{0};
+    double gpu_ms{0};
+    uint32_t draw_calls{0}, compute_calls{0};
+};
+ComputeFrameStats GetComputeFrameStats();
+
 enum ComputeBufferType { CBT_Float4, CBT_UInt4 };
 struct ComputeBufferStorage;
 // Copies share ownership; explicit destruction invalidates every copy/binding.

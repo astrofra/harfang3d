@@ -31,6 +31,20 @@ ComputeCaps GetComputeCaps() {
 	return out;
 }
 
+ComputeFrameStats GetComputeFrameStats() {
+    ComputeFrameStats out;
+    if (!IsRenderUp()) return out;
+    const auto &stats = *bgfx::getStats();
+    out.gpu_timing_available = stats.gpuTimerFreq > 0 && stats.gpuTimeBegin > 0 && stats.gpuTimeEnd >= stats.gpuTimeBegin;
+    if (out.gpu_timing_available) {
+        out.gpu_timestamp = stats.gpuTimeEnd;
+        out.gpu_ms = double(stats.gpuTimeEnd - stats.gpuTimeBegin) * 1000.0 / double(stats.gpuTimerFreq);
+    }
+    out.draw_calls = stats.numDraw;
+    out.compute_calls = stats.numCompute;
+    return out;
+}
+
 static ComputeBuffer MakeBuffer(uint32_t count, ComputeBufferType type, const void *data) {
 	if (!GetComputeCaps().supported || count == 0 || count > (256 * 1024 * 1024 / 16) || (type != CBT_Float4 && type != CBT_UInt4)) {
 		warn("Invalid compute buffer count/type or compute unavailable (maximum 256 MiB)");
@@ -116,11 +130,11 @@ bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_
 		return true;
 	};
 	for (const auto &b : buffers)
-		if (!IsValid(b.buffer) || b.access >= bgfx::Access::Count || (b.access != bgfx::Access::Read && !b.buffer.storage->writable) || !reserve(b.stage)) {
+		if (!IsValid(b.buffer) || b.access < bgfx::Access::Read || b.access >= bgfx::Access::Count || (b.access != bgfx::Access::Read && !b.buffer.storage->writable) || !reserve(b.stage)) {
 			warn("Invalid/destroyed/read-only compute buffer or duplicate/out-of-range stage"); return false;
 		}
 	for (const auto &i : images)
-		if (!bgfx::isValid(i.texture.handle) || i.access >= bgfx::Access::Count || !reserve(i.stage) ||
+		if (!bgfx::isValid(i.texture.handle) || i.access < bgfx::Access::Read || i.access >= bgfx::Access::Count || !reserve(i.stage) ||
 			(i.access != bgfx::Access::Read && !(i.texture.flags & BGFX_TEXTURE_COMPUTE_WRITE))) {
 			warn("Invalid compute image, missing compute-write flag or duplicate/out-of-range stage"); return false;
 		}
