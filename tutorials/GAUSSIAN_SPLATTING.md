@@ -6,16 +6,24 @@ An interactive SH0 Gaussian splat viewer with a quaternion trackball and a small
 
 The bundled **Houseplant by Marcel Padilla** contains 113,648 Gaussians in a 3.64 MB `.splat` file, licensed under **CC BY 4.0**. See [source, license and modifications](resources/gaussian_splatting/ATTRIBUTION.md). No download, training, CUDA, or network access is needed to build or run this tutorial.
 
-## Build and run on macOS
+## Run on macOS
 
-Use this branch's HARFANG build, including the new FabGen bindings. A previously installed `harfang` module will not have the compute API. The commands below assume an existing Release CMake configuration with `HG_BUILD_HG_LUA=ON`, `HG_BUILD_ASSETC=ON`, and `HG_BUILD_TESTS=ON`, a working `HG_FABGEN_PATH`, and the repository's usual dependencies. Run commands from the `harfang3d` repository root. Replace `../build/lua-cmake` with your build directory.
+From `tutorials`, run the script with your installed Lua executable, exactly like the other tutorials:
+
+```sh
+../../install/lua/hg_lua/lua gaussian_splatting.lua
+```
+
+**The tutorial takes no command-line arguments.** It finds `harfang.so` beside the Lua executable, selects Metal on macOS, and loads the bundled Houseplant at full quality from `resources_compiled/gaussian_splatting/metal`. On Windows it selects the separate `dx11` resource folder; that backend still requires qualification. The runtime must include this branch's compute bindings.
+
+If the compiled resources have not been prepared yet, run this once from the repository root using an existing Release CMake configuration with `HG_BUILD_HG_LUA=ON`, `HG_BUILD_ASSETC=ON`, `HG_BUILD_TESTS=ON` and a working `HG_FABGEN_PATH`:
 
 ```sh
 python3 tutorials/tools/run_gaussian_splatting.py \
-  --build-dir ../build/lua-cmake --build --renderer metal
+  --build-dir ../build/lua-cmake --build --renderer metal --compile-only
 ```
 
-The helper builds `hg_lua`, Lua, `assetc` and `shaderc`, verifies the pinned asset SHA-256, converts all presets, compiles the shaders, and runs the viewer with the freshly built module. Subsequent runs may omit `--build`. Python uses only the standard library and runs offline preparation; the application itself is Lua.
+This offline helper verifies the source hash, converts the presets, invokes `assetc`, and copies its compiled output into the ignored `tutorials/resources_compiled/gaussian_splatting/metal` directory. It uses Python's standard library. Neither Python nor compilation is involved when launching the tutorial afterward. Replace the build/install paths if your workspace uses a different layout.
 
 | Control | Action |
 |---|---|
@@ -27,9 +35,9 @@ The helper builds `hg_lua`, Lua, `assetc` and `shaderc`, verifies the pinned ass
 
 The camera ignores input when unfocused. The cursor remains visible. **There is no FPS mode.** The corner gizmo shows world **X in red, Y in green, Z in blue**, with line-drawn labels and arrowheads; it follows camera orientation and is drawn over the scene without depth testing. Window resize uses drawable pixels for rendering and client coordinates for the trackball, including Retina scaling.
 
-Full quality is the default. For a smaller workload, add `--preset 60k` or `--preset 30k`. Spatial subsampling reduces opacity coverage and can introduce holes; these are quality/performance alternatives, not equivalent reconstructions.
+Full quality is the default. To try a smaller workload in the tutorial, change `'full'` to `'60k'` or `'30k'` in its `Renderer.new(...)` call. Spatial subsampling reduces opacity coverage and can introduce holes; these are quality/performance alternatives, not equivalent reconstructions.
 
-A bounded run that closes automatically and saves a screenshot:
+The separate test/benchmark driver accepts options. For a bounded run that closes automatically and saves a screenshot:
 
 ```sh
 python3 tutorials/tools/run_gaussian_splatting.py \
@@ -37,28 +45,25 @@ python3 tutorials/tools/run_gaussian_splatting.py \
   --frames 240 --capture --width 640 --height 360
 ```
 
-On the tested Retina display, a 640×360 client window produces a 1280×720 drawable. The log and JSON report record the actual drawable dimensions. A normal interactive run has no artificial timeout; bounded tests have a subprocess watchdog.
+On the tested Retina display, a 640×360 client window produces a 1280×720 drawable. The log and JSON report record the actual drawable dimensions. The tutorial has no artificial timeout; the separate bounded tests have a subprocess watchdog.
 
 ## Source and generated files
 
 | Location | Contents |
 |---|---|
-| `tutorials/gaussian_splatting.lua` | Resource setup, pass scheduling, input and shutdown |
+| `tutorials/gaussian_splatting.lua` | Simple no-argument tutorial: window, Houseplant, trackball and render loop |
+| `tutorials/gaussian_splatting/renderer.lua` | Shared resource setup, compute passes and drawing |
+| `harfang/tests/gaussian_splatting_runner.lua` | Command-line test driver: routes, capture, timings and resize checks |
 | `tutorials/gaussian_splatting/camera.lua` | Pure Lua quaternion trackball math |
 | `tutorials/gaussian_splatting/gizmo.lua` | Reusable line vertices for the RGB orientation overlay |
 | `tutorials/resources/gaussian_splatting/source/` | Unmodified `.splat` and publisher metadata |
 | `tutorials/resources/gaussian_splatting/shaders/` | Editable compute, Gaussian and gizmo shaders |
 | `BUILD/gaussian_splatting/metal/generated/` | Converted blobs, metadata and staged shader includes |
 | `BUILD/gaussian_splatting/metal/compiled/` | Runtime resources produced exclusively by `assetc` |
+| `tutorials/resources_compiled/gaussian_splatting/metal/` | Ignored copy of compiled resources for direct tutorial launches |
 | `BUILD/gaussian_splatting/metal/` | Logs, preset JSON reports and optional PNG captures |
 
-Generated files and compiled GPU binaries stay in the build directory. The helper stages the generated Lua metadata as `.luadata`, so `assetc` copies portable Lua source without requiring a bytecode compiler. The viewer loads only compiled resources. To run directly after compilation:
-
-```sh
-../build/lua-cmake/extern/lua/lua tutorials/gaussian_splatting.lua \
-  --assets ../build/lua-cmake/gaussian_splatting/metal/compiled \
-  --module ../build/lua-cmake/languages/hg_lua
-```
+Generated data stays in the build directory. Compiled GPU binaries are copied into the ignored tutorial resource directory, not committed. The helper stages Lua metadata as `.luadata`, so `assetc` copies portable Lua source without requiring a bytecode compiler. The viewer loads only compiled resources. Benchmark/capture options belong to `harfang/tests/gaussian_splatting_runner.lua`, which shares the renderer with the tutorial.
 
 Keep the entry script together with its `gaussian_splatting/` Lua modules. Prepared runtime distribution consists of these scripts, the matching Lua/HARFANG runtime, and the selected backend's compiled resources including attribution. No Python is needed at runtime.
 
@@ -92,6 +97,10 @@ Each HGS0 output has a 64-byte little-endian `<4sIII6f6I` header (magic, version
 ## Validation
 
 ```sh
+# Actual no-argument entry point, installed Lua and default compiled Houseplant.
+# The harness closes the real tutorial after 120 rendered frames via LUA_INIT.
+python3 harfang/tests/run_gaussian_tutorial_smoke.py --lua ../install/lua/hg_lua/lua
+
 # Offline converter: 19 tests.
 python3 -m unittest discover -s tutorials/tools -p 'test_prepare_gaussian_splat.py'
 

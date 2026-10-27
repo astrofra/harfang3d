@@ -51,7 +51,7 @@ def main():
             raise RuntimeError(f'{label} failed: {root / (label+".log")}')
 
     run('assetc', [assetc, '-api', 'MTL' if args.renderer=='metal' else 'DX11', '-platform', 'osx' if args.renderer=='metal' else 'windows', '-toolchain', shaderc.parent, source, compiled])
-    run('viewer', [lua, repo / 'tutorials/gaussian_splatting.lua', '--assets', compiled, '--module', module, '--renderer', args.renderer, '--frames', '8', '--yaw', '0', '--pitch', '0', '--width', '160', '--height', '160', '--capture', root / 'oracle.png'])
+    run('viewer', [lua, repo / 'harfang/tests/gaussian_splatting_runner.lua', '--assets', compiled, '--module', module, '--renderer', args.renderer, '--frames', '8', '--yaw', '0', '--pitch', '0', '--width', '160', '--height', '160', '--capture', root / 'oracle.png'])
     # Independent scalar covariance and alpha compositing reference at the central pixel.
     # Read the actual drawable size from the PNG using the existing Picture API.
     checker = root / 'check.lua'

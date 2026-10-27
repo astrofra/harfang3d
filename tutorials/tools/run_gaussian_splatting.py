@@ -76,6 +76,10 @@ def main():
     for name in ['metadata.luadata', 'full.bin', '60k.bin', '30k.bin', 'ATTRIBUTION.md']:
         if not (compiled / name).is_file():
             raise RuntimeError(f'assetc did not propagate {name}')
+    # Publish assetc's output beside the other tutorials' compiled resources.
+    tutorial_assets = repo / 'tutorials/resources_compiled/gaussian_splatting' / args.renderer
+    shutil.copytree(compiled, tutorial_assets, dirs_exist_ok=True)
+    print(f'Tutorial resources: {tutorial_assets}', flush=True)
     if args.compile_only:
         print(f'Compiled only, runtime unverified: {compiled}')
         return
@@ -83,7 +87,7 @@ def main():
     module = build / 'languages/hg_lua'
     if not any((module / n).is_file() for n in ['harfang.so', 'harfang.dll']):
         module /= args.config
-    command = [lua, repo / 'tutorials/gaussian_splatting.lua', '--assets', compiled, '--module', module,
+    command = [lua, repo / 'harfang/tests/gaussian_splatting_runner.lua', '--assets', compiled, '--module', module,
                '--renderer', args.renderer, '--preset', args.preset, '--frames', str(args.frames),
                '--width', str(args.width), '--height', str(args.height), '--report', root / f'{args.preset}-report.json']
     if args.route:

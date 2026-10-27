@@ -62,3 +62,9 @@ Physical mouse/trackpad feel and window-manager minimize/focus gestures still me
 ### Next phase: Windows
 
 On a Windows machine, build this branch and run native/Lua compute, full-sort and pixel oracles with `--renderer dx11`, then validate the complete trackball viewer and measure the same route. Check D3D11 shader compilation, typed UAV/SRV buffers, RGBA32F image/vertex sampling, batch ordering and shutdown first. Do not mark the original two-backend M6 gate complete until that evidence exists. OpenGL qualification is separate and later; no additional backend is in scope.
+
+## Tutorial launch simplification
+
+The tutorial now follows the other Lua examples: launch `lua gaussian_splatting.lua` from `tutorials`, with no arguments. It loads Houseplant/full from the backend-specific `resources_compiled/gaussian_splatting` folder and locates HARFANG beside the installed Lua executable. The asset preparation helper populates that ignored folder from `assetc` output. Renderer internals are shared in `gaussian_splatting/renderer.lua`; command-line routes, captures and timing reports have moved to `harfang/tests/gaussian_splatting_runner.lua`.
+
+Validated with the user's installed `install/lua/hg_lua/lua`: the actual no-argument tutorial loads all 113,648 records, renders 120 frames and shuts down normally under the test-only termination hook. The shared-renderer pixel oracle and two-resize/capture check also pass. No generated assets are committed.
