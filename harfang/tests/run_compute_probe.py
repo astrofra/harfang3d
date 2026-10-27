@@ -7,6 +7,7 @@ import json
 import platform
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -27,6 +28,7 @@ def main():
     parser.add_argument("--config", default="Release")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--compile-only", action="store_true", help="Compile assets only; does not qualify runtime support")
+    parser.add_argument("--lua", action="store_true", help="Also build and exercise the generated Lua bindings")
     args = parser.parse_args()
     repo = Path(__file__).resolve().parents[2]
     build = args.build_dir.resolve()
@@ -61,7 +63,8 @@ def main():
 
     try:
         if not args.skip_build:
-            run("build", ["cmake", "--build", build, "--config", args.config, "--target", "test_compute_probe", "assetc", "shaderc", "--parallel", "4"])
+            targets = ["test_compute_probe", "assetc", "shaderc"] + (["hg_lua", "lua"] if args.lua else [])
+            run("build", ["cmake", "--build", build, "--config", args.config, "--target", *targets, "--parallel", "4"])
         assetc = executable(build / "tools/assetc", "assetc", args.config)
         shaderc = executable(build / "extern/bgfx", "shaderc", args.config)
         probe = executable(build / "harfang/tests", "test_compute_probe", args.config)
@@ -73,6 +76,8 @@ def main():
                 shutil.copyfile(path, source / path.name)
         for name in ["bgfx_shader.sh", "bgfx_compute.sh"]:
             shutil.copyfile(repo / "tutorials/resources/core/shader" / name, source / name)
+        (source / "input.bin").write_bytes(b"".join(struct.pack("<4f", (i*17+13)%200+20, (i*29+7)%200+20,
+            (i*43+3)%200+20, 64+i) for i in range(256)))
         report["source_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(source.iterdir()) if p.is_file()}
         report["executable_sha256"] = hashlib.sha256(probe.read_bytes()).hexdigest()
         api = {"metal": "MTL", "dx11": "DX11", "gl": "GL"}[args.renderer]
@@ -90,6 +95,14 @@ def main():
             # A stale previous dispatch must produce a pixel failure, not a setup error/crash.
             for control in ["skip-producer", "skip-consumer"]:
                 run(control, [probe, args.renderer, compiled, control], expected=1, marker="FAIL pixel mismatch")
+            if args.lua:
+                if args.renderer == "gl":
+                    raise RuntimeError("Lua probe currently qualifies Metal and D3D11 only")
+                lua = executable(build / "extern/lua", "lua", args.config)
+                module = build / "languages/hg_lua"
+                if not any((module / name).exists() for name in ["harfang.so", "harfang.dll"]):
+                    module = module / args.config
+                run("lua", [lua, repo / "harfang/tests/compute_probe.lua", compiled, module, args.renderer], marker="PASS Lua compute probe")
             report["status"] = "passed"
         return 0
     except (OSError, RuntimeError, subprocess.SubprocessError) as error:

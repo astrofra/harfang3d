@@ -1,6 +1,7 @@
 // HARFANG(R) Copyright (C) 2021 Emmanuel Julien, NWNC HARFANG. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 
 #include "engine/render_pipeline.h"
+#include "engine/compute.h"
 #include "engine/assets_rw_interface.h"
 #include "engine/file_format.h"
 #include "engine/meta.h"
@@ -2732,6 +2733,7 @@ Window *RenderInit(
 }
 
 void RenderShutdown() {
+	ReleaseComputeResources();
 	bgfx::shutdown();
 	bgfx_is_up = false;
 }

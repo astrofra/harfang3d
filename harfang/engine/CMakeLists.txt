@@ -1,4 +1,5 @@
 set(HDRS
+	compute.h
 	animation.h
 	assets.h
 	assets_rw_interface.h
@@ -57,6 +58,7 @@ set(HDRS
 	ogg_audio_stream.h)
 
 set(SRCS
+	compute.cpp
 	anim_load_binary.cpp
 	anim_load_json.cpp
 	animation.cpp

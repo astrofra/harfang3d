@@ -3125,6 +3125,42 @@ def bind_path_tools(gen):
 	gen.bind_function('hg::GetUserFolder', 'std::string', [])
 
 
+def bind_compute(gen):
+	gen.add_include('engine/compute.h')
+	gen.bind_named_enum('bgfx::Access::Enum', ['Read', 'Write', 'ReadWrite'], bound_name='Access', prefix='AC_')
+	gen.bind_named_enum('hg::ComputeBufferType', ['CBT_Float4', 'CBT_UInt4'])
+	gen.bind_constants('uint64_t', [('TF_ComputeWrite', 'BGFX_TEXTURE_COMPUTE_WRITE')])
+	caps = gen.begin_class('hg::ComputeCaps')
+	gen.bind_members(caps, ['bool supported', 'bool rgba32f_vertex_sampling', 'bool rgba32f_image_write',
+		'bool image_write_reporting_complete', 'uint32_t max_bindings', 'uint32_t max_views', 'uint32_t max_texture_size', 'std::string renderer'])
+	gen.end_class(caps)
+	gen.bind_function('hg::GetComputeCaps', 'hg::ComputeCaps', [])
+	buffer = gen.begin_class('hg::ComputeBuffer')
+	gen.end_class(buffer)
+	gen.bind_function('hg::CreateComputeBuffer', 'hg::ComputeBuffer', ['uint32_t count', '?hg::ComputeBufferType type'])
+	gen.bind_function('hg::CreateComputeBufferFromData', 'hg::ComputeBuffer', ['const hg::Data &data', '?hg::ComputeBufferType type', '?uint32_t offset'])
+	for suffix in ['File', 'Assets']:
+		gen.bind_function('hg::LoadComputeBufferFrom' + suffix, 'hg::ComputeBuffer', ['const char *path', '?hg::ComputeBufferType type', '?uint32_t offset'])
+		gen.bind_function('hg::LoadComputeProgramFrom' + suffix, 'bgfx::ProgramHandle', ['const char *path', '?bool silent'])
+	gen.bind_function('hg::IsValid', 'bool', ['const hg::ComputeBuffer &buffer'])
+	gen.bind_function('hg::GetComputeBufferCount', 'uint32_t', ['const hg::ComputeBuffer &buffer'])
+	gen.bind_function('hg::DestroyComputeBuffer', 'void', ['hg::ComputeBuffer &buffer'])
+	for name in ['ComputeBufferBinding', 'ImageBinding']:
+		conv = gen.begin_class('hg::' + name)
+		gen.end_class(conv)
+		bind_std_vector(gen, conv)
+	gen.bind_function('hg::MakeComputeBufferBinding', 'hg::ComputeBufferBinding', ['const hg::ComputeBuffer &buffer', 'uint32_t stage', 'bgfx::Access::Enum access'])
+	gen.bind_function('hg::MakeImageBinding', 'hg::ImageBinding', ['const hg::Texture &texture', 'uint32_t stage', 'bgfx::Access::Enum access', '?uint8_t mip'])
+	gen.bind_function_overloads('hg::DispatchCompute', expand_std_vector_proto(gen, [
+		('bool', ['bgfx::ViewId &view_id', 'bgfx::ProgramHandle program', 'uint32_t x', '?uint32_t y', '?uint32_t z'], {'arg_in_out': ['view_id']}),
+		('bool', ['bgfx::ViewId &view_id', 'bgfx::ProgramHandle program', 'uint32_t x', 'uint32_t y', 'uint32_t z',
+			'const std::vector<hg::UniformSetValue> &values', 'const std::vector<hg::UniformSetTexture> &textures',
+			'const std::vector<hg::ImageBinding> &images', 'const std::vector<hg::ComputeBufferBinding> &buffers', '?const std::string &debug_name'], {'arg_in_out': ['view_id']})
+	]))
+	gen.bind_function('hg::CreateComputeQuadModel', 'hg::Model', ['uint32_t count'])
+	gen.bind_function('hg::ComputePremultipliedRenderState', 'hg::RenderState', [])
+
+
 def bind_data(gen):
 	gen.add_include('foundation/data.h')
 
@@ -4846,6 +4882,7 @@ def bind(gen):
 	bind_color(gen)
 	bind_picture(gen)
 	bind_render(gen)
+	bind_compute(gen)
 	bind_forward_pipeline(gen)
 	bind_font(gen)
 	bind_meta(gen)

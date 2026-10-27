@@ -42,3 +42,15 @@ Two issues were exposed:
 No explicit Metal barrier was added: the pinned backend uses a serial compute encoder and directly bound device resources. Absence of explicit barriers alone does not establish a hazard. Apple's documentation describes automatic tracking for these resources and serial dispatch by default. [Metal resource synchronization](https://developer.apple.com/documentation/metal/resource-synchronization).
 
 This probe qualifies the exercised dependency chain on the recorded device. It does not validate full-size radix sorting, all formats, performance targets, or every Metal device. Readback is deliberately confined to this diagnostic; the pinned Metal implementation can wait internally when reading a texture.
+
+## Lua bridge (M1)
+
+Add `--lua` to the command above to build the FabGen module and exercise the same dependency chain through Lua. The test checks all 256 pixels for four seeds with premultiplied blending, rejected invalid dispatches without advancing the view, buffer ownership across Lua garbage collection, explicit destruction and surviving userdata after renderer shutdown. It exits automatically under the runner's watchdog.
+
+`DispatchCompute(view, program, x, y, z, values, textures, images, buffers[, name])` returns **`ok, next_view`** in Lua. Each successful dispatch consumes one view; failures leave it unchanged. Buffer stages and image/sampler stages must be unique within a dispatch. Input data consists of 16-byte float4/uint4 records, copied in bulk; `offset` skips a file header. Uploaded buffers are read-only; uninitialized scratch buffers permit GPU writes. Buffer copies and bindings share ownership, and explicit destruction invalidates all copies. Images borrow existing textures, which must outlive their submissions.
+
+`GetComputeCaps()` reports actual backend flags. `image_write_reporting_complete` is false on this vendored Metal backend: a missing RGBA32F image-write flag does not negate the separately tested path. Do not silently treat that exception as portable support.
+
+`CreateComputeQuadModel(count)` creates persistent ordered quads in batches of at most 16,384 quads with 16-bit indices. POSITION holds `(corner_x, corner_y, sorted_slot)`. Store the returned model in `PipelineResources` and destroy it through that owner. `ComputePremultipliedRenderState()` enables ONE/INV_SRC_ALPHA blending without depth writes or testing.
+
+Validated on 2026-10-27: native positive/flip-before tests pass, both missing-dispatch controls fail with the expected pixel mismatch, and the Lua test passes and shuts down normally (Apple M3 Pro, macOS 14.1, Metal). DirectX remains untested without a Windows host.

@@ -10,7 +10,7 @@ The user confirmed macOS-first implementation: advance as far as possible on Met
 |---|---|---|
 | M0 Metal native dependency chain | Validated on M3 Pro/macOS 14.1 | [Probe and exact commands](../harfang/tests/COMPUTE_PROBE.md); positive and negative pixel checks plus normal shutdown. |
 | M0 DirectX | Deferred: no Windows runner available | Run the same probe with `--renderer dx11` on Windows. |
-| M1 C++/FabGen/Lua compute bridge | Next | Image/buffer bindings, capability reporting, lifetime and Lua smoke coverage. |
+| M1 C++/FabGen/Lua compute bridge | Validated on Metal | Generated Lua module: four pixel seeds, premultiplied blending, rejected invalid dispatches, binding-owned buffers and shutdown invalidation. |
 | M2 reproducible content | Pending | Bundle verified CC BY sample, validate/convert SH0 data and presets. |
 | M3–M5 renderer and Lua viewer | Pending | Projection, GPU ordering, persistent draws, FPS camera. |
 | M6 performance/portability | Pending | Measure Metal; Windows validation in the second phase. |
