@@ -2,6 +2,11 @@ add_executable(test_timer_exit timer_exit.cpp)
 target_link_libraries(test_timer_exit PRIVATE foundation platform)
 set_target_properties(test_timer_exit PROPERTIES FOLDER "harfang")
 
+# Opt-in graphical compute probe; not part of the headless unit-test suite.
+add_executable(test_compute_probe compute_probe.cpp)
+target_link_libraries(test_compute_probe PRIVATE engine foundation platform)
+set_target_properties(test_compute_probe PROPERTIES FOLDER "harfang")
+
 add_library(DummyVideoStream SHARED dummy_video_stream.cpp)
 target_include_directories(DummyVideoStream PRIVATE ${CMAKE_SOURCE_DIR}/harfang/engine ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(DummyVideoStream PROPERTIES

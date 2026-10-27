@@ -4,6 +4,8 @@ Date: 2026-10-27. Audited HARFANG revision: `7f00a71632d16320585531f8f9fa1aa3e2c
 
 Status: implementation roadmap, supported by a static source audit and asset verification. No renderer implementation, shader compilation, GPU benchmark, or runtime compatibility result is claimed here.
 
+Implementation updates and measured results are tracked in [GSPLAT_PROGRESS.md](GSPLAT_PROGRESS.md). The user subsequently confirmed macOS-first implementation, with Windows qualification in a second phase.
+
 ## 1. Deliverable and architecture decision
 
 Deliver `tutorials/gaussian_splatting.lua`: a small, documented Gaussian splat viewer with a mouse/keyboard FPS camera, a bundled Creative Commons sample, and an essential GPU compute path. Lua owns initialization, camera controls, pass scheduling, settings, and shutdown. C++ supplies missing rendering primitives and bulk data operations through FabGen. Shaders perform the per-splat work. Other language tutorials come after the Lua version passes acceptance.
@@ -37,7 +39,7 @@ The existing [Compute Shader Feature-Parity specification](SPECS_COMPUTE_SHADER_
 
 **Required initial backends: macOS/Metal first, then Windows/DirectX through Direct3D 11 (D3D11).** Both are acceptance requirements for v1. A Metal-only build is an intermediate milestone, not the completed delivery.
 
-Run the small native feasibility probes on Metal first and D3D11 immediately afterwards, before freezing buffer layouts and shader interfaces. Continue the full viewer on Metal first, while compiling shaders for both backends throughout implementation. Keep backend-specific compiled assets in separate output directories so one build cannot overwrite the other's shader binaries. Require a Windows GPU runner for D3D11 runtime validation; shader cross-compilation alone does not qualify that backend.
+Run the small native feasibility probes on Metal first and continue the full viewer on macOS. Windows is unavailable for now: keep interfaces and shader data layouts suitable for D3D11, but defer its compiler/runtime qualification to the second phase. Keep backend-specific compiled assets in separate output directories so one build cannot overwrite the other's shader binaries. Require a Windows GPU runner before claiming D3D11 support; shader cross-compilation alone does not qualify that backend.
 
 OpenGL is the third HARFANG backend. Qualification of this tutorial's compute path on OpenGL is deferred until Metal and DirectX pass; this does not question HARFANG's existing OpenGL rendering support. Keep shader sources portable and record the OpenGL compute compiler/profile checks needed for that later milestone. Browser and mobile delivery are outside this roadmap.
 
@@ -45,6 +47,7 @@ For each tested device/backend, record renderer, GPU, OS/driver, HARFANG/bgfx re
 
 - `BGFX_CAPS_COMPUTE`, image read/write feature support, `limits.maxComputeBindings`, `maxTextureSize`, `maxViews`, and relevant allocation limits. The pinned public capability structure does not expose all workgroup limits: start with conservative 64/128-thread variants and validate compilation, shared memory and dispatch on each target.
 - Per-format image-write and vertex-sampling support: `BGFX_CAPS_FORMAT_TEXTURE_IMAGE_WRITE` and `BGFX_CAPS_FORMAT_TEXTURE_VERTEX` for the proposed `RGBA32F` attribute atlases. Check format validity for the complete texture flags too.
+- Implementation finding: pinned Metal omits the image-read/write format bits. Distinguish missing reporting from a proven unsupported format; the native probe explicitly tests RGBA32F on Metal. Do not globally mark all formats supported or silently bypass capability checks on other backends.
 - `BGFX_CAPS_INDEX32` if using one large indexed quad batch; otherwise use ordered persistent 16-bit chunks.
 - Compute-to-compute visibility with a producer/consumer sentinel, then compute-to-vertex-texture-fetch visibility with an observable rendered result. Ordered views schedule dependencies; access flags and workgroup barriers alone do not establish every required memory dependency.
 - Actual pinned backend handling of buffer/image transitions. Fix a demonstrated backend gap in C++ rather than inventing a script-level barrier API.
@@ -221,7 +224,7 @@ Execute in this order. Estimates should be made after the backend spike, because
 
 | Milestone | Work and deliverable | Exit gate |
 |---|---|---|
-| M0 — native feasibility | Source audit, capability report, tiny image and buffer compute probes through `assetc`; test Metal first, then D3D11 before freezing interfaces | C++ producer/consumer sentinel and compute-to-vertex-texture rendering pass on both Metal and D3D11. Record device/backend evidence separately. |
+| M0 — native feasibility | Source audit, capability report, tiny image and buffer compute probes through `assetc`; test Metal now, D3D11 in the Windows phase | Metal sentinel and compute-to-vertex-texture rendering unblock macOS implementation. Full two-backend qualification still requires the same evidence on Windows. |
 | M1 — Lua/FabGen bridge | Image parity plus bounded buffer API, capability query, ownership, bulk upload, premultiplied blend state and bindings; small Lua compute probe | Rebuilt `hg_lua` runs the probe, returns advanced view IDs, handles invalid resources, exposes the required blend state, and shuts down cleanly. |
 | M2 — reproducible content | Pin/download/hash the chosen sample, preserve licence, prepare SH0 blob and optional presets | Offline build reproduces manifest/count/hash; runtime loads compiled assets without network or Python. |
 | M3 — visible Gaussian slice | Synthetic ellipses, projection, atlas gather, persistent quad path; tiny CPU ordering oracle permitted for debugging | Known rotations, scales, opacity and overlapping colors match expected output; reference asset orientation is correct. |
