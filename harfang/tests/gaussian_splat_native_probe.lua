@@ -9,6 +9,8 @@ hg.WindowSystemInit()
 local win = hg.RenderInit('Native Gaussian splat probe (automatic)', 320, 200,
     renderer_name == 'dx11' and hg.RT_Direct3D11 or hg.RT_Metal)
 assert(win, 'RenderInit failed')
+assert(hg.GetComputeCaps().renderer == (renderer_name == 'metal' and 'Metal' or 'Direct3D 11'),
+    'Renderer fallback is not valid qualification evidence')
 
 local resources = hg.PipelineResources()
 local targets, models, renderers, render_data_handles = {}, {}, {}, {}

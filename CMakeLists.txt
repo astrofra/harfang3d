@@ -524,6 +524,10 @@ message(STATUS "")
 # Package configuration
 # -----------------------------------------------------------------------------
 
+if(HG_BUILD_HG_LUA AND HG_BUILD_ASSETC)
+	include(harfang/cmake/GaussianSplatTutorial.cmake)
+endif()
+
 # [WARNING] Don't forget to add any new shared library target to this list!
 if(NOT HG_BUILD_HARFANG_STATIC)
 	set(HG_SHARED_LIBRARY_TARGETS "hg::glfw;hg::libluadll")

@@ -40,6 +40,10 @@ set(TOOLCHAIN_PATH assetc/toolchains/host-${HG_TARGET_PREFIX}-target-${ASSETC_TA
 
 install(TARGETS texc texturec shaderc luac cmft gsplatc RUNTIME DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)
 
+# Host tools such as gsplatc also link engine's shared dependencies. Their
+# install rpath is relative to the executable, not the assetc parent directory.
+install_cppsdk_dependencies(${TOOLCHAIN_PATH} assetc)
+
 if(WIN32)
 	install(PROGRAMS bin/win/texconv.exe DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)
 endif()

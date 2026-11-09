@@ -31,7 +31,8 @@ def main():
         shutil.copyfile(p, source / p.name)
     (source / 'core/gaussian_splatting').mkdir(parents=True, exist_ok=True)
     (source / 'core/shader').mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(repo / 'core-package/core/gaussian_splatting/sort.sc', source / 'core/gaussian_splatting/sort.sc')
+    for name in ['sort.sc', 'gather.sc']:
+        shutil.copyfile(repo / 'core-package/core/gaussian_splatting' / name, source / 'core/gaussian_splatting' / name)
     for name in ['bgfx_shader.sh', 'bgfx_compute.sh']:
         shutil.copyfile(repo / 'core-package/core/shader' / name, source / name)
         shutil.copyfile(repo / 'core-package/core/shader' / name, source / 'core/shader' / name)
@@ -39,6 +40,10 @@ def main():
     (source / 'input.bin').write_bytes(b''.join(struct.pack('<4f', depth, i, 0, 0) for i,depth in enumerate(depths)))
     order = sorted(range(len(depths)), key=lambda i: (-depths[i], i))
     (source / 'expected.bin').write_bytes(struct.pack('<131072I', *order))
+    # Independent projected payload: gather must fetch the original source ID.
+    (source / 'projected.bin').write_bytes(b''.join(
+        struct.pack('<12f', (i & 255)/255, ((i >> 8) & 255)/255, ((i >> 16) & 255)/255, 1,
+                    0, 0, 0, 0, 0, 0, 0, 0) for i in range(len(depths))))
     assetc = executable(build / 'tools/assetc', 'assetc', 'Release')
     shaderc = executable(build / 'extern/bgfx', 'shaderc', 'Release')
     lua = executable(build / 'extern/lua', 'lua', 'Release')

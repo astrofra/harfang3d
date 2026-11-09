@@ -6,19 +6,37 @@ C++ owns HGS2 loading, GPU resources, covariance projection, spherical harmonics
 
 ## Prepare, compile and run
 
-Use a build containing the native Gaussian API, `TrackballController`, ImGui, Lua bindings and `assetc`. Both compiled models are required at startup. Houseplant is bundled; Saari comes from the local preservation project and is not redistributed.
+Use a build containing the native Gaussian API, `TrackballController`, ImGui, Lua bindings and `assetc`. Both compiled models are required at startup. Houseplant and the Saari SPZ source are included in the checkout (Saari was added in `5cb3ca7`).
 
-From `tutorials/`, stage the local Saari source before compiling:
+From `tutorials/`, compile the resources:
 
 ```powershell
-Copy-Item C:/works/projects/preservation-forward-by-komplex/postshot/saari-probe.spz resources/gaussian_splatting_native/saari-probe.spz
 assetc -api DX11 -platform windows resources resources_compiled
 lua gaussian_splatting.lua
 ```
 
-The staged SPZ is gitignored. The `gaussian_splatting_native` resource directory retains its existing name; it is a dataset directory, not a second tutorial. The Lua application takes no arguments and loads only compiled resources, including the shared Gaussian and ImGui shaders.
+The `gaussian_splatting_native` resource directory retains its existing name; it is a dataset directory, not a second tutorial. The Lua application takes no arguments and loads only compiled resources, including the shared Gaussian and ImGui shaders.
 
-On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The combined application has been validated on Windows/D3D11. Metal and displays with differing client/framebuffer scales have not been qualified.
+On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The unchanged application has been tested on macOS/arm64, Apple M3 Pro, including a 2560×1440 framebuffer for a 1280×720 client window. See the [Mac validation record](../specifications/GSPLAT_MACOS_VALIDATION.md) for the tested scope and remaining qualification work.
+
+## Build and run on macOS
+
+With the existing Lua build configured by [`rebuild_hg_lua.sh`](../rebuild_hg_lua.sh), run from the repository root:
+
+```sh
+cmake --build ../build/lua-cmake --config Release --target gsplat_tutorial_package --parallel 8
+../build/lua-cmake/gaussian_splatting/Release/app/run.command
+```
+
+The package target builds Lua, its native module and the host asset tools, checks the tutorial core mirror, compiles the canonical Gaussian/ImGui shaders and tutorial gizmo for Metal, and converts both models through `assetc`. It stages the original Lua source and installed native dependencies under `../build/lua-cmake/gaussian_splatting/Release/app/`. `run.command` sets its own working directory and module path. This directory can be moved as a unit; no developer `DYLD_LIBRARY_PATH` or Python runtime is required.
+
+`gsplat_tutorial_run` builds and opens the application directly. `gsplat_tutorial_smoke` builds and runs the automated 60-frame tutorial, saving Houseplant/Saari captures beside `app/`. GPU targets require an interactive graphics session:
+
+```sh
+cmake --build ../build/lua-cmake --config Release --target gsplat_tutorial_smoke
+```
+
+Assets and tool installations stay in the build tree. The package checks required outputs, writes `app/manifest.json` with input/output/runtime hashes and tool identities only after a successful build, and reuses unchanged assets. Changing the selected tool binaries invalidates this package's asset cache. Build/profile directories remain separate. The package helper currently supports native macOS/Metal and Windows/D3D11 configurations; the new package target has been executed on macOS only.
 
 For the local, uninstalled Windows build, from `tutorials/`:
 
@@ -118,7 +136,7 @@ The headless native `engine.trackball_controller` test covers arcball rotation, 
   "$build/languages/hg_lua/Release" gaussian_splatting.lua 60 "$build/gsplat-unified"
 ```
 
-The real-tutorial runner verifies that both models load before the loop, forces Houseplant -> Saari -> Houseplant through the GUI selection path, exercises SH1/SH3, forces two resizes and repeated GC, and checks native submissions and complete shutdown. Captures are `gsplat-unified.png` (Houseplant) and `gsplat-unified-saari.png`, with BGFX intermediate `.tga` files. Assertions remain in the tests, not in the tutorial.
+The real-tutorial runner verifies the actual initialized renderer, that both models load before the loop, forces Houseplant -> Saari -> Houseplant through the GUI selection path, exercises SH1/SH3, forces two resizes and repeated GC, and checks native submissions and complete shutdown. Captures are `gsplat-unified.png` (Houseplant) and `gsplat-unified-saari.png`, with BGFX intermediate `.tga` files. Content checks exclude the GUI and reject empty or GUI-only captures. Assertions remain in the tests, not in the tutorial.
 
 `harfang/tests/test_gaussian_splat_native.py` checks conversion, malformed input, HGS2 loading, multiple instances, mesh occlusion, SH pixels and lifetime. `tools/assetc/tests/test_gsplat.py` checks metadata and incremental compilation; `harfang/tests/run_gaussian_sort_probe.py` checks GPU-sorted IDs. Python is used only for developer tests.
 

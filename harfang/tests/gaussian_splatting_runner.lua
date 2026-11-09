@@ -70,6 +70,8 @@ hg.IsWindowOpen = function(win)
     return frame < limit and original_open(win)
 end
 hg.SubmitGaussianSplats = function(first, viewport, view_state, instances, renderer, data, settings)
+    local expected_renderer = package.config:sub(1, 1) == '\\' and 'Direct3D 11' or 'Metal'
+    assert(hg.GetComputeCaps().renderer == expected_renderer, 'Unexpected actual tutorial renderer')
     local index = expected_model + 1
     assert(#instances == 1 and instances[1].id == index, 'Wrong model submitted after GUI switch')
     assert(hg.GetGaussianSplatCount(instances[1].model) == hg.GetGaussianSplatCount(loaded_models[index]))
@@ -104,6 +106,20 @@ if capture then
         local picture = hg.Picture()
         assert(hg.LoadTGA(picture, path .. '.tga'), 'Missing screenshot')
         assert(hg.SavePNG(picture, path .. '.png'), 'Cannot save screenshot')
+        -- Ignore the GUI/gizmo. Empty frames or a GUI-only capture must fail.
+        local width, height = picture:GetWidth(), picture:GetHeight()
+        local visible, green = 0, 0
+        for y = math.floor(height * 0.25), math.floor(height * 0.85), 4 do
+            for x = math.floor(width * 0.3), math.floor(width * 0.7), 4 do
+                local color = picture:GetPixelRGBA(x, y)
+                if math.max(color.r, color.g, color.b) > 0.12 then visible = visible + 1 end
+                if color.g > color.r * 1.1 and color.g > color.b * 1.1 and color.g > 0.12 then
+                    green = green + 1
+                end
+            end
+        end
+        assert(visible > 1000 and green > 100, 'Missing model content in screenshot: ' .. path)
+        print(string.format('PASS image content: %s (%dx%d; visible=%d green=%d)', path, width, height, visible, green))
     end
 end
 print(string.format('PASS actual tutorial: %s; %d native frames, two preloads, two GUI switches, SH1/SH3, two resizes, GC and cleanup', tutorial, frame))

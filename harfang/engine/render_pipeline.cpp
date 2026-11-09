@@ -2734,6 +2734,10 @@ Window *RenderInit(
 }
 
 void RenderShutdown() {
+	// Process uploads queued since the last Frame while the renderer can still
+	// submit them. bgfx's shutdown-begin disables submission; on Metal a pending
+	// buffer upload would otherwise leave a blit encoder open when its pool drains.
+	bgfx::frame();
 	ReleaseGaussianSplatResources();
 	ReleaseComputeResources();
 	bgfx::shutdown();
