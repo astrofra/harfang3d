@@ -119,7 +119,7 @@ To use the 3.3.0 features from this unofficial fork, build the SDK from source a
 * Autodesk FBX SDK _(for FBX Converter)_
 
 ### Windows
-* Visual Studio 2019 _(C++ compiler and IDE)_
+* Visual Studio with the C++ desktop development workload, and a CMake version that supports the installed Visual Studio release
 * MinGW _(for Harfang Go module)_
 
 ### Linux
@@ -128,6 +128,13 @@ To use the 3.3.0 features from this unofficial fork, build the SDK from source a
 
 <a name="subsection_3b"></a>
 ## Building
+
+On Windows, the `rebuild_*.bat` scripts use CMake's default Visual Studio
+selection and build for x64. No Visual Studio version is hardcoded. To select
+a specific Visual Studio generator, set the standard `CMAKE_GENERATOR`
+environment variable before running a script; `PLATFORM` overrides x64.
+After changing Visual Studio versions, remove `CMakeCache.txt` and `CMakeFiles/`
+from the affected build directory before rebuilding.
 
 1. Clone the `Harfang 3D` repository including its remaining submodules.
     ```
@@ -157,7 +164,7 @@ To use the 3.3.0 features from this unofficial fork, build the SDK from source a
 
 1. Generate the build system using CMake. For example, on Windows it will be:
     ```
-    cmake ../.. -G "Visual Studio 16 2019" -A x64 \
+    cmake ../.. -A x64 \
         -DCMAKE_INSTALL_PREFIX:PATH="D:/harfang/build/install" \
         -DPYTHON_EXECUTABLE:FILEPATH="C:/Python36/python.exe" \
         -DHG_FABGEN_PATH:PATH="D:/harfang/build/fabgen" \

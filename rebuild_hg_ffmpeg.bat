@@ -17,8 +17,7 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 set "BUILD_DIR=%WORK_DIR%\build\ffmpeg-plugin"
 set "INSTALL_DIR=%WORK_DIR%\install\ffmpeg"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
-set "GENERATOR=Visual Studio 17 2022"
-set "PLATFORM=x64"
+if not defined PLATFORM set "PLATFORM=x64"
 
 if not "%~2"=="" set "FFMPEG_ROOT=%~2"
 if not defined FFMPEG_ROOT if exist "%WORK_DIR%\ffmpeg\" set "FFMPEG_ROOT=%WORK_DIR%\ffmpeg"
@@ -63,7 +62,7 @@ if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 
 echo [1/3] Configuration CMake...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^

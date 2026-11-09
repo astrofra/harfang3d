@@ -28,8 +28,7 @@ set "PLAYER_DIR=%INSTALL_DIR%\%PLAYER_DIR_NAME%"
 set "DATA_DIR=%PLAYER_DIR%\data"
 set "RESOURCE_DIR=%PLAYER_DIR%\resources\sounds"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
-set "GENERATOR=Visual Studio 17 2022"
-set "PLATFORM=x64"
+if not defined PLATFORM set "PLATFORM=x64"
 set "BUILD_TARGETS=launcher launcher_noconsole audio_xmp"
 
 if not exist "%FABGEN_DIR%\" (
@@ -52,7 +51,7 @@ if not defined PYTHON_EXE (
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
 echo [1/4] Configuration CMake...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_LUA_INSTALL_DIR="%PLAYER_DIR_NAME%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
