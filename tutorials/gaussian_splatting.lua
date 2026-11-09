@@ -68,7 +68,7 @@ local function main()
 	local model_names = {"Houseplant", "Saari"}
 	local model_paths = {
 		assets .. "/gaussian_splatting/source/plant.hgs",
-		assets .. "/gaussian_splatting_native/saari-probe.hgs"
+		assets .. "/gaussian_splatting/source/saari-probe.hgs"
 	}
 	local model_rotations = {hg.Vec3(math.pi, 0, 0), hg.Vec3(-math.pi / 2, 0, 0)}
 
