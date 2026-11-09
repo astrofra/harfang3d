@@ -2,7 +2,7 @@
 
 Date: 2026-11-09. Base revision: `2114a55`, branch `gsplat`.
 
-This is an implemented, D3D11-tested slice of the [native API study](SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md). It provides [Saari](../tutorials/gaussian_splatting_native.lua) and [Houseplant](../tutorials/gaussian_splatting.lua) tutorials using the same native API. This does not complete every proposed engine feature. See the [preparation and launch guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md).
+This is an implemented, D3D11-tested slice of the [native API study](SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md). It provides a [single Gaussian tutorial](../tutorials/gaussian_splatting.lua) preloading Houseplant and Saari, with ImGui model selection and native trackball controls. This does not complete every proposed engine feature. See the [preparation and launch guide](../tutorials/GAUSSIAN_SPLATTING.md).
 
 ## HGS2 quantized/compressed storage (2026-11-09)
 
@@ -48,11 +48,11 @@ Native `gsplatc` and assetc now accept gzip SPZ **versions 2 and 3**, with the s
 
 The full 250,000-record HGS payload was compared with the previous PLY-derived HGS. Maximum normalized position error is 1.44e-6; alpha error 0.001961; relative scale error 3.175%; sign-equivalent quaternion norm error 0.002084. These agree with the source's quantization. The retained PLY has 186 DC channel values outside SPZ's representable range; those are already clipped in the SPZ source. After accounting for this clipping, maximum DC error is 0.013073. Maximum higher-SH error is 0.066407, within the two-stage 4-bit quantization bound (1/16 + 1/256). Conversion cannot recover information removed by SPZ encoding.
 
-Format reference: [Niantic SPZ source](https://github.com/nianticlabs/spz/tree/11312e4ad836ed06e3da2f3d5b633688d17ebebb). Current preparation/launch instructions are in the [Saari guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md). Earlier PLY-only commands below remain historical evidence.
+Format reference: [Niantic SPZ source](https://github.com/nianticlabs/spz/tree/11312e4ad836ed06e3da2f3d5b633688d17ebebb). Current preparation/launch instructions are in the [Gaussian guide](../tutorials/GAUSSIAN_SPLATTING.md). Earlier PLY-only commands below remain historical evidence.
 
 ## Single-file tutorials and Python cleanup (2026-11-09)
 
-The current workflow is documented in the [Houseplant guide](../tutorials/GAUSSIAN_SPLATTING.md) and [Saari guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md). Earlier commands and timings below describe the previous staging/launcher workflow and remain historical evidence.
+The current workflow is documented in the [Gaussian guide](../tutorials/GAUSSIAN_SPLATTING.md). Earlier commands and timings below describe the previous staging/launcher workflow and remain historical evidence.
 
 - Both applications are self-contained Lua sources with embedded trackball controls. Houseplant also embeds its RGB axis gizmo. Loading, projection, sort scheduling, resource ownership and splat drawing use the native API.
 - Removed all Gaussian Python tools under `tutorials/tools`: the HGS0 converter and its tests, both launchers, and the legacy pipeline checker. Removed the former Lua renderer/camera/gizmo modules and duplicate Gaussian shaders. Native shaders live under `resources/core/gaussian_splatting`; relative includes work with ordinary assetc compilation.
@@ -163,7 +163,7 @@ Actual Copilot CLI sessions used `kimi-k3.1-pro:cloud` through the local Ollama 
 
 ## Asset compiler integration follow-up
 
-The same-day follow-up adds `type: "gaussian-splat"` to the existing `profiles` metadata convention. `assetc` converts `name.ply` plus `name.ply.meta` into `name.hgs` by launching external `gsplatc`; the converter is installed in the same platform toolchain directory as `texturec` and `shaderc`. PLY files without the declaration retain pass-through behavior. The [asset compiler manual](../doc/doc/man.AssetCompiler.md) and [Saari guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md) document the schema, defaults and `-profile` overrides.
+The same-day follow-up adds `type: "gaussian-splat"` to the existing `profiles` metadata convention. `assetc` converts `name.ply` plus `name.ply.meta` into `name.hgs` by launching external `gsplatc`; the converter is installed in the same platform toolchain directory as `texturec` and `shaderc`. PLY files without the declaration retain pass-through behavior. The [asset compiler manual](../doc/doc/man.AssetCompiler.md)  document the schema, defaults and `-profile` overrides.
 
 The build context includes effective conversion settings and a hash of the converter binary. Source/sidecar dependencies, metadata creation/removal, and profile changes participate in incremental processing. Compiler-owned alternate PLY/HGS outputs are cleaned when the conversion mode changes. Name collisions with independent HGS sources fail explicitly. Invalid metadata produces diagnostics and a nonzero one-shot exit status; failed compiler outputs are removed so retries cannot become false incremental successes.
 

@@ -1,19 +1,24 @@
-# Houseplant: a single-file native Gaussian tutorial
+# Gaussian splatting: Houseplant and Saari
 
-[gaussian_splatting.lua](gaussian_splatting.lua) displays the bundled Houseplant by Marcel Padilla (CC BY 4.0). It is one Lua source: window, native trackball controller, RGB axis overlay and native Gaussian API calls. No companion Lua modules or Python preparation/launch tools are needed.
+[gaussian_splatting.lua](gaussian_splatting.lua) is the single Lua Gaussian tutorial. It preloads Houseplant and Saari during setup, then switches between them through a small ImGui panel. Each model keeps its own native trackball camera, SH setting and render data. Switching does not reload either file.
 
-C++ owns HGS2 loading, GPU resources, covariance projection, global depth sorting and drawing. Lua submits one instance list per frame with `SubmitGaussianSplats`. The compiled shaders remain ordinary HARFANG resources; single-file refers to the Lua application, not an embedded asset bundle.
+C++ owns HGS2 loading, GPU resources, covariance projection, spherical harmonics, depth sorting and drawing. Lua owns the interface, window, model selection and RGB orientation gizmo. No companion Lua modules or Python preparation/launch tools are needed. The tutorial contains no assertions; developer checks live under `harfang/tests`.
 
-## Compile and run
+## Prepare, compile and run
 
-Use a build containing the native Gaussian API, Lua binding and `assetc`. Installed `assetc` discovers its toolchain automatically; `gsplatc` lives beside `shaderc` and `texturec`. From `tutorials/`:
+Use a build containing the native Gaussian API, `TrackballController`, ImGui, Lua bindings and `assetc`. Both compiled models are required at startup. Houseplant is bundled; Saari comes from the local preservation project and is not redistributed.
+
+From `tutorials/`, stage the local Saari source before compiling:
 
 ```powershell
+Copy-Item C:/works/projects/preservation-forward-by-komplex/postshot/saari-probe.spz resources/gaussian_splatting_native/saari-probe.spz
 assetc -api DX11 -platform windows resources resources_compiled
 lua gaussian_splatting.lua
 ```
 
-On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The migrated path has been exercised on Windows/D3D11; it has not yet been qualified on Metal.
+The staged SPZ is gitignored. The `gaussian_splatting_native` resource directory retains its existing name; it is a dataset directory, not a second tutorial. The Lua application takes no arguments and loads only compiled resources, including the shared Gaussian and ImGui shaders.
+
+On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The combined application has been validated on Windows/D3D11. Metal and displays with differing client/framebuffer scales have not been qualified.
 
 For the local, uninstalled Windows build, from `tutorials/`:
 
@@ -24,60 +29,97 @@ $env:LUA_CPATH = "$build/languages/hg_lua/Release/?.dll;;"
 & "$build/extern/lua/Release/lua.exe" gaussian_splatting.lua
 ```
 
-See the [Saari guide](GAUSSIAN_SPLATTING_NATIVE.md) for build configuration and installation commands. Preparing and running either tutorial requires no Python.
+The runtime or launcher supplies module search paths; the tutorial does not modify `package.cpath`.
 
-## Source conversion and budget
+## Models and initial poses
 
-The bundled `resources/gaussian_splatting/source/plant.splat` contains **113,648** splats. Its adjacent `plant.splat.meta` opts into native conversion:
+| Model | Compiled resource | Default retained data | Initial pose |
+|---|---|---|---|
+| Houseplant | `gaussian_splatting/source/plant.hgs` | All 113,648 splats, SH0 | Bounds-based framing; 180-degree X rotation converts -Y up |
+| Saari | `gaussian_splatting_native/saari-probe.hgs` | 250,000 of 1,307,339 splats, SH3 | Inside the sky shell, facing the island; -90-degree X rotation converts Z up |
+
+The model transforms apply to positions, covariances and SH directions together. The GUI shows the retained count and stored SH degree. Both models' native buffers are loaded during setup. Per-view GPU scratch is allocated on first submission and retained independently for each model.
+
+Houseplant is by Marcel Padilla, CC BY 4.0. Its unmodified `.splat` source is 3,636,736 bytes; attribution, source revision and checksum are in [ATTRIBUTION.md](resources/gaussian_splatting/ATTRIBUTION.md). The converter normalizes the full position bounds and encodes the stored RGB as SH0 without a gamma transform; it cannot recover higher harmonics absent from the source.
+
+The local Saari SPZ v3 source is 38,221,014 bytes, contains SH3 and has antialiasing enabled. SHA-256: `34b352905666508d92d19f5d97b7168588985177bb7992792c0d89f22bc77739`. Its matching PLY has SHA-256 `4646f8b9ead430be1d489f79700ed1c91d51c0b8735ce6f6044615cd9bb8bb01`. These files belong to the Forward/Komplex preservation project. Postshot antialias metadata enables determinant-ratio opacity compensation in native projection.
+
+## Conversion, budgets and storage
+
+`assetc` reads the adjacent `.meta` file and invokes toolchain `gsplatc`. A Saari metadata profile has this shape:
 
 ```json
 {
   "profiles": {
-    "default": {"type": "gaussian-splat", "max-count": 250000, "sh-degree": 0, "normalize": true},
-    "preview": {"max-count": 30000}
+    "default": {"type": "gaussian-splat", "max-count": 250000, "sh-degree": 3, "normalize": true, "storage": "quantized"},
+    "preview": {"max-count": 50000, "sh-degree": 1},
+    "reference": {"storage": "float32"}
   }
 }
 ```
 
-`assetc` invokes `gsplatc`, producing `resources_compiled/gaussian_splatting/source/plant.hgs`. The default preserves all records. `assetc -profile preview -api DX11 -platform windows resources resources_compiled` selects 30,000 records by deterministic midpoint sampling of the source order. This naive reduction may introduce holes; it does not merge splats or compensate opacity. Recompile with `-profile default` to restore the full asset.
+Houseplant's metadata caps storage at SH0 and its `preview` profile selects 30,000 splats. Selected-profile fields override `default` fields, then built-in defaults. Files without `type: "gaussian-splat"` pass through unchanged. See the [Asset Compiler manual](../doc/doc/man.AssetCompiler.md#gaussian-ply-splat-and-spz-compilation) for the complete schema.
 
-The native importer supports the headerless 32-byte `.splat` layout: little-endian float32 XYZ position and linear XYZ scale, byte RGBA and packed byte WXYZ quaternion. It normalizes quaternions, preserves linear alpha (including zero), and encodes stored RGB as SH0 coefficients. It does not invent higher harmonics or perform a gamma conversion. Invalid records are rejected even when decimation would discard them.
+Conversion validates every source record, even when decimating. Retained records are evenly spaced midpoint samples; this naive reduction can introduce holes and does not merge splats or compensate opacity. The maximum budget is 1,048,576 records. `normalize: true` centers the full position bounds and scales their largest extent to two units.
 
-Normalization centers the complete source position bounds and scales their largest extent to two units. The tutorial rotates the instance 180 degrees around X because the source is -Y up. The runtime transforms positions and covariances together. Source attribution and checksum are in [ATTRIBUTION.md](resources/gaussian_splatting/ATTRIBUTION.md).
+The compiled format is quantized, zlib-compressed HGS2, in blocks of up to 256 splats. Adaptive ranges cover position, scale, DC and higher SH. `assetc -profile reference ...` selects compressed `float32` storage for lossless imported attributes; `-profile default` restores compact storage. The CLI equivalent is `gsplatc INPUT.ply OUTPUT.hgs --storage quantized` (or `float32`). The converter reports file size and reconstruction errors.
 
-The default compiled asset uses quantized, zlib-compressed HGS2 blocks. A `reference` profile with `"storage": "float32"` preserves imported values for comparison. `gsplatc` quantifies reconstruction errors; the native loader decompresses/dequantizes before GPU upload. GPU memory usage is unchanged. Recompile any HGS1 assets; no legacy reader is retained. See the [format specification](../specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md).
+Loading decompresses/dequantizes into the native float buffers; GPU memory use is unchanged. HGS0/HGS1 are rejected and must be recompiled. See the [HGS2 specification](../specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md).
 
-## Controls and rendering
+Native import accepts headerless 32-byte `.splat`, Graphdeco/Postshot binary little-endian float PLY, and gzip SPZ v2/v3 with SH0-3 and the antialias flag. SPZ v4, extension flags and SH4 are unsupported. SPZ decoding uses the existing miniz dependency and occurs in `gsplatc`, outside the render loop. [SPZ format reference](https://github.com/nianticlabs/spz/tree/11312e4ad836ed06e3da2f3d5b633688d17ebebb).
 
-Camera navigation uses [`hg.TrackballController`](../doc/doc/TrackballController.md). Lua chooses the initial pose from the model bounds, gates updates on window focus and handles the reset key. Orbit, dolly, pan and camera-world transform computation are native. The runtime or launcher supplies the module search paths; the tutorial does not modify `package.cpath`.
+SPZ quantization can already clip color/SH in the input: the local Saari comparison found 186 of 750,000 retained DC channels beyond its representable range. HGS2 cannot restore those source values. Use the original PLY with `float32` storage for a reference. To prepare Saari from PLY, stage `saari-probe.ply` and rename the sidecar to `saari-probe.ply.meta`; keep only one opted-in source per basename, since both inputs produce `saari-probe.hgs`.
 
-| Input | Action |
+## GUI and controls
+
+| Control | Action |
 |---|---|
-| Left drag | Quaternion trackball, including roll |
-| Wheel | Dolly |
-| Right/middle drag | Pan |
-| R | Reset camera |
+| Model combo | Switch between preloaded Houseplant and Saari |
+| SH degree slider | Select degree 0..3 for Saari; Houseplant displays its fixed SH0 |
+| Reset camera button / R | Restore the active model's initial pose |
+| Left drag outside the GUI | Quaternion trackball, including roll |
+| Wheel outside the GUI | Dolly |
+| Right/middle drag outside the GUI | Pan |
+| 1 / 2 / 3 / 4 outside the GUI | Select SH degree 0 / 1 / 2 / 3, capped at the stored degree |
 | Escape | Close and release resources |
 
-The native submission uses two views (compute and draw). The application clears view 0 and draws the gizmo in the returned next view. It handles framebuffer resize and explicitly destroys Gaussian resources before renderer shutdown.
+Camera navigation uses [`hg.TrackballController`](../doc/doc/TrackballController.md). ImGui mouse capture blocks camera input, including the wheel; the first drag after returning from the GUI or reacquiring focus is suppressed. Camera poses and SH selections survive model changes. Runtime SH selection changes evaluation only; the importer's `sh-degree` cap controls stored data.
 
-Splats use global center-depth sorting, premultiplied blending and depth testing without depth writes. Multiple instances can be passed in the same submission. Opaque meshes can share the target depth buffer; intersecting translucent meshes and exact per-pixel splat ordering remain outside this implementation.
+The application clears view 0, submits the selected model through two native views, draws the orientation overlay in the returned next view, then draws ImGui after the overlay. It handles resize and explicitly releases both models, both render-data objects, the shared renderer and GUI resources before render shutdown.
+
+Splats use global center-depth sorting, premultiplied blending and depth testing without depth writes. Submit overlapping Gaussian instances together for a global sort. The native renderer supports translation, rotation and positive uniform scale. Opaque meshes can share the target depth buffer; arbitrary translucent mesh composition and exact per-pixel splat ordering remain outside this implementation.
+
+## Building locally on Windows
+
+From the repository root (`harfang3d/`), with the installed Visual Studio generator and FABGen path:
+
+```powershell
+cmake -S . -B ../build/gsplat-native -G "Visual Studio 18 2026" -A x64 `
+  "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
+  -DHG_BUILD_HG_LUA=ON -DHG_BUILD_ASSETC=ON -DHG_BUILD_TESTS=ON `
+  -DHG_BUILD_ASSIMP_CONVERTER=OFF -DHG_BUILD_FBX_CONVERTER=OFF `
+  -DHG_BUILD_GLTF_IMPORTER=OFF -DHG_BUILD_GLTF_EXPORTER=OFF `
+  -DHG_BUILD_LEGACY_ARCHIVE=OFF -DHG_BUILD_DOCS=OFF `
+  -DHG_FABGEN_PATH=C:/works/dev/harfang/FABGen
+cmake --build ../build/gsplat-native --config Release --target assetc hg_lua recastc bulletc --parallel 6
+cmake --install ../build/gsplat-native --config Release --component assetc --prefix ../install/gsplat-native-assets
+& ../install/gsplat-native-assets/assetc/assetc.exe -api DX11 -platform windows tutorials/resources tutorials/resources_compiled
+```
+
+Installed `assetc` discovers `gsplatc`, `shaderc` and `texturec` in its platform toolchain. Use `assetc -toolchain PATH ...` for a custom toolchain.
 
 ## Regression checks
 
-The headless native `engine.trackball_controller` unit test checks arcball rotation, dolly, pan, reset, stability and injected mouse input. The Lua binding smoke check runs without rendering:
+The headless native `engine.trackball_controller` test covers arcball rotation, dolly, pan, reset, stability and injected mouse input. Its Lua binding check runs without rendering. From `tutorials/`, with the build environment above:
 
 ```powershell
 & "$build/extern/lua/Release/lua.exe" ../harfang/tests/gaussian_camera.lua "$build/languages/hg_lua/Release"
-```
-
-Python remains only in developer tests, outside `tutorials/tools`: `harfang/tests/test_gaussian_splat_native.py` validates conversion and optional Lua/GPU composition, and `tools/assetc/tests/test_gsplat.py` exercises metadata, incremental compilation and failures. `harfang/tests/run_gaussian_sort_probe.py` checks every GPU-sorted ID using the actual native sort shader.
-
-The small Lua test runner executes the real tutorial, forces two resizes and repeated GC, checks successful native submissions and captures a screenshot. From `tutorials/`, after setting the build environment above:
-
-```powershell
 & "$build/extern/lua/Release/lua.exe" ../harfang/tests/gaussian_splatting_runner.lua `
-  "$build/languages/hg_lua/Release" gaussian_splatting.lua 60 "$build/houseplant"
+  "$build/languages/hg_lua/Release" gaussian_splatting.lua 60 "$build/gsplat-unified"
 ```
 
-This produces `houseplant.png` and the BGFX intermediate `houseplant.tga`. The former Python HGS0 converter, launcher and legacy renderer/oracle have been removed; recompile resources to replace any old generated datasets.
+The real-tutorial runner verifies that both models load before the loop, forces Houseplant -> Saari -> Houseplant through the GUI selection path, exercises SH1/SH3, forces two resizes and repeated GC, and checks native submissions and complete shutdown. Captures are `gsplat-unified.png` (Houseplant) and `gsplat-unified-saari.png`, with BGFX intermediate `.tga` files. Assertions remain in the tests, not in the tutorial.
+
+`harfang/tests/test_gaussian_splat_native.py` checks conversion, malformed input, HGS2 loading, multiple instances, mesh occlusion, SH pixels and lifetime. `tools/assetc/tests/test_gsplat.py` checks metadata and incremental compilation; `harfang/tests/run_gaussian_sort_probe.py` checks GPU-sorted IDs. Python is used only for developer tests.
+
+The [native API study](../specifications/SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md) and [validation record](../specifications/GSPLAT_NATIVE_PROGRESS.md) retain the earlier implementation history.
