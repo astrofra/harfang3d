@@ -1449,7 +1449,8 @@ void Geometry(std::map<std::string, Hash> &hashes, const std::string &path) {
 
 //
 void GatherShaderDependencies(const std::string &path, std::set<std::string> &deps, const std::string &base) {
-	const auto rel_path = base + path;
+	// Keep dependency identifiers canonical so cleanup, hashing and cycle detection see equivalent includes as the same file.
+	const auto rel_path = hg::CleanPath(base + path);
 
 	if (deps.find(rel_path) != std::end(deps))
 		return; // processed already, don't need no cyclic references

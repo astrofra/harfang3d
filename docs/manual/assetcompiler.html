@@ -111,7 +111,7 @@
 <h2 id="usage-in-detail">Usage in detail</h2>
 <p>If you need more control over the compilation options, the command line gets the following parameters:</p>
 <div class="codehilite"><pre><span></span><code><span class="n">assetc</span><span class="w"> </span><span class="o">&lt;</span><span class="n">input</span><span class="o">&gt;</span><span class="w"> </span><span class="p">[</span><span class="n">output</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">daemon</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">platform</span><span class="w"> </span><span class="n">PLATFORM</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">api</span><span class="w"> </span><span class="n">API</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">defines</span><span class="w"> </span><span class="n">DEFINES</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">job</span><span class="w"> </span><span class="n">COUNT</span><span class="p">]</span>
-<span class="w">       </span><span class="p">[</span><span class="o">-</span><span class="n">toolchain</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">progress</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">log_to_std_out</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">debug</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">quiet</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">verbose</span><span class="p">]</span>
+<span class="w">       </span><span class="p">[</span><span class="o">-</span><span class="n">toolchain</span><span class="w"> </span><span class="n">PATH</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">profile</span><span class="w"> </span><span class="n">NAME</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">progress</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">log_to_std_out</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">debug</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">quiet</span><span class="p">]</span><span class="w"> </span><span class="p">[</span><span class="o">-</span><span class="n">verbose</span><span class="p">]</span>
 </code></pre></div>
 
 <table>
@@ -164,6 +164,11 @@
 <td>Path to the toolchain folder.</td>
 </tr>
 <tr>
+<td><code>-profile</code></td>
+<td></td>
+<td>Metadata profile to select; missing fields fall back to <code>default</code>.</td>
+</tr>
+<tr>
 <td><code>-progress</code></td>
 <td></td>
 <td>Output progress to the standard output.</td>
@@ -191,7 +196,101 @@
 </tbody>
 </table>
 <p><em>Note:</em> When run in daemon mode <code>assetc</code> will not exit after its initial run and will keep watching the input folder. When a resource is modified it will automatically be compiled to the output folder.</p>
+<h2 id="texture-compilation">Texture compilation</h2>
+<p><code>assetc</code> uses the bundled portable <code>texc</code> compiler for BC1, BC3, BC4, BC5, BC7,
+RGBA8, BGRA8 and RAW textures on Windows, Linux and macOS. RAW selects BGRA8 for
+DX11 and RGBA8 for the other graphics APIs. The existing <code>compression</code>,
+<code>generate-mips</code> and <code>max-size</code> metadata remain supported. The fast path uses
+quality 0 and power-of-two dimensions, bounded by <code>max-size</code>.</p>
+<p>Formats outside this set, and HDR/EXR inputs, use the existing compilers
+(<code>texconv</code> when available and compatible, otherwise BGFX <code>texturec</code>). Custom
+toolchains without <code>texc</code> also retain this fallback. Changing the selected
+compiler invalidates the texture's compilation cache automatically.</p>
 <p>See <a href="gltf.html">Importing from GLTF</a> and <a href="fbx.html">Importing from FBX</a> to convert common 3d formats to Harfang resources.</p>
+<h2 id="gaussian-ply-splat-and-spz-compilation">Gaussian PLY, splat and SPZ compilation</h2>
+<p><code>assetc</code> delegates Gaussian PLY, <code>.splat</code> and <code>.spz</code> conversion to <code>gsplatc</code>, installed in the same
+toolchain directory as <code>texturec</code> and <code>shaderc</code>. For a resource named
+<code>island.ply</code>, create <code>island.ply.meta</code>:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;profiles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gaussian-splat&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;max-count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">250000</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;sh-degree&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;normalize&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;preview&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;max-count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">50000</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;sh-degree&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>Compiling the resources produces <code>island.hgs</code> in the corresponding output
+directory. Use <code>-profile preview</code> to select the example override. PLY, <code>.splat</code> and <code>.spz</code> resources
+without <code>type: "gaussian-splat"</code> retain pass-through behavior; this converter
+does not import polygon meshes.</p>
+<p>The importer accepts Graphdeco/Postshot binary little-endian PLY with named
+scalar float properties. It validates the entire source, optionally selects
+evenly spaced splats, and writes the versioned HGS2 runtime format. The runtime
+loads this compiled asset through the native Gaussian model API.</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>max-count</code></td>
+<td>250000</td>
+<td>Maximum retained splats, integer 1–1048576. Naive decimation can reduce opacity coverage.</td>
+</tr>
+<tr>
+<td><code>sh-degree</code></td>
+<td>3</td>
+<td>Maximum stored spherical-harmonics degree, integer 0–3. Missing source bands are not invented.</td>
+</tr>
+<tr>
+<td><code>storage</code></td>
+<td><code>quantized</code></td>
+<td><code>quantized</code> for adaptive quantization and block compression; <code>float32</code> for lossless canonical attributes with block compression.</td>
+</tr>
+<tr>
+<td><code>normalize</code></td>
+<td>false</td>
+<td>Boolean. Center the full source position bounds and uniformly scale their largest extent to two units; otherwise preserve source coordinates.</td>
+</tr>
+</tbody>
+</table>
+<p>Metadata changes participate in incremental compilation. Invalid Gaussian
+settings, missing <code>gsplatc</code>, unsupported source schemas and converter failures
+fail the build. One-shot <code>assetc</code> returns a nonzero status when compilation
+fails. A separate source <code>island.hgs</code> alongside the opted-in <code>island.ply</code> is
+rejected as an output-name collision.</p>
+<p>Headerless 32-byte <code>.splat</code> sources use the same metadata schema, for example
+<code>plant.splat.meta</code> produces <code>plant.hgs</code>. The layout is little-endian float32
+XYZ position and linear XYZ scale, byte RGBA, and packed byte WXYZ quaternion.
+RGB becomes SH0 coefficients; alpha is linear, including zero. No higher SH
+bands are invented. Every source record is validated before output is written.
+Two opted-in <code>.ply</code>/<code>.splat</code>/<code>.spz</code> sources with the same basename are rejected because
+they would produce the same HGS file.</p>
+<p>Gzip SPZ versions 2 and 3 use the same metadata: <code>island.spz.meta</code> produces
+<code>island.hgs</code>. Import preserves SH0-3, antialiasing and stored coordinate axes,
+with the same decimation and normalization options. Gzip integrity and exact
+attribute lengths are checked; decompressed input is capped at 512 MiB.
+SPZ v1/v4, extension flags and SH4 are unsupported and fail explicitly.
+SPZ quantization is retained; conversion cannot recover lost source precision.</p>
+<p>HGS2 stores blocks of up to 256 splats compressed with zlib/DEFLATE. Quantized
+storage is the default for every input format, including PLY. Adaptive block
+ranges avoid intentional color/SH clipping. <code>gsplatc --storage float32</code> (or
+<code>"storage": "float32"</code> in a metadata profile) provides a reference representation.
+The tool reports measured quantization errors and actual file size. Native
+loading reconstructs float buffers; GPU memory use is unchanged. HGS0/HGS1
+are not accepted: recompile existing Gaussian resources after updating.</p>
 <div class="doc-footer">Harfang 3.3.0 static documentation.</div>
 </main>
 </div>

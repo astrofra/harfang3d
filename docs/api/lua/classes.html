@@ -221,6 +221,65 @@
 <tr id="colorlist_size"><td><code>size</code></td><td><div class="api-proto"><code>integer</code> size()</div></td><td></td></tr>
 </table>
 </section>
+<section class="api-entry" id="computebuffer">
+<h2>ComputeBuffer <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="computebufferbinding">
+<h2>ComputeBufferBinding <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="computebufferbindinglist">
+<h2>ComputeBufferBindingList <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="computebufferbindinglist_at"><td><code>at</code></td><td><div class="api-proto"><a href="#computebufferbinding">ComputeBufferBinding</a> at(<code>integer</code> idx)</div></td><td></td></tr>
+<tr id="computebufferbindinglist_clear"><td><code>clear</code></td><td><div class="api-proto"><code>nil</code> clear()</div></td><td></td></tr>
+<tr id="computebufferbindinglist_push_back"><td><code>push_back</code></td><td><div class="api-proto"><code>nil</code> push_back(<a href="#computebufferbinding">ComputeBufferBinding</a> v)</div></td><td></td></tr>
+<tr id="computebufferbindinglist_reserve"><td><code>reserve</code></td><td><div class="api-proto"><code>nil</code> reserve(<code>integer</code> size)</div></td><td></td></tr>
+<tr id="computebufferbindinglist_size"><td><code>size</code></td><td><div class="api-proto"><code>integer</code> size()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="computecaps">
+<h2>ComputeCaps <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>image_write_reporting_complete</code></td><td><code>boolean</code></td></tr>
+<tr><td><code>max_bindings</code></td><td><code>integer</code></td></tr>
+<tr><td><code>max_texture_size</code></td><td><code>integer</code></td></tr>
+<tr><td><code>max_views</code></td><td><code>integer</code></td></tr>
+<tr><td><code>renderer</code></td><td><code>string</code></td></tr>
+<tr><td><code>rgba32f_image_write</code></td><td><code>boolean</code></td></tr>
+<tr><td><code>rgba32f_vertex_sampling</code></td><td><code>boolean</code></td></tr>
+<tr><td><code>supported</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
+<section class="api-entry" id="computeframestats">
+<h2>ComputeFrameStats <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>compute_calls</code></td><td><code>integer</code></td></tr>
+<tr><td><code>draw_calls</code></td><td><code>integer</code></td></tr>
+<tr><td><code>gpu_ms</code></td><td><code>number</code></td></tr>
+<tr><td><code>gpu_timestamp</code></td><td><code>integer</code></td></tr>
+<tr><td><code>gpu_timing_available</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
 <section class="api-entry" id="contact">
 <h2>Contact <span class="api-kind">Class</span></h2>
 <div class="api-doc"><p>Object containing the world space position, normal and depth of a contact as reported by the collision system.</p></div>
@@ -568,6 +627,119 @@ It can be used to test wether a volume is inside or outside the frustum it repre
 <tr id="gamepadstate_isconnected"><td><code>IsConnected</code></td><td><div class="api-proto"><code>boolean</code> IsConnected()</div></td><td></td></tr>
 </table>
 </section>
+<section class="api-entry" id="gaussiansplatinstance">
+<h2>GaussianSplatInstance <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>id</code></td><td><code>integer</code></td></tr>
+<tr><td><code>model</code></td><td><a href="#gaussiansplatmodel">GaussianSplatModel</a></td></tr>
+<tr><td><code>opacity</code></td><td><code>number</code></td></tr>
+<tr><td><code>world</code></td><td><a href="#mat4">Mat4</a></td></tr>
+</table>
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="gaussiansplatinstance_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#gaussiansplatinstance">GaussianSplatInstance</a> Constructor(<a href="#gaussiansplatmodel">GaussianSplatModel</a> model)</div>
+<div class="api-proto"><a href="#gaussiansplatinstance">GaussianSplatInstance</a> Constructor(<a href="#gaussiansplatmodel">GaussianSplatModel</a> model, <a href="#mat4">Mat4</a> world)</div>
+<div class="api-proto"><a href="#gaussiansplatinstance">GaussianSplatInstance</a> Constructor(<a href="#gaussiansplatmodel">GaussianSplatModel</a> model, <a href="#mat4">Mat4</a> world, <code>integer</code> id)</div>
+<div class="api-proto"><a href="#gaussiansplatinstance">GaussianSplatInstance</a> Constructor(<a href="#gaussiansplatmodel">GaussianSplatModel</a> model, <a href="#mat4">Mat4</a> world, <code>integer</code> id, <code>number</code> opacity)</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="gaussiansplatinstancelist">
+<h2>GaussianSplatInstanceList <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="gaussiansplatinstancelist_at"><td><code>at</code></td><td><div class="api-proto"><a href="#gaussiansplatinstance">GaussianSplatInstance</a> at(<code>integer</code> idx)</div></td><td></td></tr>
+<tr id="gaussiansplatinstancelist_clear"><td><code>clear</code></td><td><div class="api-proto"><code>nil</code> clear()</div></td><td></td></tr>
+<tr id="gaussiansplatinstancelist_push_back"><td><code>push_back</code></td><td><div class="api-proto"><code>nil</code> push_back(<a href="#gaussiansplatinstance">GaussianSplatInstance</a> v)</div></td><td></td></tr>
+<tr id="gaussiansplatinstancelist_reserve"><td><code>reserve</code></td><td><div class="api-proto"><code>nil</code> reserve(<code>integer</code> size)</div></td><td></td></tr>
+<tr id="gaussiansplatinstancelist_size"><td><code>size</code></td><td><div class="api-proto"><code>integer</code> size()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="gaussiansplatloadoptions">
+<h2>GaussianSplatLoadOptions <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>max_file_bytes</code></td><td><code>integer</code></td></tr>
+</table>
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="gaussiansplatloadoptions_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#gaussiansplatloadoptions">GaussianSplatLoadOptions</a> Constructor()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="gaussiansplatloadresult">
+<h2>GaussianSplatLoadResult <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>message</code></td><td><code>string</code></td></tr>
+<tr><td><code>model</code></td><td><a href="#gaussiansplatmodel">GaussianSplatModel</a></td></tr>
+<tr><td><code>ok</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
+<section class="api-entry" id="gaussiansplatmodel">
+<h2>GaussianSplatModel <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="gaussiansplatrenderdata">
+<h2>GaussianSplatRenderData <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="gaussiansplatrenderer">
+<h2>GaussianSplatRenderer <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="gaussiansplatrendersettings">
+<h2>GaussianSplatRenderSettings <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>compact_views</code></td><td><code>boolean</code></td></tr>
+<tr><td><code>depth_test</code></td><td><code>boolean</code></td></tr>
+<tr><td><code>max_pixel_radius</code></td><td><code>number</code></td></tr>
+<tr><td><code>max_sh_degree</code></td><td><code>integer</code></td></tr>
+<tr><td><code>max_splats</code></td><td><code>integer</code></td></tr>
+<tr><td><code>view_limit</code></td><td><code>integer</code></td></tr>
+</table>
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="gaussiansplatrendersettings_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#gaussiansplatrendersettings">GaussianSplatRenderSettings</a> Constructor()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="gaussiansplatsubmitresult">
+<h2>GaussianSplatSubmitResult <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>count</code></td><td><code>integer</code></td></tr>
+<tr><td><code>dispatches</code></td><td><code>integer</code></td></tr>
+<tr><td><code>draw_view</code></td><td><code>integer</code></td></tr>
+<tr><td><code>gpu_bytes</code></td><td><code>integer</code></td></tr>
+<tr><td><code>max_pixel_radius</code></td><td><code>number</code></td></tr>
+<tr><td><code>message</code></td><td><code>string</code></td></tr>
+<tr><td><code>ok</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
 <section class="api-entry" id="geometry">
 <h2>Geometry <span class="api-kind">Class</span></h2>
 <div class="api-doc"><p>Base geometry object. Before a geometry can be displayed, it must be converted to <a href="#model">Model</a> by the asset compiler (see <a href="../../manual/assetcompiler.html">Compiling to Assets</a>).</p>
@@ -608,6 +780,27 @@ It can be used to test wether a volume is inside or outside the frustum it repre
 <tr id="iaudiostreamer_seek"><td><code>Seek</code></td><td><div class="api-proto"><code>integer</code> Seek(<code>integer</code> ref, <code>integer</code> t)</div></td><td></td></tr>
 <tr id="iaudiostreamer_shutdown"><td><code>Shutdown</code></td><td><div class="api-proto"><code>nil</code> Shutdown()</div></td><td></td></tr>
 <tr id="iaudiostreamer_startup"><td><code>Startup</code></td><td><div class="api-proto"><code>integer</code> Startup()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="imagebinding">
+<h2>ImageBinding <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+
+</section>
+<section class="api-entry" id="imagebindinglist">
+<h2>ImageBindingList <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="imagebindinglist_at"><td><code>at</code></td><td><div class="api-proto"><a href="#imagebinding">ImageBinding</a> at(<code>integer</code> idx)</div></td><td></td></tr>
+<tr id="imagebindinglist_clear"><td><code>clear</code></td><td><div class="api-proto"><code>nil</code> clear()</div></td><td></td></tr>
+<tr id="imagebindinglist_push_back"><td><code>push_back</code></td><td><div class="api-proto"><code>nil</code> push_back(<a href="#imagebinding">ImageBinding</a> v)</div></td><td></td></tr>
+<tr id="imagebindinglist_reserve"><td><code>reserve</code></td><td><div class="api-proto"><code>nil</code> reserve(<code>integer</code> size)</div></td><td></td></tr>
+<tr id="imagebindinglist_size"><td><code>size</code></td><td><div class="api-proto"><code>integer</code> size()</div></td><td></td></tr>
 </table>
 </section>
 <section class="api-entry" id="imdrawlist">
@@ -1593,11 +1786,13 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <tr id="scene_computecurrentcameraviewstate"><td><code>ComputeCurrentCameraViewState</code></td><td><div class="api-proto"><a href="#viewstate">ViewState</a> ComputeCurrentCameraViewState(<a href="#vec2">Vec2</a> aspect_ratio)</div></td><td></td></tr>
 <tr id="scene_computeworldmatrices"><td><code>ComputeWorldMatrices</code></td><td><div class="api-proto"><code>nil</code> ComputeWorldMatrices()</div></td><td></td></tr>
 <tr id="scene_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#scene">Scene</a> Constructor()</div></td><td></td></tr>
+<tr id="scene_createanimplayer"><td><code>CreateAnimPlayer</code></td><td><div class="api-proto"><a href="#sceneanimplayer">SceneAnimPlayer</a> CreateAnimPlayer(<a href="#sceneanimreflist">SceneAnimRefList</a> clips)</div></td><td></td></tr>
 <tr id="scene_createcamera"><td><code>CreateCamera</code></td><td><div class="api-proto"><a href="#camera">Camera</a> CreateCamera()</div>
 <div class="api-proto"><a href="#camera">Camera</a> CreateCamera(<code>number</code> znear, <code>number</code> zfar)</div>
 <div class="api-proto"><a href="#camera">Camera</a> CreateCamera(<code>number</code> znear, <code>number</code> zfar, <code>number</code> fov)</div></td><td></td></tr>
 <tr id="scene_createcollision"><td><code>CreateCollision</code></td><td><div class="api-proto"><a href="#collision">Collision</a> CreateCollision()</div></td><td></td></tr>
 <tr id="scene_createinstance"><td><code>CreateInstance</code></td><td><div class="api-proto"><a href="#instance">Instance</a> CreateInstance()</div></td><td></td></tr>
+<tr id="scene_createinstanceanimplayer"><td><code>CreateInstanceAnimPlayer</code></td><td><div class="api-proto"><a href="#sceneanimplayer">SceneAnimPlayer</a> CreateInstanceAnimPlayer(<a href="#node">Node</a> node)</div></td><td></td></tr>
 <tr id="scene_createlight"><td><code>CreateLight</code></td><td><div class="api-proto"><a href="#light">Light</a> CreateLight()</div></td><td></td></tr>
 <tr id="scene_createlinearlight"><td><code>CreateLinearLight</code></td><td><div class="api-proto"><a href="#light">Light</a> CreateLinearLight(<a href="#color">Color</a> diffuse, <code>number</code> diffuse_intensity, <a href="#color">Color</a> specular, <code>number</code> specular_intensity)</div>
 <div class="api-proto"><a href="#light">Light</a> CreateLinearLight(<a href="#color">Color</a> diffuse, <code>number</code> diffuse_intensity, <a href="#color">Color</a> specular, <code>number</code> specular_intensity, <code>number</code> priority)</div>
@@ -1642,6 +1837,7 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <div class="api-proto"><a href="#transform">Transform</a> CreateTransform(<a href="#vec3">Vec3</a> T)</div>
 <div class="api-proto"><a href="#transform">Transform</a> CreateTransform(<a href="#vec3">Vec3</a> T, <a href="#vec3">Vec3</a> R)</div>
 <div class="api-proto"><a href="#transform">Transform</a> CreateTransform(<a href="#vec3">Vec3</a> T, <a href="#vec3">Vec3</a> R, <a href="#vec3">Vec3</a> S)</div></td><td></td></tr>
+<tr id="scene_destroyanimplayer"><td><code>DestroyAnimPlayer</code></td><td><div class="api-proto"><code>nil</code> DestroyAnimPlayer(<a href="#sceneanimplayer">SceneAnimPlayer</a> player)</div></td><td></td></tr>
 <tr id="scene_destroycamera"><td><code>DestroyCamera</code></td><td><div class="api-proto"><code>nil</code> DestroyCamera(<a href="#camera">Camera</a> camera)</div></td><td></td></tr>
 <tr id="scene_destroycollision"><td><code>DestroyCollision</code></td><td><div class="api-proto"><code>nil</code> DestroyCollision(<a href="#collision">Collision</a> collision)</div></td><td></td></tr>
 <tr id="scene_destroyinstance"><td><code>DestroyInstance</code></td><td><div class="api-proto"><code>nil</code> DestroyInstance(<a href="#instance">Instance</a> Instance)</div></td><td></td></tr>
@@ -1713,6 +1909,90 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 <tr id="scene_stopanim"><td><code>StopAnim</code></td><td><div class="api-proto"><code>nil</code> StopAnim(<a href="#sceneplayanimref">ScenePlayAnimRef</a> ref)</div></td><td></td></tr>
 <tr id="scene_update"><td><code>Update</code></td><td><div class="api-proto"><code>nil</code> Update(<code>integer</code> dt)</div></td><td><div class="api-doc"><p>Start the <em>Update</em> phase of the scene.</p></div></td></tr>
 <tr id="scene_updateplayinganims"><td><code>UpdatePlayingAnims</code></td><td><div class="api-proto"><code>nil</code> UpdatePlayingAnims(<code>integer</code> dt)</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="sceneanimimportresult">
+<h2>SceneAnimImportResult <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>anim</code></td><td><a href="#sceneanimref">SceneAnimRef</a></td></tr>
+<tr><td><code>completed_channels</code></td><td><code>integer</code></td></tr>
+<tr><td><code>copied_channels</code></td><td><code>integer</code></td></tr>
+<tr><td><code>message</code></td><td><code>string</code></td></tr>
+<tr><td><code>success</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
+<section class="api-entry" id="sceneaniminfo">
+<h2>SceneAnimInfo <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>frame_duration</code></td><td><code>integer</code></td></tr>
+<tr><td><code>name</code></td><td><code>string</code></td></tr>
+<tr><td><code>t_end</code></td><td><code>integer</code></td></tr>
+<tr><td><code>t_start</code></td><td><code>integer</code></td></tr>
+<tr><td><code>valid</code></td><td><code>boolean</code></td></tr>
+</table>
+
+</section>
+<section class="api-entry" id="sceneanimnodemap">
+<h2>SceneAnimNodeMap <span class="api-kind">Class</span></h2>
+<div class="api-doc"></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>destination_nodes</code></td><td><a href="#nodelist">NodeList</a></td></tr>
+<tr><td><code>message</code></td><td><code>string</code></td></tr>
+<tr><td><code>source_nodes</code></td><td><a href="#nodelist">NodeList</a></td></tr>
+<tr><td><code>success</code></td><td><code>boolean</code></td></tr>
+</table>
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="sceneanimnodemap_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#sceneanimnodemap">SceneAnimNodeMap</a> Constructor()</div></td><td></td></tr>
+</table>
+</section>
+<section class="api-entry" id="sceneanimplayer">
+<h2>SceneAnimPlayer <span class="api-kind">Class</span></h2>
+<div class="api-doc"><p>A scene-owned player that automatically crossfades compatible local transform animations.</p>
+<p>Create a player with <code>scene:CreateInstanceAnimPlayer(node)</code> or
+<code>scene:CreateAnimPlayer(clips)</code>. Configure <code>SetCrossFadeDuration</code> and optionally
+<code>SetCrossFadeEasing</code>, then call <code>Play</code> when the desired animation changes.</p>
+<div class="codehilite"><pre><span></span><code><span class="kd">local</span> <span class="n">player</span> <span class="o">=</span> <span class="n">scene</span><span class="p">:</span><span class="n">CreateInstanceAnimPlayer</span><span class="p">(</span><span class="n">actor</span><span class="p">)</span>
+<span class="nb">assert</span><span class="p">(</span><span class="n">player</span><span class="p">:</span><span class="n">IsValid</span><span class="p">())</span>
+<span class="n">player</span><span class="p">:</span><span class="n">SetCrossFadeDuration</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">time_from_sec_f</span><span class="p">(</span><span class="mf">0.2</span><span class="p">))</span>
+<span class="n">player</span><span class="p">:</span><span class="n">SetCrossFadeEasing</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">E_SmoothStep</span><span class="p">)</span>
+<span class="n">player</span><span class="p">:</span><span class="n">Play</span><span class="p">(</span><span class="s2">&quot;idle&quot;</span><span class="p">,</span> <span class="n">hg</span><span class="p">.</span><span class="n">ALM_Loop</span><span class="p">)</span>
+<span class="c1">-- Later:</span>
+<span class="n">player</span><span class="p">:</span><span class="n">Play</span><span class="p">(</span><span class="s2">&quot;turn_left&quot;</span><span class="p">,</span> <span class="n">hg</span><span class="p">.</span><span class="n">ALM_Once</span><span class="p">)</span>
+</code></pre></div>
+
+<p>The normal scene update advances both clips independently. Both can loop or play
+once. Interrupting a fade blends from its last displayed pose. Once-only clips
+hold their endpoint during longer fades; <code>IsTransitioning</code> reports the fade
+state independently of <code>Scene::IsPlaying</code>.</p>
+<p>The default fade duration is zero; supported easing values are <code>E_Linear</code> and
+<code>E_SmoothStep</code>. Clips must target one common set of nodes with position, rotation
+and scale tracks only. Nested instance-selection timelines are unsupported.</p>
+<p>Use <code>Stop</code> to stop playback and release ownership, or <code>scene:DestroyAnimPlayer</code>
+to invalidate the player. Releasing a scripting wrapper does not stop playback.</p></div>
+
+
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="sceneanimplayer_getcrossfadeduration"><td><code>GetCrossFadeDuration</code></td><td><div class="api-proto"><code>integer</code> GetCrossFadeDuration()</div></td><td></td></tr>
+<tr id="sceneanimplayer_getcrossfadeeasing"><td><code>GetCrossFadeEasing</code></td><td><div class="api-proto"><a href="constants.html#easing">Easing</a> GetCrossFadeEasing()</div></td><td></td></tr>
+<tr id="sceneanimplayer_istransitioning"><td><code>IsTransitioning</code></td><td><div class="api-proto"><code>boolean</code> IsTransitioning()</div></td><td></td></tr>
+<tr id="sceneanimplayer_isvalid"><td><code>IsValid</code></td><td><div class="api-proto"><code>boolean</code> IsValid()</div></td><td></td></tr>
+<tr id="sceneanimplayer_play"><td><code>Play</code></td><td><div class="api-proto"><a href="#sceneplayanimref">ScenePlayAnimRef</a> Play(<code>string</code> name)</div>
+<div class="api-proto"><a href="#sceneplayanimref">ScenePlayAnimRef</a> Play(<code>string</code> name, <a href="constants.html#animloopmode">AnimLoopMode</a> loop_mode)</div>
+<div class="api-proto"><a href="#sceneplayanimref">ScenePlayAnimRef</a> Play(<code>string</code> name, <a href="constants.html#animloopmode">AnimLoopMode</a> loop_mode, <code>boolean</code> restart)</div></td><td></td></tr>
+<tr id="sceneanimplayer_setcrossfadeduration"><td><code>SetCrossFadeDuration</code></td><td><div class="api-proto"><code>boolean</code> SetCrossFadeDuration(<code>integer</code> duration)</div></td><td></td></tr>
+<tr id="sceneanimplayer_setcrossfadeeasing"><td><code>SetCrossFadeEasing</code></td><td><div class="api-proto"><code>boolean</code> SetCrossFadeEasing(<a href="constants.html#easing">Easing</a> easing)</div></td><td></td></tr>
+<tr id="sceneanimplayer_stop"><td><code>Stop</code></td><td><div class="api-proto"><code>nil</code> Stop()</div></td><td></td></tr>
 </table>
 </section>
 <section class="api-entry" id="sceneanimref">
@@ -2150,6 +2430,55 @@ See <a href="#scene_createcamera">Scene.CreateCamera</a>.</p></div></td></tr>
 
 
 
+</section>
+<section class="api-entry" id="trackballcontroller">
+<h2>TrackballController <span class="api-kind">Class</span></h2>
+<div class="api-doc"><p>Orbit a camera around a target using a quaternion arcball, exponential dolly and screen-space pan. The controller is independent of scenes and rendering.</p>
+<p>Construct it with a target position, a positive distance and an optional camera-world orientation quaternion. The default constructor starts at a distance of 3.4 from the origin, looking along +Z. <code>Reset()</code> restores the pose captured at construction. Copies have independent state and retain this reset pose.</p>
+<p><code>target</code>, <code>orientation</code> and <code>distance</code> are editable. <code>min_distance</code>, <code>max_distance</code> and <code>dolly_speed</code> default to 0.15, 50 and 0.12. Supply positive, ordered distance limits. Limits are applied on update and reset, so a larger range can be configured after construction without losing the requested reset distance.</p>
+<p>Two <code>Update</code> overloads are available:</p>
+<ul>
+<li><code>Update(mouse, width, height, fov, drag_valid)</code> uses the left button to orbit, right/middle buttons to pan and the wheel to dolly. It suppresses motion on the first frame any of these buttons is pressed. Set <code>drag_valid</code> to false when reacquiring focus; wheel input remains enabled.</li>
+<li><code>Update(orbit, pan, x, y, dx, dy, wheel, width, height, fov)</code> takes explicit values for custom input and deterministic playback.</li>
+</ul>
+<p>The vertical field of view <code>fov</code> is in radians and defaults to pi/3. The mouse overload's <code>drag_valid</code> defaults to true. Pointer positions/deltas and viewport dimensions must use the same units, with Y pointing down. Use client dimensions for client-coordinate mouse input, including on displays where framebuffer dimensions differ. Empty viewports ignore updates; panning requires a field of view between 0 and pi. Rotations preserve roll; an exactly antipodal drag leaves the orientation unchanged.</p>
+<p>Call <code>mouse:Update()</code> before updating the controller. The application handles window focus and keyboard shortcuts. <code>ComputeWorld()</code> returns the camera world transform, ready for <code>ComputePerspectiveViewState</code>; it does not return the inverse view matrix.</p>
+<div class="codehilite"><pre><span></span><code><span class="kd">local</span> <span class="n">camera</span> <span class="o">=</span> <span class="n">hg</span><span class="p">.</span><span class="n">TrackballController</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">Vec3</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="mf">3.4</span><span class="p">)</span>
+<span class="kd">local</span> <span class="n">fov</span> <span class="o">=</span> <span class="nb">math.pi</span> <span class="o">/</span> <span class="mi">3</span>
+
+<span class="c1">-- inside the frame loop, after updating mouse and keyboard</span>
+<span class="kr">if</span> <span class="n">focused</span> <span class="kr">then</span>
+    <span class="kr">if</span> <span class="n">keyboard</span><span class="p">:</span><span class="n">Pressed</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">K_R</span><span class="p">)</span> <span class="kr">then</span>
+        <span class="n">camera</span><span class="p">:</span><span class="n">Reset</span><span class="p">()</span>
+    <span class="kr">end</span>
+    <span class="n">camera</span><span class="p">:</span><span class="n">Update</span><span class="p">(</span><span class="n">mouse</span><span class="p">,</span> <span class="n">client_width</span><span class="p">,</span> <span class="n">client_height</span><span class="p">,</span> <span class="n">fov</span><span class="p">,</span> <span class="n">was_focused</span><span class="p">)</span>
+<span class="kr">end</span>
+<span class="kd">local</span> <span class="n">camera_world</span> <span class="o">=</span> <span class="n">camera</span><span class="p">:</span><span class="n">ComputeWorld</span><span class="p">()</span>
+</code></pre></div></div>
+
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>distance</code></td><td><code>number</code></td></tr>
+<tr><td><code>dolly_speed</code></td><td><code>number</code></td></tr>
+<tr><td><code>max_distance</code></td><td><code>number</code></td></tr>
+<tr><td><code>min_distance</code></td><td><code>number</code></td></tr>
+<tr><td><code>orientation</code></td><td><a href="#quaternion">Quaternion</a></td></tr>
+<tr><td><code>target</code></td><td><a href="#vec3">Vec3</a></td></tr>
+</table>
+<h3>Functions</h3>
+<table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
+<tr id="trackballcontroller_computeworld"><td><code>ComputeWorld</code></td><td><div class="api-proto"><a href="#mat4">Mat4</a> ComputeWorld()</div></td><td></td></tr>
+<tr id="trackballcontroller_constructor"><td><code>Constructor</code></td><td><div class="api-proto"><a href="#trackballcontroller">TrackballController</a> Constructor()</div>
+<div class="api-proto"><a href="#trackballcontroller">TrackballController</a> Constructor(<a href="#vec3">Vec3</a> target, <code>number</code> distance)</div>
+<div class="api-proto"><a href="#trackballcontroller">TrackballController</a> Constructor(<a href="#vec3">Vec3</a> target, <code>number</code> distance, <a href="#quaternion">Quaternion</a> orientation)</div>
+<div class="api-proto"><a href="#trackballcontroller">TrackballController</a> Constructor(<a href="#trackballcontroller">TrackballController</a> controller)</div></td><td></td></tr>
+<tr id="trackballcontroller_reset"><td><code>Reset</code></td><td><div class="api-proto"><code>nil</code> Reset()</div></td><td></td></tr>
+<tr id="trackballcontroller_update"><td><code>Update</code></td><td><div class="api-proto"><code>nil</code> Update(<code>boolean</code> orbit, <code>boolean</code> pan, <code>number</code> x, <code>number</code> y, <code>number</code> dx, <code>number</code> dy, <code>number</code> wheel, <code>number</code> width, <code>number</code> height)</div>
+<div class="api-proto"><code>nil</code> Update(<code>boolean</code> orbit, <code>boolean</code> pan, <code>number</code> x, <code>number</code> y, <code>number</code> dx, <code>number</code> dy, <code>number</code> wheel, <code>number</code> width, <code>number</code> height, <code>number</code> fov)</div>
+<div class="api-proto"><code>nil</code> Update(<a href="#mouse">Mouse</a> mouse, <code>number</code> width, <code>number</code> height)</div>
+<div class="api-proto"><code>nil</code> Update(<a href="#mouse">Mouse</a> mouse, <code>number</code> width, <code>number</code> height, <code>number</code> fov)</div>
+<div class="api-proto"><code>nil</code> Update(<a href="#mouse">Mouse</a> mouse, <code>number</code> width, <code>number</code> height, <code>number</code> fov, <code>boolean</code> drag_valid)</div></td><td></td></tr>
+</table>
 </section>
 <section class="api-entry" id="transform">
 <h2>Transform <span class="api-kind">Class</span></h2>

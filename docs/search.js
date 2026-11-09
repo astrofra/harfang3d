@@ -198,6 +198,36 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "ComputeBuffer",
+    "href": "api/cpython/classes.html#computebuffer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBinding",
+    "href": "api/cpython/classes.html#computebufferbinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBindingList",
+    "href": "api/cpython/classes.html#computebufferbindinglist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeCaps",
+    "href": "api/cpython/classes.html#computecaps",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeFrameStats",
+    "href": "api/cpython/classes.html#computeframestats",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Contact",
     "href": "api/cpython/classes.html#contact",
     "kind": "class",
@@ -360,6 +390,60 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "GaussianSplatInstance",
+    "href": "api/cpython/classes.html#gaussiansplatinstance",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatInstanceList",
+    "href": "api/cpython/classes.html#gaussiansplatinstancelist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadOptions",
+    "href": "api/cpython/classes.html#gaussiansplatloadoptions",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadResult",
+    "href": "api/cpython/classes.html#gaussiansplatloadresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatModel",
+    "href": "api/cpython/classes.html#gaussiansplatmodel",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderData",
+    "href": "api/cpython/classes.html#gaussiansplatrenderdata",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderer",
+    "href": "api/cpython/classes.html#gaussiansplatrenderer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderSettings",
+    "href": "api/cpython/classes.html#gaussiansplatrendersettings",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatSubmitResult",
+    "href": "api/cpython/classes.html#gaussiansplatsubmitresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Geometry",
     "href": "api/cpython/classes.html#geometry",
     "kind": "class",
@@ -374,6 +458,18 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "IAudioStreamer",
     "href": "api/cpython/classes.html#iaudiostreamer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBinding",
+    "href": "api/cpython/classes.html#imagebinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBindingList",
+    "href": "api/cpython/classes.html#imagebindinglist",
     "kind": "class",
     "text": ""
   },
@@ -750,6 +846,30 @@ window.HG_SEARCH_INDEX = [
     "text": "A scene object representing a world populated with Node, see man.Scene."
   },
   {
+    "title": "SceneAnimImportResult",
+    "href": "api/cpython/classes.html#sceneanimimportresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimInfo",
+    "href": "api/cpython/classes.html#sceneaniminfo",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimNodeMap",
+    "href": "api/cpython/classes.html#sceneanimnodemap",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimPlayer",
+    "href": "api/cpython/classes.html#sceneanimplayer",
+    "kind": "class",
+    "text": "A scene-owned player that automatically crossfades compatible local transform animations. Create a player with `scene:CreateInstanceAnimPlayer(node)` or `scene:CreateAnimPlayer(clips)`. Configure `SetCrossFadeDuration` and optionally `SetCr"
+  },
+  {
     "title": "SceneAnimRef",
     "href": "api/cpython/classes.html#sceneanimref",
     "kind": "class",
@@ -928,6 +1048,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/classes.html#timecallbackconnection",
     "kind": "class",
     "text": "A TimeCallback connection to a Signal_returning_void_taking_time_ns."
+  },
+  {
+    "title": "TrackballController",
+    "href": "api/cpython/classes.html#trackballcontroller",
+    "kind": "class",
+    "text": "Orbit a camera around a target using a quaternion arcball, exponential dolly and screen-space pan. The controller is independent of scenes and rendering. Construct it with a target position, a positive distance and an optional camera-world "
   },
   {
     "title": "Transform",
@@ -1146,6 +1272,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Begin a named profiler section. Call EndProfilerSection to end the section."
   },
   {
+    "title": "BuildSceneAnimNodeMap",
+    "href": "api/cpython/functions.html#buildsceneanimnodemap",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CaptureProfilerFrame",
     "href": "api/cpython/functions.html#captureprofilerframe",
     "kind": "function",
@@ -1320,6 +1452,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Compute a perspective view state. See ComputePerspectiveProjectionMatrix, ZoomFactorToFov, FovToZoomFactor, ComputeAspectRatioX and ComputeAspectRatioY."
   },
   {
+    "title": "ComputePremultipliedRenderState",
+    "href": "api/cpython/functions.html#computepremultipliedrenderstate",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "ComputeRenderState",
     "href": "api/cpython/functions.html#computerenderstate",
     "kind": "function",
@@ -1416,6 +1554,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Create a capsule render model. See CreateCubeModel, CreateConeModel, CreateCylinderModel, CreatePlaneModel, CreateSphereModel and DrawModel."
   },
   {
+    "title": "CreateComputeBuffer",
+    "href": "api/cpython/functions.html#createcomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeBufferFromData",
+    "href": "api/cpython/functions.html#createcomputebufferfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeQuadModel",
+    "href": "api/cpython/functions.html#createcomputequadmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CreateConeModel",
     "href": "api/cpython/functions.html#createconemodel",
     "kind": "function",
@@ -1456,6 +1612,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#createframebuffer",
     "kind": "function",
     "text": "Create a framebuffer and its texture attachments. See DestroyFrameBuffer."
+  },
+  {
+    "title": "CreateGaussianSplatRenderData",
+    "href": "api/cpython/functions.html#creategaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromAssets",
+    "href": "api/cpython/functions.html#creategaussiansplatrendererfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromFile",
+    "href": "api/cpython/functions.html#creategaussiansplatrendererfromfile",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "CreateInstanceFromAssets",
@@ -1668,6 +1842,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Destroy a bloom post process object and all associated resources."
   },
   {
+    "title": "DestroyComputeBuffer",
+    "href": "api/cpython/functions.html#destroycomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "DestroyForwardPipeline",
     "href": "api/cpython/functions.html#destroyforwardpipeline",
     "kind": "function",
@@ -1684,6 +1864,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#destroyframebuffer",
     "kind": "function",
     "text": "Destroy a frame buffer and its resources."
+  },
+  {
+    "title": "DestroyGaussianSplatModel",
+    "href": "api/cpython/functions.html#destroygaussiansplatmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderData",
+    "href": "api/cpython/functions.html#destroygaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderer",
+    "href": "api/cpython/functions.html#destroygaussiansplatrenderer",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "DestroyNavMesh",
@@ -1730,6 +1928,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "DisableCursor",
     "href": "api/cpython/functions.html#disablecursor",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DispatchCompute",
+    "href": "api/cpython/functions.html#dispatchcompute",
     "kind": "function",
     "text": ""
   },
@@ -2004,6 +2208,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Returns the nth column."
   },
   {
+    "title": "GetComputeBufferCount",
+    "href": "api/cpython/functions.html#getcomputebuffercount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeCaps",
+    "href": "api/cpython/functions.html#getcomputecaps",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeFrameStats",
+    "href": "api/cpython/functions.html#getcomputeframestats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetCurrentWorkingDirectory",
     "href": "api/cpython/functions.html#getcurrentworkingdirectory",
     "kind": "function",
@@ -2043,7 +2265,37 @@ window.HG_SEARCH_INDEX = [
     "title": "GetGamepadNames",
     "href": "api/cpython/functions.html#getgamepadnames",
     "kind": "function",
-    "text": "Return a list of names for all supported gamepad devices on the system. See ReadGamepad."
+    "text": "Return a list of names for all supported gamepad devices on the system. These are registered input readers, including unoccupied slots. Check the `IsConnected` state returned by ReadGamepad to determine whether a reader has a connected devi"
+  },
+  {
+    "title": "GetGaussianSplatBoundsMax",
+    "href": "api/cpython/functions.html#getgaussiansplatboundsmax",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatBoundsMin",
+    "href": "api/cpython/functions.html#getgaussiansplatboundsmin",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatCount",
+    "href": "api/cpython/functions.html#getgaussiansplatcount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSHDegree",
+    "href": "api/cpython/functions.html#getgaussiansplatshdegree",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSourceCount",
+    "href": "api/cpython/functions.html#getgaussiansplatsourcecount",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetHandJointAngularVelocity",
@@ -2298,6 +2550,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the scale component of a matrix a scale vector."
   },
   {
+    "title": "GetSceneAnimInfo",
+    "href": "api/cpython/functions.html#getsceneaniminfo",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetSceneForwardPipelineFog",
     "href": "api/cpython/functions.html#getsceneforwardpipelinefog",
     "kind": "function",
@@ -2391,13 +2649,19 @@ window.HG_SEARCH_INDEX = [
     "title": "GetWindowClientSize",
     "href": "api/cpython/functions.html#getwindowclientsize",
     "kind": "function",
-    "text": "Return a window client rectangle. The client area of a window does not include its decorations."
+    "text": "Return the window client size in screen coordinates, excluding decorations. On macOS these coordinates are points, which can differ from drawable pixels on Retina displays. Use GetWindowFrameBufferSize for renderer backbuffer dimensions and"
   },
   {
     "title": "GetWindowContentScale",
     "href": "api/cpython/functions.html#getwindowcontentscale",
     "kind": "function",
     "text": ""
+  },
+  {
+    "title": "GetWindowFrameBufferSize",
+    "href": "api/cpython/functions.html#getwindowframebuffersize",
+    "kind": "function",
+    "text": "Return the window drawable width and height in pixels. On Retina displays this can be twice the client size on each axis. Query the drawable directly instead of multiplying the client size by the content scale: the relationship is platform "
   },
   {
     "title": "GetWindowHandle",
@@ -3666,6 +3930,12 @@ window.HG_SEARCH_INDEX = [
     "text": "ImGui wants mouse capture. Use this function to determine when to pause mouse processing from other parts of your program."
   },
   {
+    "title": "ImportSceneAnim",
+    "href": "api/cpython/functions.html#importsceneanim",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "Inch",
     "href": "api/cpython/functions.html#inch",
     "kind": "function",
@@ -3754,6 +4024,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#isfinite",
     "kind": "function",
     "text": "Test if a floating point value is finite."
+  },
+  {
+    "title": "IsGaussianSplatAntialiased",
+    "href": "api/cpython/functions.html#isgaussiansplatantialiased",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "IsHandJointActive",
@@ -3858,6 +4134,30 @@ window.HG_SEARCH_INDEX = [
     "text": "Load a Picture in [BMP](https://en.wikipedia.org/wiki/BMP_file_format) file format."
   },
   {
+    "title": "LoadComputeBufferFromAssets",
+    "href": "api/cpython/functions.html#loadcomputebufferfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeBufferFromFile",
+    "href": "api/cpython/functions.html#loadcomputebufferfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromAssets",
+    "href": "api/cpython/functions.html#loadcomputeprogramfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromFile",
+    "href": "api/cpython/functions.html#loadcomputeprogramfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "LoadDataFromFile",
     "href": "api/cpython/functions.html#loaddatafromfile",
     "kind": "function",
@@ -3884,6 +4184,24 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "LoadForwardPipelineAAAConfigFromFile",
     "href": "api/cpython/functions.html#loadforwardpipelineaaaconfigfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromAssets",
+    "href": "api/cpython/functions.html#loadgaussiansplatmodelfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromData",
+    "href": "api/cpython/functions.html#loadgaussiansplatmodelfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromFile",
+    "href": "api/cpython/functions.html#loadgaussiansplatmodelfromfile",
     "kind": "function",
     "text": ""
   },
@@ -4110,6 +4428,12 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "MakeComputeBufferBinding",
+    "href": "api/cpython/functions.html#makecomputebufferbinding",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "MakeForwardPipelineLinearLight",
     "href": "api/cpython/functions.html#makeforwardpipelinelinearlight",
     "kind": "function",
@@ -4132,6 +4456,18 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#makefrustum",
     "kind": "function",
     "text": "Create a projection frustum. This object can then be used to perform culling using TestVisibility. ```python # Compute a perspective matrix proj = hg.ComputePerspectiveProjectionMatrix(0.1, 1000, hg.FovToZoomFactor(math.pi/4), 1280/720) # M"
+  },
+  {
+    "title": "MakeGaussianSplatInstance",
+    "href": "api/cpython/functions.html#makegaussiansplatinstance",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "MakeImageBinding",
+    "href": "api/cpython/functions.html#makeimagebinding",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "MakePlane",
@@ -4695,7 +5031,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ReadGamepad",
     "href": "api/cpython/functions.html#readgamepad",
     "kind": "function",
-    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. See GetGamepadNames."
+    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. On macOS with the GLFW backend, `default` prefers the first connected Apple GameController extended gamepad, falling back to GLFW slot 0 when none is ava"
   },
   {
     "title": "ReadJoystick",
@@ -4779,7 +5115,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderInit",
     "href": "api/cpython/functions.html#renderinit",
     "kind": "function",
-    "text": "Initialize the render system. To change the states of the render system afterward use RenderReset."
+    "text": "Initialize the render system. The initial backbuffer uses the window's drawable pixel size, including Retina scaling. Overloads that create a window take its dimensions in screen coordinates; query GetWindowFrameBufferSize afterward for ren"
   },
   {
     "title": "RenderReset",
@@ -4791,7 +5127,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderResetToWindow",
     "href": "api/cpython/functions.html#renderresettowindow",
     "kind": "function",
-    "text": "Resize the renderer backbuffer to the provided window client area dimensions. Return true if a reset was needed and carried out."
+    "text": "Resize the renderer backbuffer to the window's drawable pixel dimensions, including Retina scaling. The input/output `width` and `height` are backbuffer dimensions in pixels, not window coordinates. Return true and update the dimensions if "
   },
   {
     "title": "RenderShutdown",
@@ -4840,6 +5176,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/cpython/functions.html#rmtree",
     "kind": "function",
     "text": "Remove a folder on the local filesystem. **Warning:** This function will through all subfolders and erase all files and folders in the target folder."
+  },
+  {
+    "title": "Rotate",
+    "href": "api/cpython/functions.html#rotate",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "RotationMat2D",
@@ -5508,6 +5850,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the content of a file on the local filesystem as a string."
   },
   {
+    "title": "SubmitGaussianSplats",
+    "href": "api/cpython/functions.html#submitgaussiansplats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "SubmitSceneToForwardPipeline",
     "href": "api/cpython/functions.html#submitscenetoforwardpipeline",
     "kind": "function",
@@ -5928,6 +6276,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Convert from a zoom factor value in meters to a fov value in radian."
   },
   {
+    "title": "Access",
+    "href": "api/cpython/constants.html#access",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
     "title": "AnimLoopMode",
     "href": "api/cpython/constants.html#animloopmode",
     "kind": "enumeration",
@@ -5978,6 +6332,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "CollisionType",
     "href": "api/cpython/constants.html#collisiontype",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferType",
+    "href": "api/cpython/constants.html#computebuffertype",
     "kind": "enumeration",
     "text": ""
   },
@@ -6378,6 +6738,36 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "ComputeBuffer",
+    "href": "api/lua/classes.html#computebuffer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBinding",
+    "href": "api/lua/classes.html#computebufferbinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBindingList",
+    "href": "api/lua/classes.html#computebufferbindinglist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeCaps",
+    "href": "api/lua/classes.html#computecaps",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeFrameStats",
+    "href": "api/lua/classes.html#computeframestats",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Contact",
     "href": "api/lua/classes.html#contact",
     "kind": "class",
@@ -6540,6 +6930,60 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "GaussianSplatInstance",
+    "href": "api/lua/classes.html#gaussiansplatinstance",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatInstanceList",
+    "href": "api/lua/classes.html#gaussiansplatinstancelist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadOptions",
+    "href": "api/lua/classes.html#gaussiansplatloadoptions",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadResult",
+    "href": "api/lua/classes.html#gaussiansplatloadresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatModel",
+    "href": "api/lua/classes.html#gaussiansplatmodel",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderData",
+    "href": "api/lua/classes.html#gaussiansplatrenderdata",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderer",
+    "href": "api/lua/classes.html#gaussiansplatrenderer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderSettings",
+    "href": "api/lua/classes.html#gaussiansplatrendersettings",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatSubmitResult",
+    "href": "api/lua/classes.html#gaussiansplatsubmitresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Geometry",
     "href": "api/lua/classes.html#geometry",
     "kind": "class",
@@ -6554,6 +6998,18 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "IAudioStreamer",
     "href": "api/lua/classes.html#iaudiostreamer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBinding",
+    "href": "api/lua/classes.html#imagebinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBindingList",
+    "href": "api/lua/classes.html#imagebindinglist",
     "kind": "class",
     "text": ""
   },
@@ -6930,6 +7386,30 @@ window.HG_SEARCH_INDEX = [
     "text": "A scene object representing a world populated with Node, see man.Scene."
   },
   {
+    "title": "SceneAnimImportResult",
+    "href": "api/lua/classes.html#sceneanimimportresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimInfo",
+    "href": "api/lua/classes.html#sceneaniminfo",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimNodeMap",
+    "href": "api/lua/classes.html#sceneanimnodemap",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimPlayer",
+    "href": "api/lua/classes.html#sceneanimplayer",
+    "kind": "class",
+    "text": "A scene-owned player that automatically crossfades compatible local transform animations. Create a player with `scene:CreateInstanceAnimPlayer(node)` or `scene:CreateAnimPlayer(clips)`. Configure `SetCrossFadeDuration` and optionally `SetCr"
+  },
+  {
     "title": "SceneAnimRef",
     "href": "api/lua/classes.html#sceneanimref",
     "kind": "class",
@@ -7108,6 +7588,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/classes.html#timecallbackconnection",
     "kind": "class",
     "text": "A TimeCallback connection to a Signal_returning_void_taking_time_ns."
+  },
+  {
+    "title": "TrackballController",
+    "href": "api/lua/classes.html#trackballcontroller",
+    "kind": "class",
+    "text": "Orbit a camera around a target using a quaternion arcball, exponential dolly and screen-space pan. The controller is independent of scenes and rendering. Construct it with a target position, a positive distance and an optional camera-world "
   },
   {
     "title": "Transform",
@@ -7326,6 +7812,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Begin a named profiler section. Call EndProfilerSection to end the section."
   },
   {
+    "title": "BuildSceneAnimNodeMap",
+    "href": "api/lua/functions.html#buildsceneanimnodemap",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CaptureProfilerFrame",
     "href": "api/lua/functions.html#captureprofilerframe",
     "kind": "function",
@@ -7500,6 +7992,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Compute a perspective view state. See ComputePerspectiveProjectionMatrix, ZoomFactorToFov, FovToZoomFactor, ComputeAspectRatioX and ComputeAspectRatioY."
   },
   {
+    "title": "ComputePremultipliedRenderState",
+    "href": "api/lua/functions.html#computepremultipliedrenderstate",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "ComputeRenderState",
     "href": "api/lua/functions.html#computerenderstate",
     "kind": "function",
@@ -7596,6 +8094,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Create a capsule render model. See CreateCubeModel, CreateConeModel, CreateCylinderModel, CreatePlaneModel, CreateSphereModel and DrawModel."
   },
   {
+    "title": "CreateComputeBuffer",
+    "href": "api/lua/functions.html#createcomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeBufferFromData",
+    "href": "api/lua/functions.html#createcomputebufferfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeQuadModel",
+    "href": "api/lua/functions.html#createcomputequadmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CreateConeModel",
     "href": "api/lua/functions.html#createconemodel",
     "kind": "function",
@@ -7636,6 +8152,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#createframebuffer",
     "kind": "function",
     "text": "Create a framebuffer and its texture attachments. See DestroyFrameBuffer."
+  },
+  {
+    "title": "CreateGaussianSplatRenderData",
+    "href": "api/lua/functions.html#creategaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromAssets",
+    "href": "api/lua/functions.html#creategaussiansplatrendererfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromFile",
+    "href": "api/lua/functions.html#creategaussiansplatrendererfromfile",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "CreateInstanceFromAssets",
@@ -7848,6 +8382,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Destroy a bloom post process object and all associated resources."
   },
   {
+    "title": "DestroyComputeBuffer",
+    "href": "api/lua/functions.html#destroycomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "DestroyForwardPipeline",
     "href": "api/lua/functions.html#destroyforwardpipeline",
     "kind": "function",
@@ -7864,6 +8404,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#destroyframebuffer",
     "kind": "function",
     "text": "Destroy a frame buffer and its resources."
+  },
+  {
+    "title": "DestroyGaussianSplatModel",
+    "href": "api/lua/functions.html#destroygaussiansplatmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderData",
+    "href": "api/lua/functions.html#destroygaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderer",
+    "href": "api/lua/functions.html#destroygaussiansplatrenderer",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "DestroyNavMesh",
@@ -7910,6 +8468,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "DisableCursor",
     "href": "api/lua/functions.html#disablecursor",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DispatchCompute",
+    "href": "api/lua/functions.html#dispatchcompute",
     "kind": "function",
     "text": ""
   },
@@ -8184,6 +8748,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Returns the nth column."
   },
   {
+    "title": "GetComputeBufferCount",
+    "href": "api/lua/functions.html#getcomputebuffercount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeCaps",
+    "href": "api/lua/functions.html#getcomputecaps",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeFrameStats",
+    "href": "api/lua/functions.html#getcomputeframestats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetCurrentWorkingDirectory",
     "href": "api/lua/functions.html#getcurrentworkingdirectory",
     "kind": "function",
@@ -8223,7 +8805,37 @@ window.HG_SEARCH_INDEX = [
     "title": "GetGamepadNames",
     "href": "api/lua/functions.html#getgamepadnames",
     "kind": "function",
-    "text": "Return a list of names for all supported gamepad devices on the system. See ReadGamepad."
+    "text": "Return a list of names for all supported gamepad devices on the system. These are registered input readers, including unoccupied slots. Check the `IsConnected` state returned by ReadGamepad to determine whether a reader has a connected devi"
+  },
+  {
+    "title": "GetGaussianSplatBoundsMax",
+    "href": "api/lua/functions.html#getgaussiansplatboundsmax",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatBoundsMin",
+    "href": "api/lua/functions.html#getgaussiansplatboundsmin",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatCount",
+    "href": "api/lua/functions.html#getgaussiansplatcount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSHDegree",
+    "href": "api/lua/functions.html#getgaussiansplatshdegree",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSourceCount",
+    "href": "api/lua/functions.html#getgaussiansplatsourcecount",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetHandJointAngularVelocity",
@@ -8478,6 +9090,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the scale component of a matrix a scale vector."
   },
   {
+    "title": "GetSceneAnimInfo",
+    "href": "api/lua/functions.html#getsceneaniminfo",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetSceneForwardPipelineFog",
     "href": "api/lua/functions.html#getsceneforwardpipelinefog",
     "kind": "function",
@@ -8571,13 +9189,19 @@ window.HG_SEARCH_INDEX = [
     "title": "GetWindowClientSize",
     "href": "api/lua/functions.html#getwindowclientsize",
     "kind": "function",
-    "text": "Return a window client rectangle. The client area of a window does not include its decorations."
+    "text": "Return the window client size in screen coordinates, excluding decorations. On macOS these coordinates are points, which can differ from drawable pixels on Retina displays. Use GetWindowFrameBufferSize for renderer backbuffer dimensions and"
   },
   {
     "title": "GetWindowContentScale",
     "href": "api/lua/functions.html#getwindowcontentscale",
     "kind": "function",
     "text": ""
+  },
+  {
+    "title": "GetWindowFrameBufferSize",
+    "href": "api/lua/functions.html#getwindowframebuffersize",
+    "kind": "function",
+    "text": "Return the window drawable width and height in pixels. On Retina displays this can be twice the client size on each axis. Query the drawable directly instead of multiplying the client size by the content scale: the relationship is platform "
   },
   {
     "title": "GetWindowHandle",
@@ -9846,6 +10470,12 @@ window.HG_SEARCH_INDEX = [
     "text": "ImGui wants mouse capture. Use this function to determine when to pause mouse processing from other parts of your program."
   },
   {
+    "title": "ImportSceneAnim",
+    "href": "api/lua/functions.html#importsceneanim",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "Inch",
     "href": "api/lua/functions.html#inch",
     "kind": "function",
@@ -9934,6 +10564,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#isfinite",
     "kind": "function",
     "text": "Test if a floating point value is finite."
+  },
+  {
+    "title": "IsGaussianSplatAntialiased",
+    "href": "api/lua/functions.html#isgaussiansplatantialiased",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "IsHandJointActive",
@@ -10038,6 +10674,30 @@ window.HG_SEARCH_INDEX = [
     "text": "Load a Picture in [BMP](https://en.wikipedia.org/wiki/BMP_file_format) file format."
   },
   {
+    "title": "LoadComputeBufferFromAssets",
+    "href": "api/lua/functions.html#loadcomputebufferfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeBufferFromFile",
+    "href": "api/lua/functions.html#loadcomputebufferfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromAssets",
+    "href": "api/lua/functions.html#loadcomputeprogramfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromFile",
+    "href": "api/lua/functions.html#loadcomputeprogramfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "LoadDataFromFile",
     "href": "api/lua/functions.html#loaddatafromfile",
     "kind": "function",
@@ -10064,6 +10724,24 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "LoadForwardPipelineAAAConfigFromFile",
     "href": "api/lua/functions.html#loadforwardpipelineaaaconfigfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromAssets",
+    "href": "api/lua/functions.html#loadgaussiansplatmodelfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromData",
+    "href": "api/lua/functions.html#loadgaussiansplatmodelfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromFile",
+    "href": "api/lua/functions.html#loadgaussiansplatmodelfromfile",
     "kind": "function",
     "text": ""
   },
@@ -10290,6 +10968,12 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "MakeComputeBufferBinding",
+    "href": "api/lua/functions.html#makecomputebufferbinding",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "MakeForwardPipelineLinearLight",
     "href": "api/lua/functions.html#makeforwardpipelinelinearlight",
     "kind": "function",
@@ -10312,6 +10996,18 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#makefrustum",
     "kind": "function",
     "text": "Create a projection frustum. This object can then be used to perform culling using TestVisibility. ```python # Compute a perspective matrix proj = hg.ComputePerspectiveProjectionMatrix(0.1, 1000, hg.FovToZoomFactor(math.pi/4), 1280/720) # M"
+  },
+  {
+    "title": "MakeGaussianSplatInstance",
+    "href": "api/lua/functions.html#makegaussiansplatinstance",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "MakeImageBinding",
+    "href": "api/lua/functions.html#makeimagebinding",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "MakePlane",
@@ -10875,7 +11571,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ReadGamepad",
     "href": "api/lua/functions.html#readgamepad",
     "kind": "function",
-    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. See GetGamepadNames."
+    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. On macOS with the GLFW backend, `default` prefers the first connected Apple GameController extended gamepad, falling back to GLFW slot 0 when none is ava"
   },
   {
     "title": "ReadJoystick",
@@ -10959,7 +11655,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderInit",
     "href": "api/lua/functions.html#renderinit",
     "kind": "function",
-    "text": "Initialize the render system. To change the states of the render system afterward use RenderReset."
+    "text": "Initialize the render system. The initial backbuffer uses the window's drawable pixel size, including Retina scaling. Overloads that create a window take its dimensions in screen coordinates; query GetWindowFrameBufferSize afterward for ren"
   },
   {
     "title": "RenderReset",
@@ -10971,7 +11667,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderResetToWindow",
     "href": "api/lua/functions.html#renderresettowindow",
     "kind": "function",
-    "text": "Resize the renderer backbuffer to the provided window client area dimensions. Return true if a reset was needed and carried out."
+    "text": "Resize the renderer backbuffer to the window's drawable pixel dimensions, including Retina scaling. The input/output `width` and `height` are backbuffer dimensions in pixels, not window coordinates. Return true and update the dimensions if "
   },
   {
     "title": "RenderShutdown",
@@ -11020,6 +11716,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/lua/functions.html#rmtree",
     "kind": "function",
     "text": "Remove a folder on the local filesystem. **Warning:** This function will through all subfolders and erase all files and folders in the target folder."
+  },
+  {
+    "title": "Rotate",
+    "href": "api/lua/functions.html#rotate",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "RotationMat2D",
@@ -11688,6 +12390,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the content of a file on the local filesystem as a string."
   },
   {
+    "title": "SubmitGaussianSplats",
+    "href": "api/lua/functions.html#submitgaussiansplats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "SubmitSceneToForwardPipeline",
     "href": "api/lua/functions.html#submitscenetoforwardpipeline",
     "kind": "function",
@@ -12108,6 +12816,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Convert from a zoom factor value in meters to a fov value in radian."
   },
   {
+    "title": "Access",
+    "href": "api/lua/constants.html#access",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
     "title": "AnimLoopMode",
     "href": "api/lua/constants.html#animloopmode",
     "kind": "enumeration",
@@ -12158,6 +12872,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "CollisionType",
     "href": "api/lua/constants.html#collisiontype",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferType",
+    "href": "api/lua/constants.html#computebuffertype",
     "kind": "enumeration",
     "text": ""
   },
@@ -12558,6 +13278,36 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "ComputeBuffer",
+    "href": "api/squirrel/classes.html#computebuffer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBinding",
+    "href": "api/squirrel/classes.html#computebufferbinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferBindingList",
+    "href": "api/squirrel/classes.html#computebufferbindinglist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeCaps",
+    "href": "api/squirrel/classes.html#computecaps",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ComputeFrameStats",
+    "href": "api/squirrel/classes.html#computeframestats",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Contact",
     "href": "api/squirrel/classes.html#contact",
     "kind": "class",
@@ -12720,6 +13470,60 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "GaussianSplatInstance",
+    "href": "api/squirrel/classes.html#gaussiansplatinstance",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatInstanceList",
+    "href": "api/squirrel/classes.html#gaussiansplatinstancelist",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadOptions",
+    "href": "api/squirrel/classes.html#gaussiansplatloadoptions",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatLoadResult",
+    "href": "api/squirrel/classes.html#gaussiansplatloadresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatModel",
+    "href": "api/squirrel/classes.html#gaussiansplatmodel",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderData",
+    "href": "api/squirrel/classes.html#gaussiansplatrenderdata",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderer",
+    "href": "api/squirrel/classes.html#gaussiansplatrenderer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatRenderSettings",
+    "href": "api/squirrel/classes.html#gaussiansplatrendersettings",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "GaussianSplatSubmitResult",
+    "href": "api/squirrel/classes.html#gaussiansplatsubmitresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
     "title": "Geometry",
     "href": "api/squirrel/classes.html#geometry",
     "kind": "class",
@@ -12734,6 +13538,18 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "IAudioStreamer",
     "href": "api/squirrel/classes.html#iaudiostreamer",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBinding",
+    "href": "api/squirrel/classes.html#imagebinding",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "ImageBindingList",
+    "href": "api/squirrel/classes.html#imagebindinglist",
     "kind": "class",
     "text": ""
   },
@@ -13110,6 +13926,30 @@ window.HG_SEARCH_INDEX = [
     "text": "A scene object representing a world populated with Node, see man.Scene."
   },
   {
+    "title": "SceneAnimImportResult",
+    "href": "api/squirrel/classes.html#sceneanimimportresult",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimInfo",
+    "href": "api/squirrel/classes.html#sceneaniminfo",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimNodeMap",
+    "href": "api/squirrel/classes.html#sceneanimnodemap",
+    "kind": "class",
+    "text": ""
+  },
+  {
+    "title": "SceneAnimPlayer",
+    "href": "api/squirrel/classes.html#sceneanimplayer",
+    "kind": "class",
+    "text": "A scene-owned player that automatically crossfades compatible local transform animations. Create a player with `scene:CreateInstanceAnimPlayer(node)` or `scene:CreateAnimPlayer(clips)`. Configure `SetCrossFadeDuration` and optionally `SetCr"
+  },
+  {
     "title": "SceneAnimRef",
     "href": "api/squirrel/classes.html#sceneanimref",
     "kind": "class",
@@ -13288,6 +14128,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/classes.html#timecallbackconnection",
     "kind": "class",
     "text": "A TimeCallback connection to a Signal_returning_void_taking_time_ns."
+  },
+  {
+    "title": "TrackballController",
+    "href": "api/squirrel/classes.html#trackballcontroller",
+    "kind": "class",
+    "text": "Orbit a camera around a target using a quaternion arcball, exponential dolly and screen-space pan. The controller is independent of scenes and rendering. Construct it with a target position, a positive distance and an optional camera-world "
   },
   {
     "title": "Transform",
@@ -13506,6 +14352,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Begin a named profiler section. Call EndProfilerSection to end the section."
   },
   {
+    "title": "BuildSceneAnimNodeMap",
+    "href": "api/squirrel/functions.html#buildsceneanimnodemap",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CaptureProfilerFrame",
     "href": "api/squirrel/functions.html#captureprofilerframe",
     "kind": "function",
@@ -13680,6 +14532,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Compute a perspective view state. See ComputePerspectiveProjectionMatrix, ZoomFactorToFov, FovToZoomFactor, ComputeAspectRatioX and ComputeAspectRatioY."
   },
   {
+    "title": "ComputePremultipliedRenderState",
+    "href": "api/squirrel/functions.html#computepremultipliedrenderstate",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "ComputeRenderState",
     "href": "api/squirrel/functions.html#computerenderstate",
     "kind": "function",
@@ -13776,6 +14634,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Create a capsule render model. See CreateCubeModel, CreateConeModel, CreateCylinderModel, CreatePlaneModel, CreateSphereModel and DrawModel."
   },
   {
+    "title": "CreateComputeBuffer",
+    "href": "api/squirrel/functions.html#createcomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeBufferFromData",
+    "href": "api/squirrel/functions.html#createcomputebufferfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateComputeQuadModel",
+    "href": "api/squirrel/functions.html#createcomputequadmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "CreateConeModel",
     "href": "api/squirrel/functions.html#createconemodel",
     "kind": "function",
@@ -13816,6 +14692,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#createframebuffer",
     "kind": "function",
     "text": "Create a framebuffer and its texture attachments. See DestroyFrameBuffer."
+  },
+  {
+    "title": "CreateGaussianSplatRenderData",
+    "href": "api/squirrel/functions.html#creategaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromAssets",
+    "href": "api/squirrel/functions.html#creategaussiansplatrendererfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "CreateGaussianSplatRendererFromFile",
+    "href": "api/squirrel/functions.html#creategaussiansplatrendererfromfile",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "CreateInstanceFromAssets",
@@ -14028,6 +14922,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Destroy a bloom post process object and all associated resources."
   },
   {
+    "title": "DestroyComputeBuffer",
+    "href": "api/squirrel/functions.html#destroycomputebuffer",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "DestroyForwardPipeline",
     "href": "api/squirrel/functions.html#destroyforwardpipeline",
     "kind": "function",
@@ -14044,6 +14944,24 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#destroyframebuffer",
     "kind": "function",
     "text": "Destroy a frame buffer and its resources."
+  },
+  {
+    "title": "DestroyGaussianSplatModel",
+    "href": "api/squirrel/functions.html#destroygaussiansplatmodel",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderData",
+    "href": "api/squirrel/functions.html#destroygaussiansplatrenderdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DestroyGaussianSplatRenderer",
+    "href": "api/squirrel/functions.html#destroygaussiansplatrenderer",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "DestroyNavMesh",
@@ -14090,6 +15008,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "DisableCursor",
     "href": "api/squirrel/functions.html#disablecursor",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "DispatchCompute",
+    "href": "api/squirrel/functions.html#dispatchcompute",
     "kind": "function",
     "text": ""
   },
@@ -14364,6 +15288,24 @@ window.HG_SEARCH_INDEX = [
     "text": "Returns the nth column."
   },
   {
+    "title": "GetComputeBufferCount",
+    "href": "api/squirrel/functions.html#getcomputebuffercount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeCaps",
+    "href": "api/squirrel/functions.html#getcomputecaps",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetComputeFrameStats",
+    "href": "api/squirrel/functions.html#getcomputeframestats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetCurrentWorkingDirectory",
     "href": "api/squirrel/functions.html#getcurrentworkingdirectory",
     "kind": "function",
@@ -14403,7 +15345,37 @@ window.HG_SEARCH_INDEX = [
     "title": "GetGamepadNames",
     "href": "api/squirrel/functions.html#getgamepadnames",
     "kind": "function",
-    "text": "Return a list of names for all supported gamepad devices on the system. See ReadGamepad."
+    "text": "Return a list of names for all supported gamepad devices on the system. These are registered input readers, including unoccupied slots. Check the `IsConnected` state returned by ReadGamepad to determine whether a reader has a connected devi"
+  },
+  {
+    "title": "GetGaussianSplatBoundsMax",
+    "href": "api/squirrel/functions.html#getgaussiansplatboundsmax",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatBoundsMin",
+    "href": "api/squirrel/functions.html#getgaussiansplatboundsmin",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatCount",
+    "href": "api/squirrel/functions.html#getgaussiansplatcount",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSHDegree",
+    "href": "api/squirrel/functions.html#getgaussiansplatshdegree",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "GetGaussianSplatSourceCount",
+    "href": "api/squirrel/functions.html#getgaussiansplatsourcecount",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "GetHandJointAngularVelocity",
@@ -14658,6 +15630,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the scale component of a matrix a scale vector."
   },
   {
+    "title": "GetSceneAnimInfo",
+    "href": "api/squirrel/functions.html#getsceneaniminfo",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "GetSceneForwardPipelineFog",
     "href": "api/squirrel/functions.html#getsceneforwardpipelinefog",
     "kind": "function",
@@ -14751,13 +15729,19 @@ window.HG_SEARCH_INDEX = [
     "title": "GetWindowClientSize",
     "href": "api/squirrel/functions.html#getwindowclientsize",
     "kind": "function",
-    "text": "Return a window client rectangle. The client area of a window does not include its decorations."
+    "text": "Return the window client size in screen coordinates, excluding decorations. On macOS these coordinates are points, which can differ from drawable pixels on Retina displays. Use GetWindowFrameBufferSize for renderer backbuffer dimensions and"
   },
   {
     "title": "GetWindowContentScale",
     "href": "api/squirrel/functions.html#getwindowcontentscale",
     "kind": "function",
     "text": ""
+  },
+  {
+    "title": "GetWindowFrameBufferSize",
+    "href": "api/squirrel/functions.html#getwindowframebuffersize",
+    "kind": "function",
+    "text": "Return the window drawable width and height in pixels. On Retina displays this can be twice the client size on each axis. Query the drawable directly instead of multiplying the client size by the content scale: the relationship is platform "
   },
   {
     "title": "GetWindowHandle",
@@ -16026,6 +17010,12 @@ window.HG_SEARCH_INDEX = [
     "text": "ImGui wants mouse capture. Use this function to determine when to pause mouse processing from other parts of your program."
   },
   {
+    "title": "ImportSceneAnim",
+    "href": "api/squirrel/functions.html#importsceneanim",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "Inch",
     "href": "api/squirrel/functions.html#inch",
     "kind": "function",
@@ -16114,6 +17104,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#isfinite",
     "kind": "function",
     "text": "Test if a floating point value is finite."
+  },
+  {
+    "title": "IsGaussianSplatAntialiased",
+    "href": "api/squirrel/functions.html#isgaussiansplatantialiased",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "IsHandJointActive",
@@ -16218,6 +17214,30 @@ window.HG_SEARCH_INDEX = [
     "text": "Load a Picture in [BMP](https://en.wikipedia.org/wiki/BMP_file_format) file format."
   },
   {
+    "title": "LoadComputeBufferFromAssets",
+    "href": "api/squirrel/functions.html#loadcomputebufferfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeBufferFromFile",
+    "href": "api/squirrel/functions.html#loadcomputebufferfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromAssets",
+    "href": "api/squirrel/functions.html#loadcomputeprogramfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadComputeProgramFromFile",
+    "href": "api/squirrel/functions.html#loadcomputeprogramfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "LoadDataFromFile",
     "href": "api/squirrel/functions.html#loaddatafromfile",
     "kind": "function",
@@ -16244,6 +17264,24 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "LoadForwardPipelineAAAConfigFromFile",
     "href": "api/squirrel/functions.html#loadforwardpipelineaaaconfigfromfile",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromAssets",
+    "href": "api/squirrel/functions.html#loadgaussiansplatmodelfromassets",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromData",
+    "href": "api/squirrel/functions.html#loadgaussiansplatmodelfromdata",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "LoadGaussianSplatModelFromFile",
+    "href": "api/squirrel/functions.html#loadgaussiansplatmodelfromfile",
     "kind": "function",
     "text": ""
   },
@@ -16470,6 +17508,12 @@ window.HG_SEARCH_INDEX = [
     "text": ""
   },
   {
+    "title": "MakeComputeBufferBinding",
+    "href": "api/squirrel/functions.html#makecomputebufferbinding",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "MakeForwardPipelineLinearLight",
     "href": "api/squirrel/functions.html#makeforwardpipelinelinearlight",
     "kind": "function",
@@ -16492,6 +17536,18 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#makefrustum",
     "kind": "function",
     "text": "Create a projection frustum. This object can then be used to perform culling using TestVisibility. ```python # Compute a perspective matrix proj = hg.ComputePerspectiveProjectionMatrix(0.1, 1000, hg.FovToZoomFactor(math.pi/4), 1280/720) # M"
+  },
+  {
+    "title": "MakeGaussianSplatInstance",
+    "href": "api/squirrel/functions.html#makegaussiansplatinstance",
+    "kind": "function",
+    "text": ""
+  },
+  {
+    "title": "MakeImageBinding",
+    "href": "api/squirrel/functions.html#makeimagebinding",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "MakePlane",
@@ -17055,7 +18111,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ReadGamepad",
     "href": "api/squirrel/functions.html#readgamepad",
     "kind": "function",
-    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. See GetGamepadNames."
+    "text": "Read the current state of a named gamepad. If no name is passed, `default` is implied. On macOS with the GLFW backend, `default` prefers the first connected Apple GameController extended gamepad, falling back to GLFW slot 0 when none is ava"
   },
   {
     "title": "ReadJoystick",
@@ -17139,7 +18195,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderInit",
     "href": "api/squirrel/functions.html#renderinit",
     "kind": "function",
-    "text": "Initialize the render system. To change the states of the render system afterward use RenderReset."
+    "text": "Initialize the render system. The initial backbuffer uses the window's drawable pixel size, including Retina scaling. Overloads that create a window take its dimensions in screen coordinates; query GetWindowFrameBufferSize afterward for ren"
   },
   {
     "title": "RenderReset",
@@ -17151,7 +18207,7 @@ window.HG_SEARCH_INDEX = [
     "title": "RenderResetToWindow",
     "href": "api/squirrel/functions.html#renderresettowindow",
     "kind": "function",
-    "text": "Resize the renderer backbuffer to the provided window client area dimensions. Return true if a reset was needed and carried out."
+    "text": "Resize the renderer backbuffer to the window's drawable pixel dimensions, including Retina scaling. The input/output `width` and `height` are backbuffer dimensions in pixels, not window coordinates. Return true and update the dimensions if "
   },
   {
     "title": "RenderShutdown",
@@ -17200,6 +18256,12 @@ window.HG_SEARCH_INDEX = [
     "href": "api/squirrel/functions.html#rmtree",
     "kind": "function",
     "text": "Remove a folder on the local filesystem. **Warning:** This function will through all subfolders and erase all files and folders in the target folder."
+  },
+  {
+    "title": "Rotate",
+    "href": "api/squirrel/functions.html#rotate",
+    "kind": "function",
+    "text": ""
   },
   {
     "title": "RotationMat2D",
@@ -17868,6 +18930,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Return the content of a file on the local filesystem as a string."
   },
   {
+    "title": "SubmitGaussianSplats",
+    "href": "api/squirrel/functions.html#submitgaussiansplats",
+    "kind": "function",
+    "text": ""
+  },
+  {
     "title": "SubmitSceneToForwardPipeline",
     "href": "api/squirrel/functions.html#submitscenetoforwardpipeline",
     "kind": "function",
@@ -18288,6 +19356,12 @@ window.HG_SEARCH_INDEX = [
     "text": "Convert from a zoom factor value in meters to a fov value in radian."
   },
   {
+    "title": "Access",
+    "href": "api/squirrel/constants.html#access",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
     "title": "AnimLoopMode",
     "href": "api/squirrel/constants.html#animloopmode",
     "kind": "enumeration",
@@ -18338,6 +19412,12 @@ window.HG_SEARCH_INDEX = [
   {
     "title": "CollisionType",
     "href": "api/squirrel/constants.html#collisiontype",
+    "kind": "enumeration",
+    "text": ""
+  },
+  {
+    "title": "ComputeBufferType",
+    "href": "api/squirrel/constants.html#computebuffertype",
     "kind": "enumeration",
     "text": ""
   },

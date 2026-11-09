@@ -133,6 +133,11 @@
 <div class="api-proto">BeginProfilerSection(name: <code>str</code>, section_details: <code>str</code>) -&gt; <code>int</code></div>
 <div class="api-doc"><p>Begin a named profiler section. Call <a href="#endprofilersection">EndProfilerSection</a> to end the section.</p></div>
 </section>
+<section class="api-entry" id="buildsceneanimnodemap">
+<h2>BuildSceneAnimNodeMap <span class="api-kind">Function</span></h2>
+<div class="api-proto">BuildSceneAnimNodeMap(source: <a href="classes.html#scene">Scene</a>, destination: <a href="classes.html#scene">Scene</a>) -&gt; <a href="classes.html#sceneanimnodemap">SceneAnimNodeMap</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="captureprofilerframe">
 <h2>CaptureProfilerFrame <span class="api-kind">Function</span></h2>
 <div class="api-proto">CaptureProfilerFrame() -&gt; <a href="classes.html#profilerframe">ProfilerFrame</a></div>
@@ -304,6 +309,11 @@
 <div class="api-doc"><p>Compute a perspective view state.</p>
 <p>See <a href="#computeperspectiveprojectionmatrix">ComputePerspectiveProjectionMatrix</a>, <a href="#zoomfactortofov">ZoomFactorToFov</a>, <a href="#fovtozoomfactor">FovToZoomFactor</a>, <a href="#computeaspectratiox">ComputeAspectRatioX</a> and <a href="#computeaspectratioy">ComputeAspectRatioY</a>.</p></div>
 </section>
+<section class="api-entry" id="computepremultipliedrenderstate">
+<h2>ComputePremultipliedRenderState <span class="api-kind">Function</span></h2>
+<div class="api-proto">ComputePremultipliedRenderState() -&gt; <a href="classes.html#renderstate">RenderState</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="computerenderstate">
 <h2>ComputeRenderState <span class="api-kind">Function</span></h2>
 <div class="api-proto">ComputeRenderState(blend: <a href="constants.html#blendmode">BlendMode</a>) -&gt; <a href="classes.html#renderstate">RenderState</a></div>
@@ -404,6 +414,24 @@
 <div class="api-doc"><p>Create a capsule render model.</p>
 <p>See <a href="#createcubemodel">CreateCubeModel</a>, <a href="#createconemodel">CreateConeModel</a>, <a href="#createcylindermodel">CreateCylinderModel</a>, <a href="#createplanemodel">CreatePlaneModel</a>, <a href="#createspheremodel">CreateSphereModel</a> and <a href="#drawmodel">DrawModel</a>.</p></div>
 </section>
+<section class="api-entry" id="createcomputebuffer">
+<h2>CreateComputeBuffer <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateComputeBuffer(count: <code>int</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">CreateComputeBuffer(count: <code>int</code>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="createcomputebufferfromdata">
+<h2>CreateComputeBufferFromData <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateComputeBufferFromData(data: <a href="classes.html#data">Data</a>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">CreateComputeBufferFromData(data: <a href="classes.html#data">Data</a>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">CreateComputeBufferFromData(data: <a href="classes.html#data">Data</a>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>, offset: <code>int</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="createcomputequadmodel">
+<h2>CreateComputeQuadModel <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateComputeQuadModel(count: <code>int</code>) -&gt; <a href="classes.html#model">Model</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="createconemodel">
 <h2>CreateConeModel <span class="api-kind">Function</span></h2>
 <div class="api-proto">CreateConeModel(decl: <a href="classes.html#vertexlayout">VertexLayout</a>, radius: <code>float</code>, height: <code>float</code>, subdiv_x: <code>int</code>) -&gt; <a href="classes.html#model">Model</a></div>
@@ -451,6 +479,21 @@
 <div class="api-proto">CreateFrameBuffer(width: <code>int</code>, height: <code>int</code>, color_format: <a href="constants.html#textureformat">TextureFormat</a>, depth_format: <a href="constants.html#textureformat">TextureFormat</a>, aa: <code>int</code>, name: <code>str</code>) -&gt; <a href="classes.html#framebuffer">FrameBuffer</a></div>
 <div class="api-doc"><p>Create a framebuffer and its texture attachments.</p>
 <p>See <a href="#destroyframebuffer">DestroyFrameBuffer</a>.</p></div>
+</section>
+<section class="api-entry" id="creategaussiansplatrenderdata">
+<h2>CreateGaussianSplatRenderData <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateGaussianSplatRenderData() -&gt; <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="creategaussiansplatrendererfromassets">
+<h2>CreateGaussianSplatRendererFromAssets <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateGaussianSplatRendererFromAssets(shader_root: <code>str</code>) -&gt; <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="creategaussiansplatrendererfromfile">
+<h2>CreateGaussianSplatRendererFromFile <span class="api-kind">Function</span></h2>
+<div class="api-proto">CreateGaussianSplatRendererFromFile(shader_root: <code>str</code>) -&gt; <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="createinstancefromassets">
 <h2>CreateInstanceFromAssets <span class="api-kind">Function</span></h2>
@@ -698,6 +741,11 @@
 <div class="api-proto">DestroyBloom(bloom: <a href="classes.html#bloom">Bloom</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Destroy a bloom post process object and all associated resources.</p></div>
 </section>
+<section class="api-entry" id="destroycomputebuffer">
+<h2>DestroyComputeBuffer <span class="api-kind">Function</span></h2>
+<div class="api-proto">DestroyComputeBuffer(buffer: <a href="classes.html#computebuffer">ComputeBuffer</a>) -&gt; <code>None</code></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="destroyforwardpipeline">
 <h2>DestroyForwardPipeline <span class="api-kind">Function</span></h2>
 <div class="api-proto">DestroyForwardPipeline(pipeline: <a href="classes.html#forwardpipeline">ForwardPipeline</a>) -&gt; <code>None</code></div>
@@ -712,6 +760,21 @@
 <h2>DestroyFrameBuffer <span class="api-kind">Function</span></h2>
 <div class="api-proto">DestroyFrameBuffer(frameBuffer: <a href="classes.html#framebuffer">FrameBuffer</a>) -&gt; <code>None</code></div>
 <div class="api-doc"><p>Destroy a frame buffer and its resources.</p></div>
+</section>
+<section class="api-entry" id="destroygaussiansplatmodel">
+<h2>DestroyGaussianSplatModel <span class="api-kind">Function</span></h2>
+<div class="api-proto">DestroyGaussianSplatModel(value: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>None</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="destroygaussiansplatrenderdata">
+<h2>DestroyGaussianSplatRenderData <span class="api-kind">Function</span></h2>
+<div class="api-proto">DestroyGaussianSplatRenderData(value: <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a>) -&gt; <code>None</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="destroygaussiansplatrenderer">
+<h2>DestroyGaussianSplatRenderer <span class="api-kind">Function</span></h2>
+<div class="api-proto">DestroyGaussianSplatRenderer(value: <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a>) -&gt; <code>None</code></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="destroynavmesh">
 <h2>DestroyNavMesh <span class="api-kind">Function</span></h2>
@@ -751,6 +814,15 @@
 <section class="api-entry" id="disablecursor">
 <h2>DisableCursor <span class="api-kind">Function</span></h2>
 <div class="api-proto">DisableCursor() -&gt; <code>None</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="dispatchcompute">
+<h2>DispatchCompute <span class="api-kind">Function</span></h2>
+<div class="api-proto">DispatchCompute(view_id: <code>int</code>, program: <a href="classes.html#programhandle">ProgramHandle</a>, x: <code>int</code>) -&gt; <code>bool</code>, <code>int</code></div>
+<div class="api-proto">DispatchCompute(view_id: <code>int</code>, program: <a href="classes.html#programhandle">ProgramHandle</a>, x: <code>int</code>, y: <code>int</code>) -&gt; <code>bool</code>, <code>int</code></div>
+<div class="api-proto">DispatchCompute(view_id: <code>int</code>, program: <a href="classes.html#programhandle">ProgramHandle</a>, x: <code>int</code>, y: <code>int</code>, z: <code>int</code>) -&gt; <code>bool</code>, <code>int</code></div>
+<div class="api-proto">DispatchCompute(view_id: <code>int</code>, program: <a href="classes.html#programhandle">ProgramHandle</a>, x: <code>int</code>, y: <code>int</code>, z: <code>int</code>, values: <a href="classes.html#uniformsetvaluelist">UniformSetValueList</a>, textures: <a href="classes.html#uniformsettexturelist">UniformSetTextureList</a>, images: <a href="classes.html#imagebindinglist">ImageBindingList</a>, buffers: <a href="classes.html#computebufferbindinglist">ComputeBufferBindingList</a>) -&gt; <code>bool</code>, <code>int</code></div>
+<div class="api-proto">DispatchCompute(view_id: <code>int</code>, program: <a href="classes.html#programhandle">ProgramHandle</a>, x: <code>int</code>, y: <code>int</code>, z: <code>int</code>, values: <a href="classes.html#uniformsetvaluelist">UniformSetValueList</a>, textures: <a href="classes.html#uniformsettexturelist">UniformSetTextureList</a>, images: <a href="classes.html#imagebindinglist">ImageBindingList</a>, buffers: <a href="classes.html#computebufferbindinglist">ComputeBufferBindingList</a>, debug_name: <code>str</code>) -&gt; <code>bool</code>, <code>int</code></div>
 <div class="api-doc"></div>
 </section>
 <section class="api-entry" id="dist">
@@ -1051,6 +1123,21 @@ This function returns the backend current frame.</p>
 <div class="api-proto">GetColumn(m: <a href="classes.html#mat44">Mat44</a>, idx: <code>int</code>) -&gt; <a href="classes.html#vec4">Vec4</a></div>
 <div class="api-doc"><p>Returns the nth column.</p></div>
 </section>
+<section class="api-entry" id="getcomputebuffercount">
+<h2>GetComputeBufferCount <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetComputeBufferCount(buffer: <a href="classes.html#computebuffer">ComputeBuffer</a>) -&gt; <code>int</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getcomputecaps">
+<h2>GetComputeCaps <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetComputeCaps() -&gt; <a href="classes.html#computecaps">ComputeCaps</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getcomputeframestats">
+<h2>GetComputeFrameStats <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetComputeFrameStats() -&gt; <a href="classes.html#computeframestats">ComputeFrameStats</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="getcurrentworkingdirectory">
 <h2>GetCurrentWorkingDirectory <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetCurrentWorkingDirectory() -&gt; <code>str</code></div>
@@ -1085,7 +1172,37 @@ This function returns the backend current frame.</p>
 <h2>GetGamepadNames <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetGamepadNames() -&gt; <a href="classes.html#stringlist">StringList</a></div>
 <div class="api-doc"><p>Return a list of names for all supported gamepad devices on the system.</p>
+<p>These are registered input readers, including unoccupied slots. Check the
+<code>IsConnected</code> state returned by <a href="#readgamepad">ReadGamepad</a> to determine whether a reader has a
+connected device. On macOS with the GLFW backend, <code>gamecontroller_slot_0</code> through
+<code>gamecontroller_slot_15</code> expose Apple's native GameController input in addition
+to the GLFW readers. <code>default</code> prefers a connected native controller.</p>
 <p>See <a href="#readgamepad">ReadGamepad</a>.</p></div>
+</section>
+<section class="api-entry" id="getgaussiansplatboundsmax">
+<h2>GetGaussianSplatBoundsMax <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetGaussianSplatBoundsMax(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <a href="classes.html#vec3">Vec3</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getgaussiansplatboundsmin">
+<h2>GetGaussianSplatBoundsMin <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetGaussianSplatBoundsMin(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <a href="classes.html#vec3">Vec3</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getgaussiansplatcount">
+<h2>GetGaussianSplatCount <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetGaussianSplatCount(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>int</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getgaussiansplatshdegree">
+<h2>GetGaussianSplatSHDegree <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetGaussianSplatSHDegree(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>int</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getgaussiansplatsourcecount">
+<h2>GetGaussianSplatSourceCount <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetGaussianSplatSourceCount(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>int</code></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="gethandjointangularvelocity">
 <h2>GetHandJointAngularVelocity <span class="api-kind">Function</span></h2>
@@ -1306,6 +1423,11 @@ This function returns the backend current frame.</p>
 <div class="api-proto">GetScale(m: <a href="classes.html#mat4">Mat4</a>) -&gt; <a href="classes.html#vec3">Vec3</a></div>
 <div class="api-doc"><p>Return the scale component of a matrix a scale vector.</p></div>
 </section>
+<section class="api-entry" id="getsceneaniminfo">
+<h2>GetSceneAnimInfo <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetSceneAnimInfo(scene: <a href="classes.html#scene">Scene</a>, ref: <a href="classes.html#sceneanimref">SceneAnimRef</a>) -&gt; <a href="classes.html#sceneaniminfo">SceneAnimInfo</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="getsceneforwardpipelinefog">
 <h2>GetSceneForwardPipelineFog <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetSceneForwardPipelineFog(scene: <a href="classes.html#scene">Scene</a>) -&gt; <a href="classes.html#forwardpipelinefog">ForwardPipelineFog</a></div>
@@ -1389,12 +1511,21 @@ This function returns the backend current frame.</p>
 <section class="api-entry" id="getwindowclientsize">
 <h2>GetWindowClientSize <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetWindowClientSize(window: <a href="classes.html#window">Window</a>) -&gt; <code>bool</code>, <code>int</code>, <code>int</code></div>
-<div class="api-doc"><p>Return a window client rectangle. The client area of a window does not include its decorations.</p></div>
+<div class="api-doc"><p>Return the window client size in screen coordinates, excluding decorations. On macOS these coordinates are points, which can differ from drawable pixels on Retina displays.</p>
+<p>Use <a href="#getwindowframebuffersize">GetWindowFrameBufferSize</a> for renderer backbuffer dimensions and viewports. Use this function for window layout and sizing.</p></div>
 </section>
 <section class="api-entry" id="getwindowcontentscale">
 <h2>GetWindowContentScale <span class="api-kind">Function</span></h2>
 <div class="api-proto">GetWindowContentScale(window: <a href="classes.html#window">Window</a>) -&gt; <a href="classes.html#vec2">Vec2</a></div>
 <div class="api-doc"></div>
+</section>
+<section class="api-entry" id="getwindowframebuffersize">
+<h2>GetWindowFrameBufferSize <span class="api-kind">Function</span></h2>
+<div class="api-proto">GetWindowFrameBufferSize(window: <a href="classes.html#window">Window</a>) -&gt; <code>bool</code>, <code>int</code>, <code>int</code></div>
+<div class="api-doc"><p>Return the window drawable width and height in pixels. On Retina displays this can be twice the client size on each axis. Query the drawable directly instead of multiplying the client size by the content scale: the relationship is platform dependent.</p>
+<p>Use these dimensions with <a href="#renderreset">RenderReset</a>, <a href="#setviewrect">SetViewRect</a>, <a href="#setview2d">SetView2D</a> and scene submission rectangles. <a href="#newwindow">NewWindow</a> and <a href="#setwindowclientsize">SetWindowClientSize</a> still use screen coordinates.</p>
+<p>Returns false and zero dimensions for a null window. A valid window may temporarily have zero drawable dimensions; skip rendering until both dimensions are positive.</p>
+<p>The drawable size may change when resizing the window or moving it between displays. <a href="#renderresettowindow">RenderResetToWindow</a> queries it and resets the backbuffer when needed; applications must also update their viewports and projections.</p></div>
 </section>
 <section class="api-entry" id="getwindowhandle">
 <h2>GetWindowHandle <span class="api-kind">Function</span></h2>
@@ -2650,6 +2781,12 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <div class="api-proto">ImGuiWantCaptureMouse() -&gt; <code>bool</code></div>
 <div class="api-doc"><p>ImGui wants mouse capture. Use this function to determine when to pause mouse processing from other parts of your program.</p></div>
 </section>
+<section class="api-entry" id="importsceneanim">
+<h2>ImportSceneAnim <span class="api-kind">Function</span></h2>
+<div class="api-proto">ImportSceneAnim(source: <a href="classes.html#scene">Scene</a>, source_anim: <a href="classes.html#sceneanimref">SceneAnimRef</a>, destination: <a href="classes.html#scene">Scene</a>, node_map: <a href="classes.html#sceneanimnodemap">SceneAnimNodeMap</a>, name: <code>str</code>) -&gt; <a href="classes.html#sceneanimimportresult">SceneAnimImportResult</a></div>
+<div class="api-proto">ImportSceneAnim(source: <a href="classes.html#scene">Scene</a>, source_anim: <a href="classes.html#sceneanimref">SceneAnimRef</a>, destination: <a href="classes.html#scene">Scene</a>, node_map: <a href="classes.html#sceneanimnodemap">SceneAnimNodeMap</a>, name: <code>str</code>, preserve_missing_trs: <code>bool</code>) -&gt; <a href="classes.html#sceneanimimportresult">SceneAnimImportResult</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="inch">
 <h2>Inch <span class="api-kind">Function</span></h2>
 <div class="api-proto">Inch(inch: <code>float</code>) -&gt; <code>float</code></div>
@@ -2745,6 +2882,11 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <div class="api-proto">IsFinite(v: <code>float</code>) -&gt; <code>bool</code></div>
 <div class="api-doc"><p>Test if a floating point value is finite.</p></div>
 </section>
+<section class="api-entry" id="isgaussiansplatantialiased">
+<h2>IsGaussianSplatAntialiased <span class="api-kind">Function</span></h2>
+<div class="api-proto">IsGaussianSplatAntialiased(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>bool</code></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="ishandjointactive">
 <h2>IsHandJointActive <span class="api-kind">Function</span></h2>
 <div class="api-proto">IsHandJointActive(hand: <a href="constants.html#handsside">HandsSide</a>) -&gt; <code>bool</code></div>
@@ -2785,6 +2927,10 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <div class="api-proto">IsValid(file: <a href="classes.html#file">File</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(t: <a href="classes.html#texture">Texture</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(fb: <a href="classes.html#framebuffer">FrameBuffer</a>) -&gt; <code>bool</code></div>
+<div class="api-proto">IsValid(buffer: <a href="classes.html#computebuffer">ComputeBuffer</a>) -&gt; <code>bool</code></div>
+<div class="api-proto">IsValid(value: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <code>bool</code></div>
+<div class="api-proto">IsValid(value: <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a>) -&gt; <code>bool</code></div>
+<div class="api-proto">IsValid(value: <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(pipeline: <a href="classes.html#forwardpipelineaaa">ForwardPipelineAAA</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(streamer: <a href="classes.html#iaudiostreamer">IAudioStreamer</a>) -&gt; <code>bool</code></div>
 <div class="api-proto">IsValid(streamer: <a href="classes.html#ivideostreamer">IVideoStreamer</a>) -&gt; <code>bool</code></div>
@@ -2854,6 +3000,32 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <div class="api-proto">LoadBMP(pict: <a href="classes.html#picture">Picture</a>, path: <code>str</code>) -&gt; <code>bool</code></div>
 <div class="api-doc"><p>Load a <a href="classes.html#picture">Picture</a> in <a href="https://en.wikipedia.org/wiki/BMP_file_format">BMP</a> file format.</p></div>
 </section>
+<section class="api-entry" id="loadcomputebufferfromassets">
+<h2>LoadComputeBufferFromAssets <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadComputeBufferFromAssets(path: <code>str</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">LoadComputeBufferFromAssets(path: <code>str</code>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">LoadComputeBufferFromAssets(path: <code>str</code>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>, offset: <code>int</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadcomputebufferfromfile">
+<h2>LoadComputeBufferFromFile <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadComputeBufferFromFile(path: <code>str</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">LoadComputeBufferFromFile(path: <code>str</code>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-proto">LoadComputeBufferFromFile(path: <code>str</code>, type: <a href="constants.html#computebuffertype">ComputeBufferType</a>, offset: <code>int</code>) -&gt; <a href="classes.html#computebuffer">ComputeBuffer</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadcomputeprogramfromassets">
+<h2>LoadComputeProgramFromAssets <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadComputeProgramFromAssets(path: <code>str</code>) -&gt; <a href="classes.html#programhandle">ProgramHandle</a></div>
+<div class="api-proto">LoadComputeProgramFromAssets(path: <code>str</code>, silent: <code>bool</code>) -&gt; <a href="classes.html#programhandle">ProgramHandle</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadcomputeprogramfromfile">
+<h2>LoadComputeProgramFromFile <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadComputeProgramFromFile(path: <code>str</code>) -&gt; <a href="classes.html#programhandle">ProgramHandle</a></div>
+<div class="api-proto">LoadComputeProgramFromFile(path: <code>str</code>, silent: <code>bool</code>) -&gt; <a href="classes.html#programhandle">ProgramHandle</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="loaddatafromfile">
 <h2>LoadDataFromFile <span class="api-kind">Function</span></h2>
 <div class="api-proto">LoadDataFromFile(path: <code>str</code>, data: <a href="classes.html#data">Data</a>) -&gt; <code>bool</code></div>
@@ -2887,6 +3059,24 @@ Or test if a rectangle in screen space is visible/not clipped.</p></div>
 <section class="api-entry" id="loadforwardpipelineaaaconfigfromfile">
 <h2>LoadForwardPipelineAAAConfigFromFile <span class="api-kind">Function</span></h2>
 <div class="api-proto">LoadForwardPipelineAAAConfigFromFile(path: <code>str</code>, config: <a href="classes.html#forwardpipelineaaaconfig">ForwardPipelineAAAConfig</a>) -&gt; <code>bool</code></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadgaussiansplatmodelfromassets">
+<h2>LoadGaussianSplatModelFromAssets <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadGaussianSplatModelFromAssets(path: <code>str</code>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
+<div class="api-proto">LoadGaussianSplatModelFromAssets(path: <code>str</code>, options: <a href="classes.html#gaussiansplatloadoptions">GaussianSplatLoadOptions</a>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadgaussiansplatmodelfromdata">
+<h2>LoadGaussianSplatModelFromData <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadGaussianSplatModelFromData(data: <a href="classes.html#data">Data</a>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
+<div class="api-proto">LoadGaussianSplatModelFromData(data: <a href="classes.html#data">Data</a>, options: <a href="classes.html#gaussiansplatloadoptions">GaussianSplatLoadOptions</a>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="loadgaussiansplatmodelfromfile">
+<h2>LoadGaussianSplatModelFromFile <span class="api-kind">Function</span></h2>
+<div class="api-proto">LoadGaussianSplatModelFromFile(path: <code>str</code>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
+<div class="api-proto">LoadGaussianSplatModelFromFile(path: <code>str</code>, options: <a href="classes.html#gaussiansplatloadoptions">GaussianSplatLoadOptions</a>) -&gt; <a href="classes.html#gaussiansplatloadresult">GaussianSplatLoadResult</a></div>
 <div class="api-doc"></div>
 </section>
 <section class="api-entry" id="loadgif">
@@ -3107,6 +3297,11 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">MakeAudioStreamer(module_path: <code>str</code>) -&gt; <a href="classes.html#iaudiostreamer">IAudioStreamer</a></div>
 <div class="api-doc"></div>
 </section>
+<section class="api-entry" id="makecomputebufferbinding">
+<h2>MakeComputeBufferBinding <span class="api-kind">Function</span></h2>
+<div class="api-proto">MakeComputeBufferBinding(buffer: <a href="classes.html#computebuffer">ComputeBuffer</a>, stage: <code>int</code>, access: <a href="constants.html#access">Access</a>) -&gt; <a href="classes.html#computebufferbinding">ComputeBufferBinding</a></div>
+<div class="api-doc"></div>
+</section>
 <section class="api-entry" id="makeforwardpipelinelinearlight">
 <h2>MakeForwardPipelineLinearLight <span class="api-kind">Function</span></h2>
 <div class="api-proto">MakeForwardPipelineLinearLight(world: <a href="classes.html#mat4">Mat4</a>, diffuse: <a href="classes.html#color">Color</a>, specular: <a href="classes.html#color">Color</a>) -&gt; <a href="classes.html#forwardpipelinelight">ForwardPipelineLight</a></div>
@@ -3149,6 +3344,20 @@ is copied to the audio backend before the function returns.</p></div>
 <span class="c1"># Make a frustum from this projection matrix</span>
 <span class="n">frustum</span> <span class="o">=</span> <span class="n">hg</span><span class="o">.</span><span class="n">MakeFrustum</span><span class="p">(</span><span class="n">proj</span><span class="p">)</span>
 </code></pre></div></div>
+</section>
+<section class="api-entry" id="makegaussiansplatinstance">
+<h2>MakeGaussianSplatInstance <span class="api-kind">Function</span></h2>
+<div class="api-proto">MakeGaussianSplatInstance(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>) -&gt; <a href="classes.html#gaussiansplatinstance">GaussianSplatInstance</a></div>
+<div class="api-proto">MakeGaussianSplatInstance(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>, world: <a href="classes.html#mat4">Mat4</a>) -&gt; <a href="classes.html#gaussiansplatinstance">GaussianSplatInstance</a></div>
+<div class="api-proto">MakeGaussianSplatInstance(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>, world: <a href="classes.html#mat4">Mat4</a>, id: <code>int</code>) -&gt; <a href="classes.html#gaussiansplatinstance">GaussianSplatInstance</a></div>
+<div class="api-proto">MakeGaussianSplatInstance(model: <a href="classes.html#gaussiansplatmodel">GaussianSplatModel</a>, world: <a href="classes.html#mat4">Mat4</a>, id: <code>int</code>, opacity: <code>float</code>) -&gt; <a href="classes.html#gaussiansplatinstance">GaussianSplatInstance</a></div>
+<div class="api-doc"></div>
+</section>
+<section class="api-entry" id="makeimagebinding">
+<h2>MakeImageBinding <span class="api-kind">Function</span></h2>
+<div class="api-proto">MakeImageBinding(texture: <a href="classes.html#texture">Texture</a>, stage: <code>int</code>, access: <a href="constants.html#access">Access</a>) -&gt; <a href="classes.html#imagebinding">ImageBinding</a></div>
+<div class="api-proto">MakeImageBinding(texture: <a href="classes.html#texture">Texture</a>, stage: <code>int</code>, access: <a href="constants.html#access">Access</a>, mip: <code>int</code>) -&gt; <a href="classes.html#imagebinding">ImageBinding</a></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="makeplane">
 <h2>MakePlane <span class="api-kind">Function</span></h2>
@@ -3710,6 +3919,15 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">ReadGamepad() -&gt; <a href="classes.html#gamepadstate">GamepadState</a></div>
 <div class="api-proto">ReadGamepad(name: <code>str</code>) -&gt; <a href="classes.html#gamepadstate">GamepadState</a></div>
 <div class="api-doc"><p>Read the current state of a named gamepad. If no name is passed, <code>default</code> is implied.</p>
+<p>On macOS with the GLFW backend, <code>default</code> prefers the first connected Apple
+GameController extended gamepad, falling back to GLFW slot 0 when none is
+available. Native devices can also be read explicitly as <code>gamecontroller_slot_0</code>
+through <code>gamecontroller_slot_15</code>. The existing <code>gamepad_slot_*</code> readers retain
+their GLFW behavior. Apple-managed Bluetooth controllers may be visible to GLFW
+while their HID input values remain frozen; use <code>default</code> or a native reader for
+these devices.</p>
+<p>Native stick Y axes and triggers use the same ranges as the GLFW readers:
+positive Y points down, and triggers range from -1 (released) to +1 (fully pressed).</p>
 <p>See <a href="#getgamepadnames">GetGamepadNames</a>.</p></div>
 </section>
 <section class="api-entry" id="readjoystick">
@@ -3814,6 +4032,8 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">RenderInit(window_title: <code>str</code>, width: <code>int</code>, height: <code>int</code>, type: <a href="constants.html#renderertype">RendererType</a>, reset_flags: <a href="constants.html#resetflags">ResetFlags</a>, format: <a href="constants.html#textureformat">TextureFormat</a>) -&gt; <a href="classes.html#window">Window</a></div>
 <div class="api-proto">RenderInit(window_title: <code>str</code>, width: <code>int</code>, height: <code>int</code>, type: <a href="constants.html#renderertype">RendererType</a>, reset_flags: <a href="constants.html#resetflags">ResetFlags</a>, format: <a href="constants.html#textureformat">TextureFormat</a>, debug_flags: <a href="constants.html#debugflags">DebugFlags</a>) -&gt; <a href="classes.html#window">Window</a></div>
 <div class="api-doc"><p>Initialize the render system.</p>
+<p>The initial backbuffer uses the window's drawable pixel size, including Retina scaling. Overloads that create a window take its dimensions in screen coordinates; query <a href="#getwindowframebuffersize">GetWindowFrameBufferSize</a> afterward for rendering dimensions.</p>
+<p>Viewports and scene submission rectangles must use drawable pixels too. Existing applications that use the requested window dimensions for rendering should switch to <a href="#getwindowframebuffersize">GetWindowFrameBufferSize</a> or <a href="#renderresettowindow">RenderResetToWindow</a>.</p>
 <p>To change the states of the render system afterward use <a href="#renderreset">RenderReset</a>.</p></div>
 </section>
 <section class="api-entry" id="renderreset">
@@ -3827,7 +4047,9 @@ is copied to the audio backend before the function returns.</p></div>
 <h2>RenderResetToWindow <span class="api-kind">Function</span></h2>
 <div class="api-proto">RenderResetToWindow(win: <a href="classes.html#window">Window</a>, width: <code>int</code>, height: <code>int</code>) -&gt; <code>bool</code>, <code>int</code>, <code>int</code></div>
 <div class="api-proto">RenderResetToWindow(win: <a href="classes.html#window">Window</a>, width: <code>int</code>, height: <code>int</code>, reset_flags: <code>int</code>) -&gt; <code>bool</code>, <code>int</code>, <code>int</code></div>
-<div class="api-doc"><p>Resize the renderer backbuffer to the provided window client area dimensions. Return true if a reset was needed and carried out.</p></div>
+<div class="api-doc"><p>Resize the renderer backbuffer to the window's drawable pixel dimensions, including Retina scaling. The input/output <code>width</code> and <code>height</code> are backbuffer dimensions in pixels, not window coordinates.</p>
+<p>Return true and update the dimensions if a reset was needed and carried out. Return false without changing them if they already match, the window query fails, or either drawable dimension is zero. This avoids resetting the renderer to an empty surface while a window is minimized.</p>
+<p>After a successful reset, update viewports, projections and other resources that depend on the backbuffer size. <a href="#getwindowclientsize">GetWindowClientSize</a> remains available for window layout in screen coordinates.</p></div>
 </section>
 <section class="api-entry" id="rendershutdown">
 <h2>RenderShutdown <span class="api-kind">Function</span></h2>
@@ -3873,6 +4095,12 @@ is copied to the audio backend before the function returns.</p></div>
 <div class="api-proto">RmTree(path: <code>str</code>) -&gt; <code>bool</code></div>
 <div class="api-doc"><p>Remove a folder on the local filesystem.</p>
 <p><strong>Warning:</strong> This function will through all subfolders and erase all files and folders in the target folder.</p></div>
+</section>
+<section class="api-entry" id="rotate">
+<h2>Rotate <span class="api-kind">Function</span></h2>
+<div class="api-proto">Rotate(q: <a href="classes.html#quaternion">Quaternion</a>, v: <a href="classes.html#vec3">Vec3</a>) -&gt; <a href="classes.html#vec3">Vec3</a></div>
+<div class="api-proto">Rotate(q: <a href="classes.html#quaternion">Quaternion</a>, v: <a href="classes.html#vec4">Vec4</a>) -&gt; <a href="classes.html#vec4">Vec4</a></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="rotationmat2d">
 <h2>RotationMat2D <span class="api-kind">Function</span></h2>
@@ -4528,6 +4756,13 @@ is copied to the audio backend before the function returns.</p></div>
 <h2>StringToFile <span class="api-kind">Function</span></h2>
 <div class="api-proto">StringToFile(path: <code>str</code>, value: <code>str</code>) -&gt; <code>bool</code></div>
 <div class="api-doc"><p>Return the content of a file on the local filesystem as a string.</p></div>
+</section>
+<section class="api-entry" id="submitgaussiansplats">
+<h2>SubmitGaussianSplats <span class="api-kind">Function</span></h2>
+<div class="api-proto">SubmitGaussianSplats(next_view: <code>int</code>, rect: <a href="classes.html#intrect">IntRect</a>, view_state: <a href="classes.html#viewstate">ViewState</a>, instances: <a href="classes.html#gaussiansplatinstancelist">GaussianSplatInstanceList</a>, renderer: <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a>, render_data: <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a>) -&gt; <a href="classes.html#gaussiansplatsubmitresult">GaussianSplatSubmitResult</a>, <code>int</code></div>
+<div class="api-proto">SubmitGaussianSplats(next_view: <code>int</code>, rect: <a href="classes.html#intrect">IntRect</a>, view_state: <a href="classes.html#viewstate">ViewState</a>, instances: <a href="classes.html#gaussiansplatinstancelist">GaussianSplatInstanceList</a>, renderer: <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a>, render_data: <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a>, settings: <a href="classes.html#gaussiansplatrendersettings">GaussianSplatRenderSettings</a>) -&gt; <a href="classes.html#gaussiansplatsubmitresult">GaussianSplatSubmitResult</a>, <code>int</code></div>
+<div class="api-proto">SubmitGaussianSplats(next_view: <code>int</code>, rect: <a href="classes.html#intrect">IntRect</a>, view_state: <a href="classes.html#viewstate">ViewState</a>, instances: <a href="classes.html#gaussiansplatinstancelist">GaussianSplatInstanceList</a>, renderer: <a href="classes.html#gaussiansplatrenderer">GaussianSplatRenderer</a>, render_data: <a href="classes.html#gaussiansplatrenderdata">GaussianSplatRenderData</a>, settings: <a href="classes.html#gaussiansplatrendersettings">GaussianSplatRenderSettings</a>, target: <a href="classes.html#framebufferhandle">FrameBufferHandle</a>) -&gt; <a href="classes.html#gaussiansplatsubmitresult">GaussianSplatSubmitResult</a>, <code>int</code></div>
+<div class="api-doc"></div>
 </section>
 <section class="api-entry" id="submitscenetoforwardpipeline">
 <h2>SubmitSceneToForwardPipeline <span class="api-kind">Function</span></h2>

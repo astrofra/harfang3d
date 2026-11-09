@@ -6,6 +6,10 @@ add_definitions(-DASSIMP_BUILD_NO_3MF_EXPORTER=1) # TODO: if this exported is ne
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+# Keep the vendored Assimp revision independent of the enclosing HARFANG repository.
+set(ASSIMP_IGNORE_GIT_HASH ON CACHE BOOL "" FORCE)
+set(GIT_COMMIT_HASH c1120a4c)
+set(GIT_BRANCH "vendored")
 add_subdirectory(assimp EXCLUDE_FROM_ALL)
 set_target_properties(assimp PROPERTIES FOLDER "harfang/tools/3rdparty")
 
