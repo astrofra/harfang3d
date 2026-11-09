@@ -4659,6 +4659,8 @@ static hg::Vec2 _ImGuiCalcTextSize(const char *text, bool hide_text_after_double
 	gen.bind_function('hg::ImGuiShutdown', 'void', [])
 	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard'])
 	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['hg::DearImguiContext &ctx', 'int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard'])
+	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard', 'const hg::tVec2<float> &mouse_scale'])
+	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['hg::DearImguiContext &ctx', 'int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard', 'const hg::tVec2<float> &mouse_scale'])
 	gen.bind_function('hg::ImGuiEndFrame', 'void', ['const hg::DearImguiContext& ctx', '?bgfx::ViewId view_id'])
 	gen.bind_function('hg::ImGuiEndFrame', 'void', ['?bgfx::ViewId view_id'])
 	gen.bind_function('hg::ImGuiClearInputBuffer', 'void', [])

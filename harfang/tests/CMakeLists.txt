@@ -82,6 +82,7 @@ set(TEST_FOUNDATION_SRCS
 )
 
 set(TEST_ENGINE_SRCS
+	engine/dear_imgui.cpp
 	engine/trackball_controller.cpp
 	engine/assets.cpp
 	engine/animation.cpp

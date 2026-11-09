@@ -1,6 +1,6 @@
 # Gaussian splatting: Houseplant and Saari
 
-[gaussian_splatting.lua](gaussian_splatting.lua) is the single Lua Gaussian tutorial. It preloads Houseplant and Saari during setup, then switches between them through a small ImGui panel. Each model keeps its own native trackball camera, SH setting and render data. Switching does not reload either file.
+[gaussian_splatting.lua](gaussian_splatting.lua) is the single Lua Gaussian tutorial. It preloads Houseplant and Saari during setup, then switches between them through a small ImGui panel or the Space key. Each model keeps its own native trackball camera, SH setting and render data. Switching does not reload either file.
 
 C++ owns HGS2 loading, GPU resources, covariance projection, spherical harmonics, depth sorting and drawing. Lua owns the interface, window, model selection and RGB orientation gizmo. No companion Lua modules or Python preparation/launch tools are needed. The tutorial contains no assertions; developer checks live under `harfang/tests`.
 
@@ -30,7 +30,7 @@ cmake --build ../build/lua-cmake --config Release --target gsplat_tutorial_packa
 
 The package target builds Lua, its native module and the host asset tools, checks the tutorial core mirror, compiles the canonical Gaussian/ImGui shaders and tutorial gizmo for Metal, and converts both models through `assetc`. It stages the original Lua source and installed native dependencies under `../build/lua-cmake/gaussian_splatting/Release/app/`. `run.command` sets its own working directory and module path. This directory can be moved as a unit; no developer `DYLD_LIBRARY_PATH` or Python runtime is required.
 
-`gsplat_tutorial_run` builds and opens the application directly. `gsplat_tutorial_smoke` builds and runs the automated 60-frame tutorial, saving Houseplant/Saari captures beside `app/`. GPU targets require an interactive graphics session:
+`gsplat_tutorial_run` builds and opens the application directly. `gsplat_tutorial_smoke` builds and runs two automated 60-frame tutorials (GUI and Space switching), saving Houseplant/Saari captures beside `app/`. Both runs require all 1,307,339 Saari splats. GPU targets require an interactive graphics session:
 
 ```sh
 cmake --build ../build/lua-cmake --config Release --target gsplat_tutorial_smoke
@@ -95,6 +95,7 @@ SPZ quantization can already clip color/SH in the input: the local Saari compari
 | Control | Action |
 |---|---|
 | Model combo | Switch between preloaded Houseplant and Saari |
+| Space | Switch model once per press, including while hovering the GUI |
 | SH degree slider | Select degree 0..3 for Saari; Houseplant displays its fixed SH0 |
 | Reset camera button / R | Restore the active model's initial pose |
 | Left drag outside the GUI | Quaternion trackball, including roll |
@@ -104,6 +105,8 @@ SPZ quantization can already clip color/SH in the input: the local Saari compari
 | Escape | Close and release resources |
 
 Camera navigation uses [`hg.TrackballController`](../doc/doc/TrackballController.md). ImGui mouse capture blocks camera input, including the wheel; the first drag after returning from the GUI or reacquiring focus is suppressed. Camera poses and SH selections survive model changes. Runtime SH selection changes evaluation only; the importer's `sh-degree` cap controls stored data.
+
+On Retina/HiDPI displays, the tutorial passes the current framebuffer/client ratio to the `ImGuiBeginFrame` mouse-scale overload. Mouse hit testing then uses the same pixel coordinates as the GUI; the camera continues using client coordinates. The ratio is recomputed every frame and is not a fixed macOS multiplier.
 
 The application clears view 0, submits the selected model through two native views, draws the orientation overlay in the returned next view, then draws ImGui after the overlay. It handles resize and explicitly releases both models, both render-data objects, the shared renderer and GUI resources before render shutdown.
 
@@ -116,6 +119,8 @@ The native renderer keeps uploaded source/SH data in immutable GPU buffers, uses
 Retain one `GaussianSplatRenderData` per independently rendered camera/pass. Changes to camera, projection, viewport size, model/instance IDs, transforms, opacity, SH degree, radius cap or renderer invalidate cached compute results. Reordering an otherwise identical instance list does not. Multiple submissions sharing render data must execute in increasing BGFX view order; do not reorder their compute/draw dependencies afterward.
 
 Rebuild the Lua module **and compile the updated core shaders** together. The canonical package now also includes `sort_local.sc`, `radix_histogram.sc`, `radix_prefix.sc` and `radix_scatter.sc`; `sort.sc` remains the correctness reference. Existing compiled HGS2 assets need no reconversion. See the [performance report and reproducible benchmark](../specifications/SPECS_GAUSSIAN_SPLATTING_NATIVE_PERFORMANCE.md) for measured results and backend coverage.
+
+The full-count route is also tested on Apple M3 Pro/Metal: 57.0 fps average on the 60-second moving-camera benchmark at 1280x720, 27 compute dispatches while moving and zero on cache hits. See the [Mac validation and Retina input checks](../specifications/GSPLAT_MACOS_OPTIMIZED_VALIDATION.md).
 
 ## Building locally on Windows
 

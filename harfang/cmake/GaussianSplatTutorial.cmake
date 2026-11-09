@@ -46,4 +46,8 @@ add_custom_target(gsplat_tutorial_smoke
 		"${_gsplat_root}/app/$<TARGET_FILE_NAME:lua>"
 		"${CMAKE_SOURCE_DIR}/harfang/tests/gaussian_splatting_runner.lua"
 		. gaussian_splatting.lua 60 "${_gsplat_root}/tutorial"
+	COMMAND "${CMAKE_COMMAND}" -E chdir "${_gsplat_root}/app"
+		"${_gsplat_root}/app/$<TARGET_FILE_NAME:lua>"
+		"${CMAKE_SOURCE_DIR}/harfang/tests/gaussian_splatting_runner.lua"
+		. gaussian_splatting.lua 60 "${_gsplat_root}/tutorial-space" space
 	DEPENDS gsplat_tutorial_package USES_TERMINAL VERBATIM)

@@ -1,7 +1,9 @@
 -- Run from tutorials/. Exercise preloading, GUI switching and lifetime in the actual tutorial.
--- lua runner.lua MODULE_DIR TUTORIAL.lua [FRAMES=60] [SCREENSHOT_BASE]
+-- lua runner.lua MODULE_DIR TUTORIAL.lua [FRAMES=60] [SCREENSHOT_BASE] [gui|space]
 local module_dir, tutorial = assert(arg[1]), assert(arg[2])
 local limit, capture = tonumber(arg[3]) or 60, arg[4]
+local switch_mode = arg[5] or 'gui'
+assert(switch_mode == 'gui' or switch_mode == 'space')
 assert(limit >= 60)
 package.cpath = module_dir .. '/?.dll;' .. module_dir .. '/?.so;' .. package.cpath
 local hg = require('harfang')
@@ -13,6 +15,38 @@ local expected_model = 0
 local original_open, original_frame = hg.IsWindowOpen, hg.Frame
 local original_submit, original_shutdown = hg.SubmitGaussianSplats, hg.RenderShutdown
 local original_load = hg.LoadGaussianSplatModelFromFile
+if switch_mode == 'space' then
+    -- Inject press edges independently of ImGui selection; holding must not cycle.
+    local original_keyboard = hg.Keyboard
+    hg.Keyboard = function(...)
+        local keyboard = original_keyboard(...)
+        return {
+            Update = function() keyboard:Update() end,
+            GetState = function() return keyboard:GetState() end,
+            Down = function(_, key)
+                if key == hg.K_Space then return (frame >= 12 and frame <= 15) or (frame >= 36 and frame <= 39) end
+                return keyboard:Down(key)
+            end,
+            Pressed = function(_, key)
+                if key == hg.K_Space then return frame == 12 or frame == 36 end
+                return keyboard:Pressed(key)
+            end,
+        }
+    end
+    hg.WindowHasFocus = function() return true end
+end
+local original_gui_begin = hg.ImGuiBeginFrame
+local scaled_input_frames = 0
+local min_scale, max_scale = math.huge, 0
+hg.ImGuiBeginFrame = function(width, height, dt, mouse, keyboard, scale)
+    assert(scale and scale.x > 0 and scale.y > 0, 'Missing client/framebuffer mouse scale')
+    original_gui_begin(width, height, dt, mouse, keyboard, scale)
+    local position = hg.ImGuiGetMousePos()
+    assert(math.abs(position.x - mouse:X() * scale.x) <= 1 and
+        math.abs(position.y - (height - mouse:Y() * scale.y)) <= 1, 'ImGui mouse coordinates do not match rendered pixels')
+    scaled_input_frames = scaled_input_frames + 1
+    min_scale, max_scale = math.min(min_scale, scale.x, scale.y), math.max(max_scale, scale.x, scale.y)
+end
 hg.LoadGaussianSplatModelFromFile = function(path)
     assert(frame == 0, 'Models must be preloaded before the frame loop')
     local loaded = original_load(path)
@@ -23,6 +57,8 @@ hg.LoadGaussianSplatModelFromFile = function(path)
         assert(hg.GetGaussianSplatSHDegree(loaded.model) == 0)
     else
         assert(hg.GetGaussianSplatSHDegree(loaded.model) == 3)
+        assert(hg.GetGaussianSplatCount(loaded.model) == 1307339 and
+            hg.GetGaussianSplatCount(loaded.model) == hg.GetGaussianSplatSourceCount(loaded.model), 'Saari must retain every source splat')
     end
     return loaded
 end
@@ -30,7 +66,13 @@ local original_combo, original_slider = hg.ImGuiCombo, hg.ImGuiSliderInt
 hg.ImGuiCombo = function(label, selected, items, ...)
     local changed, value = original_combo(label, selected, items, ...)
     assert(label == 'Model' and #items == 2)
+    local previous_expected = expected_model
     expected_model = frame >= 12 and frame < 36 and 1 or 0
+    if switch_mode == 'space' then
+        assert(selected == expected_model, 'Space must switch exactly once per press, independently of the GUI')
+        if expected_model ~= previous_expected then switches = switches + 1 end
+        return changed, value
+    end
     if selected ~= expected_model then switches = switches + 1 end
     return selected ~= expected_model, expected_model
 end
@@ -102,6 +144,7 @@ assert(shutdown and frame == limit and submissions == frame and resized == 2, 'I
 assert(#loaded_models == 2 and switches == 2 and visits[1] > 0 and visits[2] > 0, 'Incomplete preload/switch coverage')
 assert(submitted_data[1] ~= submitted_data[2] and sh_degrees[1] and sh_degrees[3], 'Missing independent state or SH selection')
 assert(gui_frames == frame and gui_shutdown and destroyed_models == 2 and destroyed_data == 2, 'Incomplete resource cleanup')
+assert(scaled_input_frames == frame, 'Missing Retina input coverage')
 if capture then
     for _, path in ipairs({capture, capture .. '-saari'}) do
         local picture = hg.Picture()
@@ -123,4 +166,4 @@ if capture then
         print(string.format('PASS image content: %s (%dx%d; visible=%d green=%d)', path, width, height, visible, green))
     end
 end
-print(string.format('PASS actual tutorial: %s; %d native frames, two preloads, two GUI switches, SH1/SH3, two resizes, GC and cleanup', tutorial, frame))
+print(string.format('PASS actual tutorial: %s; %d native frames, two full-count preloads, two %s switches, input scale %.2f..%.2f, SH1/SH3, two resizes, GC and cleanup', tutorial, frame, switch_mode, min_scale, max_scale))

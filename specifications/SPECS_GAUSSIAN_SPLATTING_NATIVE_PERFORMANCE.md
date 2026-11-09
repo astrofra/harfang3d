@@ -2,6 +2,8 @@
 
 Date: 2026-11-09. Implementation and validation: Codex / Copilot CLI with Kimi.
 
+macOS follow-up: the optimized full-count path now passes native, sort/gather, cache and actual-tutorial tests on Apple M3 Pro/Metal. The same moving-camera benchmark measures 57.0 fps average at 1280x720 with all 1,307,339 Saari splats. See the [Mac measurements, Retina input fix and qualification scope](GSPLAT_MACOS_OPTIMIZED_VALIDATION.md). The measurements below remain the original Windows before/after run.
+
 Copilot implemented the sorting kernels and reviewed the final buffer/cache/sort lifecycle without identifying a concrete blocker. Codex integrated and corrected the implementation, profiled the native path, fixed immutable-buffer allocation and ran the builds, GPU oracles and benchmarks. The static review does not substitute for device testing.
 
 This implements the immediate performance work from the [Lua tutorial roadmap](SPECS_GAUSSIAN_SPLATTING_LUA_TUTORIAL_ROADMAP.md). Full Saari rendering keeps all **1,307,339 splats**, SH3, the existing projection, radius cap and blending equations. Applications keep their existing Lua submission calls. No import decimation, runtime particle limit, CPU sorting or synchronous readback was introduced.

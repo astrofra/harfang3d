@@ -1,6 +1,7 @@
 -- Native Gaussian splatting: preload Houseplant and Saari, then select either model in ImGui.
 -- Houseplant by Marcel Padilla (CC BY 4.0); Saari is a local preservation capture.
 -- Drag left to orbit, wheel to dolly, drag right/middle to pan, R to reset.
+-- Space switches between the preloaded models, including while hovering the GUI.
 -- One Lua source; compile resources with assetc before running. Escape closes the window.
 
 local hg = require("harfang")
@@ -138,11 +139,18 @@ local function main()
 				hg.RenderReset(width, height, 0)
 			end
 
+			-- Input is in client coordinates; ImGui and rendering use framebuffer pixels.
+			local _, client_w, client_h = hg.GetWindowClientSize(win)
+			local mouse_scale = hg.Vec2(width / math.max(1, client_w), height / math.max(1, client_h))
+			hg.ImGuiBeginFrame(width, height, dt, mouse:GetState(), keyboard:GetState(), mouse_scale)
+			local previous_model = selected_model
+			if focused and keyboard:Pressed(hg.K_Space) then
+				selected_model = (selected_model + 1) % #scenes
+			end
+
 			-- model selection and spherical harmonics
-			hg.ImGuiBeginFrame(width, height, dt, mouse:GetState(), keyboard:GetState())
 			hg.ImGuiSetNextWindowPos(hg.Vec2(16, 16), hg.ImGuiCond_Once)
 			hg.ImGuiSetNextWindowSize(hg.Vec2(360, 220), hg.ImGuiCond_Once)
-			local previous_model = selected_model
 			if hg.ImGuiBegin("Gaussian splatting") then
 				local _, model_index = hg.ImGuiCombo("Model", selected_model, model_names)
 				selected_model = model_index
@@ -160,6 +168,7 @@ local function main()
 				hg.ImGuiSeparator()
 				hg.ImGuiText("Left drag: orbit / wheel: dolly")
 				hg.ImGuiText("Right or middle drag: pan / R: reset")
+				hg.ImGuiText("Space: switch model")
 			end
 			hg.ImGuiEnd()
 
@@ -167,7 +176,6 @@ local function main()
 			local scene = scenes[selected_model + 1]
 			local camera = scene.camera
 			local camera_active = focused and not hg.ImGuiWantCaptureMouse()
-			local _, client_w, client_h = hg.GetWindowClientSize(win)
 			if camera_active then
 				if keyboard:Pressed(hg.K_R) then
 					camera:Reset()

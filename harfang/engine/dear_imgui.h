@@ -3,6 +3,7 @@
 #pragma once
 
 #include "foundation/time.h"
+#include "foundation/vector2.h"
 
 #include <bgfx/bgfx.h>
 #include <imgui/imgui.h>
@@ -44,6 +45,11 @@ struct KeyboardState;
 
 void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard);
 void ImGuiBeginFrame(int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard);
+// Scale client-coordinate mouse input into the supplied display dimensions.
+// Use framebuffer/client size on HiDPI displays; the existing overloads use 1:1.
+void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard,
+	const Vec2 &mouse_scale);
+void ImGuiBeginFrame(int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard, const Vec2 &mouse_scale);
 void ImGuiEndFrame(const DearImguiContext &ctx, bgfx::ViewId view_id = 255);
 void ImGuiEndFrame(bgfx::ViewId view_id = 255);
 

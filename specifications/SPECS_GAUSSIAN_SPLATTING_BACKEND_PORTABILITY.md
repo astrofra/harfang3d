@@ -2,6 +2,8 @@
 
 Status: implementation study and proposed contracts, not an implementation claim.
 
+Optimized full-count follow-up: [Mac validation at `436661c`](GSPLAT_MACOS_OPTIMIZED_VALIDATION.md) covers all 1,307,339 Saari splats, the new radix/cache path, performance, Retina mouse scaling and Space switching.
+
 Implementation update, 2026-11-09: the unchanged tutorial now runs on a real macOS/arm64 Apple M3 Pro with both models, Metal shaders and installed runtime dependencies. Native shutdown/upload handling and asset-tool installation were fixed; package/run/smoke CMake targets and stronger GPU/image checks were added. See [Mac validation and remaining scope](GSPLAT_MACOS_VALIDATION.md). The study below retains its original observations and proposed long-term policy; renderer overrides and the full acceptance matrix are not claimed complete.
 
 Date: 2026-11-09. Source baseline: `f2a805b`, plus the working-tree shader dependency path normalization in `assetc`. Review: Codex with Copilot/Kimi. The study was conducted on Windows; no macOS GPU execution was performed for this document.
