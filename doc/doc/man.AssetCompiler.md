@@ -66,7 +66,7 @@ If you need more control over the compilation options, the command line gets the
 
 ```
 assetc <input> [output PATH] [-daemon] [-platform PLATFORM] [-api API] [-defines DEFINES] [-job COUNT]
-       [-toolchain PATH] [-progress] [-log_to_std_out] [-debug] [-quiet] [-verbose]
+       [-toolchain PATH] [-profile NAME] [-progress] [-log_to_std_out] [-debug] [-quiet] [-verbose]
 ```
 
 Option | Shortcut | Description
@@ -79,6 +79,7 @@ Option | Shortcut | Description
 `-defines` | `-D` | Semicolon separated defines to pass to the shader compiler (eg. FLAG;VALUE=2).
 `-job` | `-j` | Maximum number of parallel job (0 - automatic).
 `-toolchain` | `-t` | Path to the toolchain folder.
+`-profile` | | Metadata profile to select; missing fields fall back to `default`.
 `-progress` | | Output progress to the standard output.
 `-log_to_std_out` | `-l` | Log errors to the standard output.
 `-debug` | | Compile in debug mode (eg. output debug informations in shader).
@@ -101,3 +102,56 @@ toolchains without `texc` also retain this fallback. Changing the selected
 compiler invalidates the texture's compilation cache automatically.
 
 See [man.GLTF] and [man.FBX] to convert common 3d formats to Harfang resources.
+
+## Gaussian PLY and splat compilation
+
+`assetc` delegates Gaussian PLY and `.splat` conversion to `gsplatc`, installed in the same
+toolchain directory as `texturec` and `shaderc`. For a resource named
+`island.ply`, create `island.ply.meta`:
+
+```json
+{
+  "profiles": {
+    "default": {
+      "type": "gaussian-splat",
+      "max-count": 250000,
+      "sh-degree": 3,
+      "normalize": false
+    },
+    "preview": {
+      "max-count": 50000,
+      "sh-degree": 1
+    }
+  }
+}
+```
+
+Compiling the resources produces `island.hgs` in the corresponding output
+directory. Use `-profile preview` to select the example override. PLY and `.splat` resources
+without `type: "gaussian-splat"` retain pass-through behavior; this converter
+does not import polygon meshes.
+
+The importer accepts Graphdeco/Postshot binary little-endian PLY with named
+scalar float properties. It validates the entire source, optionally selects
+evenly spaced splats, and writes the versioned HGS1 runtime format. The runtime
+loads this compiled asset through the native Gaussian model API.
+
+Parameter | Default | Meaning
+----------|---------|--------
+`max-count` | 250000 | Maximum retained splats, integer 1–1048576. Naive decimation can reduce opacity coverage.
+`sh-degree` | 3 | Maximum stored spherical-harmonics degree, integer 0–3. Missing source bands are not invented.
+`normalize` | false | Boolean. Center the full source position bounds and uniformly scale their largest extent to two units; otherwise preserve source coordinates.
+
+Metadata changes participate in incremental compilation. Invalid Gaussian
+settings, missing `gsplatc`, unsupported source schemas and converter failures
+fail the build. One-shot `assetc` returns a nonzero status when compilation
+fails. A separate source `island.hgs` alongside the opted-in `island.ply` is
+rejected as an output-name collision.
+
+Headerless 32-byte `.splat` sources use the same metadata schema, for example
+`plant.splat.meta` produces `plant.hgs`. The layout is little-endian float32
+XYZ position and linear XYZ scale, byte RGBA, and packed byte WXYZ quaternion.
+RGB becomes SH0 coefficients; alpha is linear, including zero. No higher SH
+bands are invented. Every source record is validated before output is written.
+Two opted-in `.ply`/`.splat` sources with the same basename are rejected because
+they would produce the same HGS file.

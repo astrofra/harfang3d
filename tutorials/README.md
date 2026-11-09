@@ -5,6 +5,9 @@ These **tutorials** demonstrate the usage of the HARFANG API in **Python**, **Lu
 For the thirty-two native JavaScript ports, launch commands and validation, see
 [the JavaScript tutorial guide](README_JS.md).
 
+For the single-file Lua Gaussian tutorials using the native C++ API, see
+[Houseplant](GAUSSIAN_SPLATTING.md) (bundled sample) and [Saari](GAUSSIAN_SPLATTING_NATIVE.md) (local PLY).
+
 To run the tutorials:
 
 1. Download or clone this repository to your computer _(eg. in `d:/tutorials-hg2`)_.
@@ -72,6 +75,6 @@ Alternatively, you can open the tutorial folder using [Visual Studio Code](https
 * Dear ImGui edition
 ![Dear ImGui edition](screenshots/imgui_edit.png)
 
-## Gaussian splatting (Lua, macOS/Metal)
+## Gaussian splatting (Lua, native API)
 
-See [the Gaussian splatting tutorial](GAUSSIAN_SPLATTING.md) for a compute-assisted SH0 renderer, quaternion trackball, RGB axis gizmo, bundled CC BY sample and reproducible build/test commands. DirectX 11 qualification follows in the Windows phase.
+See [the Gaussian splatting tutorial](GAUSSIAN_SPLATTING.md) for the single-file Houseplant application, quaternion trackball, RGB axis gizmo and bundled CC BY sample. Conversion and rendering are native; assetc reads `.meta` settings and invokes toolchain `gsplatc`. The migrated tutorials are validated on Windows/D3D11.

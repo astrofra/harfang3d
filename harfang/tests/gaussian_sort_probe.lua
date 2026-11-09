@@ -8,7 +8,7 @@ local res=hg.PipelineResources()
 local textures,buffers,programs={},{},{}
 local fb
 local function main()
-    programs.sort=hg.LoadComputeProgramFromFile(assets..'/sort.sc')
+    programs.sort=hg.LoadComputeProgramFromFile(assets..'/core/gaussian_splatting/sort.sc')
     programs.encode=hg.LoadComputeProgramFromFile(assets..'/encode.sc')
     programs.display=hg.LoadProgramFromFile(assets..'/display')
     local input=hg.LoadComputeBufferFromFile(assets..'/input.bin')

@@ -1,5 +1,7 @@
 # Gaussian splatting implementation progress
 
+> Implementation update (2026-11-09): Houseplant and Saari now use single-file Lua applications backed by the native API and assetc/gsplatc. The Python tutorial tools, HGS0 path and separate Lua renderer modules mentioned below are historical and have been removed. See [current native progress](GSPLAT_NATIVE_PROGRESS.md) and the [Houseplant guide](../tutorials/GAUSSIAN_SPLATTING.md).
+
 Branch: `gsplat`. Local commits only, authored as `Astrofra`. Updated 2026-10-27.
 
 ## Delivery order

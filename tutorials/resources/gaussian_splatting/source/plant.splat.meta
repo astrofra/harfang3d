@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "default": {
+      "type": "gaussian-splat",
+      "max-count": 250000,
+      "sh-degree": 0,
+      "normalize": true
+    },
+    "preview": {
+      "max-count": 30000
+    }
+  }
+}

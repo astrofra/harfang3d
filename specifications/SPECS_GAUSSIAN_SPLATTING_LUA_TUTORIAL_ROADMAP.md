@@ -1,5 +1,7 @@
 # Real-Time Gaussian Splatting in Lua — Tutorial Roadmap
 
+> Implementation update (2026-11-09): Houseplant and Saari now use single-file Lua applications backed by the native API and assetc/gsplatc. The Python tutorial tools, HGS0 path and separate Lua renderer modules mentioned below are historical and have been removed. See [current native progress](GSPLAT_NATIVE_PROGRESS.md) and the [Houseplant guide](../tutorials/GAUSSIAN_SPLATTING.md).
+
 Date: 2026-10-27. Audited HARFANG revision: `7f00a71632d16320585531f8f9fa1aa3e2c729d6`.
 
 Status: the source audit below describes the pre-implementation revision. The macOS/Metal implementation now exists; current validation, decisions and measurements are recorded in [GSPLAT_PROGRESS.md](GSPLAT_PROGRESS.md). Windows qualification remains deferred.

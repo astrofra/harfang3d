@@ -1,6 +1,7 @@
 // HARFANG(R) Copyright (C) 2021 Emmanuel Julien, NWNC HARFANG. Released under GPL/LGPL/Commercial Licence, see licence.txt for details.
 
 #include <algorithm>
+#include <cstdint>
 #include <deque>
 #include <exception>
 #include <future>
@@ -68,6 +69,7 @@ static std::string cwd;
 
 //
 static std::atomic<int> error_count;
+static int last_compilation_error_count = 0;
 static bool log_errors_to_stderr = false;
 
 static bool progress = false;
@@ -118,7 +120,7 @@ static std::string global_shader_defines;
 
 //
 struct Toolchain {
-	std::string shaderc, texturec, luac, cmft, recastc, texconv, bulletc, texc;
+	std::string shaderc, texturec, luac, cmft, recastc, texconv, bulletc, texc, gsplatc;
 };
 
 static Toolchain toolchain;
@@ -140,15 +142,18 @@ static void ToolchainExists() {
 		toolchain.bulletc.clear();
 	if (!IsFile(toolchain.texc.c_str()))
 		toolchain.texc.clear();
+	if (!IsFile(toolchain.gsplatc.c_str()))
+		toolchain.gsplatc.clear();
 }
 
 static void SetToolchain(const std::string &path) {
 #ifdef WIN32
 	toolchain = {PathJoin({path, "shaderc.exe"}), PathJoin({path, "texturec.exe"}), PathJoin({path, "luac.exe"}), PathJoin({path, "cmft.exe"}),
-		PathJoin({path, "recastc.exe"}), PathJoin({path, "texconv.exe"}), PathJoin({path, "bulletc.exe"}), PathJoin({path, "texc.exe"})};
+		PathJoin({path, "recastc.exe"}), PathJoin({path, "texconv.exe"}), PathJoin({path, "bulletc.exe"}), PathJoin({path, "texc.exe"}),
+		PathJoin({path, "gsplatc.exe"})};
 #else
 	toolchain = {PathJoin({path, "shaderc"}), PathJoin({path, "texturec"}), PathJoin({path, "luac"}), PathJoin({path, "cmft"}), PathJoin({path, "recast"}),
-		PathJoin({path, "texconv"}), PathJoin({path, "bulletc"}), PathJoin({path, "texc"})};
+		PathJoin({path, "texconv"}), PathJoin({path, "bulletc"}), PathJoin({path, "texc"}), PathJoin({path, "gsplatc"})};
 #endif
 }
 
@@ -372,7 +377,8 @@ static std::mutex default_log_mutex;
 static std::map<std::string, std::string> default_log_output;
 static std::map<std::string, std::string> default_error_log_output;
 
-static void RunProcess(const std::string &name, const std::string &cmd, const std::string &cwd) {
+static void RunProcess(const std::string &name, const std::string &cmd, const std::string &cwd, const std::string &output_path) {
+	bool failed = false;
 	//
 	const auto cmd_elms = split(cmd, " ");
 	ProfilerPerfSection perf(format("Command/RunProcess/%1").arg(cmd_elms[0]));
@@ -392,6 +398,7 @@ static void RunProcess(const std::string &name, const std::string &cmd, const st
 		false);
 
 	if (process.get_id() == 0) {
+		failed = true;
 		ReportFailedInput(name);
 		const json json_err = {{"type", "FailedToSpawnCompileProcess"}, {"name", name}};
 		log_error(json_err);
@@ -418,11 +425,20 @@ static void RunProcess(const std::string &name, const std::string &cmd, const st
 		}
 
 		if (res != 0) {
+			failed = true;
 			ReportFailedInput(name);
 			const json json_err = {{"type", "CompileProcessReturnedNonZero"}, {"res", res}, {"cmd", cmd}, {"cwd", cwd}, {"out", out}, {"err", err}};
 			log_error(json_err);
+		} else if (!output_path.empty() && !IsFile(output_path.c_str())) {
+			failed = true;
+			ReportFailedInput(name);
+			const json json_err = {{"type", "CompileProcessDidNotProduceOutput"}, {"cmd", cmd}, {"output", output_path}};
+			log_error(json_err);
 		}
 	}
+
+	if (failed && !output_path.empty())
+		Unlink(output_path.c_str());
 }
 
 //
@@ -433,8 +449,8 @@ struct task {
 
 static std::deque<task> task_queue;
 
-static void PushAsyncProcessTask(const std::string &name, const std::string &cmd, const std::string &cwd) {
-	task_queue.emplace_back(task{name, [=]() { return std::async(std::launch::async, RunProcess, name, cmd, cwd); }});
+static void PushAsyncProcessTask(const std::string &name, const std::string &cmd, const std::string &cwd, const std::string &output_path = "") {
+	task_queue.emplace_back(task{name, [=]() { return std::async(std::launch::async, RunProcess, name, cmd, cwd, output_path); }});
 }
 
 static int max_async_jobs = 0;
@@ -708,6 +724,267 @@ void Scene(std::map<std::string, Hash> &hashes, const std::string &path) {
 
 //
 void Copy(std::map<std::string, Hash> &hashes, const std::string &path);
+
+struct GaussianSplatConfig {
+	bool enabled = false;
+	int max_count = 250000;
+	int sh_degree = 3;
+	bool normalize = false;
+};
+
+static bool ValidateGaussianInteger(const json &profile_js, const char *key, int min_value, int max_value, const std::string &profile_name,
+	std::string &error_message) {
+	const auto i = profile_js.find(key);
+	if (i == std::end(profile_js))
+		return true;
+
+	if (!i->is_number_integer()) {
+		error_message = std::string("Profile '") + profile_name + "' field '" + key + "' must be an integer";
+		return false;
+	}
+
+	bool in_range;
+	if (i->is_number_unsigned()) {
+		const auto value = i->get<uint64_t>();
+		in_range = value >= uint64_t(min_value) && value <= uint64_t(max_value);
+	} else {
+		const auto value = i->get<int64_t>();
+		in_range = value >= min_value && value <= max_value;
+	}
+
+	if (!in_range) {
+		error_message = std::string("Profile '") + profile_name + "' field '" + key + "' must be in " + std::to_string(min_value) + ".." +
+			std::to_string(max_value);
+		return false;
+	}
+	return true;
+}
+
+static bool ValidateGaussianProfileValues(const json &profile_js, const std::string &profile_name, std::string &error_message) {
+	const auto type = profile_js.find("type");
+	if (type != std::end(profile_js) && !type->is_string()) {
+		error_message = "Profile '" + profile_name + "' field 'type' must be a string";
+		return false;
+	}
+
+	const auto normalize = profile_js.find("normalize");
+	if (normalize != std::end(profile_js) && !normalize->is_boolean()) {
+		error_message = "Profile '" + profile_name + "' field 'normalize' must be a boolean";
+		return false;
+	}
+
+	return ValidateGaussianInteger(profile_js, "max-count", 1, 1048576, profile_name, error_message) &&
+		ValidateGaussianInteger(profile_js, "sh-degree", 0, 3, profile_name, error_message);
+}
+
+static bool ValidateGaussianProfileKeys(const json &profile_js, const std::string &profile_name, std::string &error_message) {
+	static const std::set<std::string> allowed_keys = {"type", "max-count", "sh-degree", "normalize"};
+	for (const auto &i : profile_js.items())
+		if (allowed_keys.find(i.key()) == std::end(allowed_keys)) {
+			error_message = "Unknown Gaussian splat field '" + i.key() + "' in profile '" + profile_name + "'";
+			return false;
+		}
+	return true;
+}
+
+template <typename T> static void GetGaussianProfileValue(const json *profile_js, const char *key, T &value) {
+	if (!profile_js)
+		return;
+	const auto i = profile_js->find(key);
+	if (i != std::end(*profile_js))
+		value = i->get<T>();
+}
+
+static bool LoadGaussianSplatConfig(const std::string &path, GaussianSplatConfig &config, std::string &error_message) {
+	const auto meta_path = path + ".meta";
+	if (!IsFile(FullInputPath(meta_path).c_str()))
+		return true;
+
+	bool loaded = false;
+	json meta_db;
+	try {
+		meta_db = LoadJsonFromFile(FullInputPath(meta_path).c_str(), &loaded);
+	} catch (const json::exception &e) {
+		error_message = std::string("Invalid JSON metadata: ") + e.what();
+		return false;
+	}
+	if (!loaded) {
+		error_message = "Malformed JSON metadata";
+		return false;
+	}
+	if (!meta_db.is_object()) {
+		error_message = "Metadata root must be an object";
+		return false;
+	}
+
+	const auto profiles = meta_db.find("profiles");
+	if (profiles == std::end(meta_db))
+		return true;
+	if (!profiles->is_object()) {
+		error_message = "Metadata 'profiles' must be an object";
+		return false;
+	}
+
+	const json *default_profile = nullptr, *selected_profile = nullptr;
+	const auto default_i = profiles->find("default");
+	if (default_i != std::end(*profiles)) {
+		if (!default_i->is_object()) {
+			error_message = "Metadata profile 'default' must be an object";
+			return false;
+		}
+		default_profile = &(*default_i);
+	}
+
+	if (profile == "default") {
+		selected_profile = default_profile;
+	} else {
+		const auto selected_i = profiles->find(profile);
+		if (selected_i != std::end(*profiles)) {
+			if (!selected_i->is_object()) {
+				error_message = "Metadata profile '" + profile + "' must be an object";
+				return false;
+			}
+			selected_profile = &(*selected_i);
+		}
+	}
+
+	if (default_profile && !ValidateGaussianProfileValues(*default_profile, "default", error_message))
+		return false;
+	if (selected_profile && selected_profile != default_profile && !ValidateGaussianProfileValues(*selected_profile, profile, error_message))
+		return false;
+
+	std::string default_type, type;
+	GetGaussianProfileValue(default_profile, "type", default_type);
+	GetGaussianProfileValue(default_profile, "type", type);
+	GetGaussianProfileValue(selected_profile, "type", type);
+	config.enabled = type == "gaussian-splat";
+
+	if ((config.enabled || default_type == "gaussian-splat") && default_profile &&
+		!ValidateGaussianProfileKeys(*default_profile, "default", error_message))
+		return false;
+	if (config.enabled && selected_profile && selected_profile != default_profile &&
+		!ValidateGaussianProfileKeys(*selected_profile, profile, error_message))
+		return false;
+
+	GetGaussianProfileValue(default_profile, "max-count", config.max_count);
+	GetGaussianProfileValue(default_profile, "sh-degree", config.sh_degree);
+	GetGaussianProfileValue(default_profile, "normalize", config.normalize);
+	GetGaussianProfileValue(selected_profile, "max-count", config.max_count);
+	GetGaussianProfileValue(selected_profile, "sh-degree", config.sh_degree);
+	GetGaussianProfileValue(selected_profile, "normalize", config.normalize);
+	return true;
+}
+
+static void CleanPreviousAlternateOutput(const std::string &source, const std::string &output) {
+	const auto i = compilation_db.output_to_inputs.find(output);
+	if (i == std::end(compilation_db.output_to_inputs) || i->second.find(source) == std::end(i->second))
+		return;
+
+	Unlink(FullOutputPath(output).c_str());
+	compilation_db.output_build_params.erase(output);
+	compilation_db.output_to_inputs.erase(i);
+}
+
+static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::string &path) {
+	ProfilerPerfSection perf("Command/GaussianSplatSource");
+	log(format("  Gaussian source '%1'").arg(path));
+
+	GaussianSplatConfig config;
+	std::string error_message;
+	if (!LoadGaussianSplatConfig(path, config, error_message)) {
+		ReportFailedInput(FullInputPath(path));
+		warn(format("Invalid Gaussian metadata '%1.meta': %2").arg(path).arg(error_message));
+		const json json_err = {{"type", "InvalidGaussianSplatMetadata"}, {"path", path}, {"message", error_message}};
+		log_error(json_err);
+		return;
+	}
+
+	const auto hgs_path = CutFileExtension(path) + ".hgs";
+	if (!config.enabled) {
+		CleanPreviousAlternateOutput(path, hgs_path);
+		Copy(hashes, path);
+		return;
+	}
+
+	CleanPreviousAlternateOutput(path, path);
+
+	if (IsFile(FullInputPath(hgs_path).c_str())) {
+		ReportFailedInput(FullInputPath(path));
+		const json json_err = {{"type", "GaussianSplatOutputCollision"}, {"path", path}, {"output", hgs_path}};
+		log_error(json_err);
+		return;
+	}
+
+	// Two opted-in source formats must not race to write the same HGS asset.
+	const auto directory = GetFilePath(path);
+	for (const auto &entry : ListDir(FullInputPath(directory).c_str(), DE_File)) {
+		const auto sibling = PathJoin({directory, entry.name});
+		const auto extension = tolower(GetFileExtension(sibling));
+		if (sibling == path || (extension != "ply" && extension != "splat"))
+			continue;
+		if (CutFileExtension(sibling) != CutFileExtension(path))
+			continue;
+		GaussianSplatConfig sibling_config;
+		std::string sibling_error;
+		if (LoadGaussianSplatConfig(sibling, sibling_config, sibling_error) && sibling_config.enabled) {
+			ReportFailedInput(FullInputPath(path));
+			const json json_err = {{"type", "GaussianSplatOutputCollision"}, {"path", path}, {"other", sibling}, {"output", hgs_path}};
+			log_error(json_err);
+			return;
+		}
+	}
+
+	if (toolchain.gsplatc.empty()) {
+		ReportFailedInput(FullInputPath(path));
+		const json json_err = {{"type", "MissingGaussianSplatCompiler"}, {"path", path}};
+		log_error(json_err);
+		return;
+	}
+
+	Data converter_data;
+	if (!FileToData(toolchain.gsplatc.c_str(), converter_data, true)) {
+		ReportFailedInput(FullInputPath(path));
+		const json json_err = {{"type", "FailedToLoadGaussianSplatCompiler"}, {"path", toolchain.gsplatc}};
+		log_error(json_err);
+		return;
+	}
+
+	Hash converter_hash;
+	ComputeHash(converter_data.GetData(), converter_data.GetSize(), converter_hash);
+
+	Data build_ctx;
+	Write(build_ctx, std::string("gsplatc"));
+	Write(build_ctx, uint32_t(1)); // converter build context schema
+	Write(build_ctx, config.max_count);
+	Write(build_ctx, config.sh_degree);
+	Write(build_ctx, config.normalize);
+	Write(build_ctx, converter_hash);
+
+	std::set<std::string> inputs = {path};
+	const auto meta_path = path + ".meta";
+	if (IsFile(FullInputPath(meta_path).c_str()))
+		inputs.insert(meta_path);
+
+	if (NeedsCompilation(hashes, inputs, {hgs_path}, build_ctx)) {
+		if (!MkOutputTree(hgs_path))
+			return;
+		CleanOutputs({hgs_path});
+
+		const auto src = FullInputPath(path), dst = FullOutputPath(hgs_path);
+		auto cmd = format("\"%1\" \"%2\" \"%3\" --max-count %4 --sh-degree %5")
+					   .arg(toolchain.gsplatc)
+					   .arg(src)
+					   .arg(dst)
+					   .arg(config.max_count)
+					   .arg(config.sh_degree)
+					   .str();
+		if (config.normalize)
+			cmd += " --normalize";
+		PushAsyncProcessTask(path + " (Gaussian Splat)", cmd, cwd, dst);
+	} else {
+		debug("    [O] Gaussian splat up to date");
+	}
+}
 
 //
 static std::string Get_texc_Format(const std::string &f) {
@@ -1712,13 +1989,29 @@ static void PathFinding(std::map<std::string, Hash> &hashes, const std::string &
 }
 
 //
-enum class AssetType { Unprocessed, Ignore, Broken, Scene, Texture, Geometry, Lua, Squirrel, Shader, PipelineShader, Physics, PathFinding, ComputeShader, Count };
+enum class AssetType {
+	Unprocessed,
+	Ignore,
+	Broken,
+	Scene,
+	Texture,
+	Geometry,
+	Lua,
+	Squirrel,
+	Shader,
+	PipelineShader,
+	Physics,
+	PathFinding,
+	ComputeShader,
+	GaussianSplat,
+	Count
+};
 
 #if 0
 // CWE 561: The function 'AssetTypeToString' is never used.
 static const std::string& AssetTypeToString(AssetType type) {
 	static const std::string types[static_cast<int>(AssetType::Count) + 1] = {
-		"Unprocessed", "Ignore", "Broken", "Scene", "Texture", "Geometry", "Lua", "Squirrel", "Shader", "PipelineShader", "Physics", "PathFinding", "ComputeShader", "Undefined"};
+		"Unprocessed", "Ignore", "Broken", "Scene", "Texture", "Geometry", "Lua", "Squirrel", "Shader", "PipelineShader", "Physics", "PathFinding", "ComputeShader", "GaussianSplat", "Undefined"};
 	return types[int(type)];
 }
 #endif
@@ -1743,6 +2036,9 @@ static AssetType GetAssetFileType(std::string path, const std::vector<std::strin
 	} else if (ext == "geo") {
 		out_files.push_back(path);
 		return AssetType::Geometry;
+	} else if (ext == "ply" || ext == "splat") {
+		out_files.push_back(path);
+		return AssetType::GaussianSplat;
 	} else if (ext == "lua") {
 		out_files.push_back(path);
 		return AssetType::Lua;
@@ -1894,6 +2190,7 @@ static std::map<std::vector<std::string>, AssetConfig> ClassifyInputDir() {
 static bool CompileClassifiedInputs(const std::map<std::vector<std::string>, AssetConfig> &inputs) {
 	ProfilerPerfSection perf("Manage/CompileClassifiedInputs");
 
+	last_compilation_error_count = 0;
 	const auto t_start = time_now();
 	std::cout << "Compilation start" << std::endl;
 
@@ -1920,6 +2217,8 @@ static bool CompileClassifiedInputs(const std::map<std::vector<std::string>, Ass
 				Texture(updated_hashes, names[0]);
 			else if (config.type == AssetType::Geometry)
 				Geometry(updated_hashes, names[0]);
+			else if (config.type == AssetType::GaussianSplat)
+				GaussianSplatSource(updated_hashes, names[0]);
 			else if (config.type == AssetType::Lua)
 				LuaScript(updated_hashes, names[0]);
 			else if (config.type == AssetType::Squirrel)
@@ -1940,6 +2239,7 @@ static bool CompileClassifiedInputs(const std::map<std::vector<std::string>, Ass
 
 		if (!IsPollProcessUp()) {
 			std::cout << "Compilation aborted after " << time_to_ms(time_now() - t_start) << "ms, poll process down" << std::endl;
+			last_compilation_error_count = error_count.load();
 			return false;
 		}
 	}
@@ -1948,7 +2248,9 @@ static bool CompileClassifiedInputs(const std::map<std::vector<std::string>, Ass
 		compilation_db.source_hashes[h.first] = h.second; // commit updated hashes
 
 	assetc::RunTaskQueue();
+	last_compilation_error_count = error_count.load();
 	assetc::SaveCompilationDB();
+	last_compilation_error_count += error_count.load(); // SaveCompilationDB resets the counter before saving.
 
 	std::cout << "Compilation done, took " << time_to_ms(time_now() - t_start) << "ms" << std::endl;
 	return true;
@@ -1990,10 +2292,16 @@ static void DaemonMode() {
 		const auto events = GetDirectoryWatchEvents(input_dir);
 
 		std::set<std::string> modified_files;
-		for (const auto &ev : events)
-			if ((ev.type == WatchEvent::FileAdded) || (ev.type == WatchEvent::FileModified))
+		for (const auto &ev : events) {
+			if ((ev.type == WatchEvent::FileAdded) || (ev.type == WatchEvent::FileModified)) {
 				if (IsFile(PathJoin({input_dir, ev.path}).c_str()))
 					modified_files.insert(ev.path);
+			} else if (ev.type == WatchEvent::FileRemoved && ends_with(ev.path, ".meta", insensitive)) {
+				const auto source_path = left(ev.path, -5);
+				if (IsFile(PathJoin({input_dir, source_path}).c_str()))
+					modified_files.insert(source_path);
+			}
+		}
 
 		// change in .meta must trickle down to the file it refers to
 		std::set<std::string> modified_files_;
@@ -2084,6 +2392,7 @@ int main(int narg, const char **args) {
 		{
 			{"-job", "Maximum number of parallel job (0 - automatic)", true},
 			{"-toolchain", format("Path to the toolchain folder (default: %1)").arg(default_toolchain_path), true},
+			{"-profile", "Select the metadata profile (default: default)", true},
 			{"-platform", "Select the target platform to compile for (defaults to current platform)", true},
 			{"-api", "Select the platform graphic API to compile for", true},
 			{"-defines", "Semicolon separated defines to pass to shaderc (eg. FLAG;VALUE=2)", true},
@@ -2128,6 +2437,7 @@ int main(int narg, const char **args) {
 	*/
 
 	assetc::api = GetCmdLineSingleValue(cmd_content, "-api", assetc::api);
+	assetc::profile = GetCmdLineSingleValue(cmd_content, "-profile", "default");
 	assetc::platform = GetCmdLineSingleValue(cmd_content, "-platform", assetc::platform);
 	assetc::global_shader_defines = GetCmdLineSingleValue(cmd_content, "-defines", "");
 
@@ -2195,10 +2505,13 @@ int main(int narg, const char **args) {
 	log(format("  - Shader      %1").arg(exe_path_or_nothing(assetc::toolchain.shaderc)));
 	log(format("  - Texture     %1").arg(exe_path_or_nothing(assetc::toolchain.texturec)));
 	log(format("  - Texture fast %1").arg(exe_path_or_nothing(assetc::toolchain.texc)));
+	log(format("  - Gaussian    %1").arg(exe_path_or_nothing(assetc::toolchain.gsplatc)));
 	log(format("  - Probe       %1").arg(exe_path_or_nothing(assetc::toolchain.cmft)));
 	log(format("  - Lua         %1").arg(exe_path_or_nothing(assetc::toolchain.luac)));
 	log(format("  - Pathfinding %1").arg(exe_path_or_nothing(assetc::toolchain.recastc)));
 	log("");
+
+	const bool daemon_mode = GetCmdLineFlagValue(cmd_content, "-daemon");
 
 	// initial run over input directory (process all files)
 	{
@@ -2211,7 +2524,7 @@ int main(int narg, const char **args) {
 
 		if (assetc::CompileClassifiedInputs(assetc::ClassifyInputDir())) {
 			// enter daemon mode, process input dir files as they change
-			if (GetCmdLineFlagValue(cmd_content, "-daemon"))
+			if (daemon_mode)
 				assetc::DaemonMode();
 		}
 	}
@@ -2220,5 +2533,5 @@ int main(int narg, const char **args) {
 	assetc::OutputPerfReport();
 
 	std::cout << "Exit" << std::endl;
-	return 0;
+	return !daemon_mode && assetc::last_compilation_error_count != 0 ? 1 : 0;
 }

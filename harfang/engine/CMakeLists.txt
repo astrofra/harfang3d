@@ -1,5 +1,7 @@
 set(HDRS
 	compute.h
+	gaussian_splat_data.h
+	gaussian_splat.h
 	animation.h
 	assets.h
 	assets_rw_interface.h
@@ -59,6 +61,8 @@ set(HDRS
 
 set(SRCS
 	compute.cpp
+	gaussian_splat_data.cpp
+	gaussian_splat.cpp
 	anim_load_binary.cpp
 	anim_load_json.cpp
 	animation.cpp

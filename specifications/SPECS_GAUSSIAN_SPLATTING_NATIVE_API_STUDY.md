@@ -4,6 +4,8 @@ Date: 2026-10-27. Source audit: branch `gsplat`, revision `dc0f42de206f2982d12c9
 
 Status: architecture study and proposed contracts, not an implemented API. This document builds on the [Lua tutorial roadmap](SPECS_GAUSSIAN_SPLATTING_LUA_TUTORIAL_ROADMAP.md) and distinguishes the current implementation from the proposed engine feature. Backend results quoted below come from [GSPLAT_PROGRESS.md](GSPLAT_PROGRESS.md); no new GPU qualification was performed for this study.
 
+Implementation follow-up (2026-11-09): a native Saari tutorial slice is now implemented and tested on D3D11. See [GSPLAT_NATIVE_PROGRESS.md](GSPLAT_NATIVE_PROGRESS.md) for the delivered API, validation evidence and remaining study scope. The architectural proposals below retain their original study status. Houseplant was subsequently migrated to the same native API; former Python tools and separate Lua modules cited in the source audit below have been removed.
+
 ## 1. Recommendation and intended use
 
 **Build a native Gaussian rendering subsystem for scenes containing several Gaussian models and conventional meshes. Make the tutorial a small client of that subsystem.** Moving the current Lua implementation into C++ verbatim would preserve several limitations that are unacceptable for this use case.
@@ -24,7 +26,7 @@ The first complete engine feature must demonstrate **two overlapping Gaussian mo
 
 ## 2. What exists, and what it proves
 
-The entry point is already small: [`gaussian_splatting.lua`](../tutorials/gaussian_splatting.lua) controls the window, camera and frame loop. Most orchestration is in [`renderer.lua`](../tutorials/gaussian_splatting/renderer.lua). There is no per-Gaussian Lua loop during normal rendering; projection, culling, sorting and gathering already run on the GPU. Native code chiefly provides an opportunity for reliable ownership, scheduling and integration. A performance gain must be measured, not inferred from the language change.
+The entry point is already small: [`gaussian_splatting.lua`](../tutorials/gaussian_splatting.lua) controls the window, camera and frame loop. Most orchestration is in `gaussian_splatting/renderer.lua` (historical source). There is no per-Gaussian Lua loop during normal rendering; projection, culling, sorting and gathering already run on the GPU. Native code chiefly provides an opportunity for reliable ownership, scheduling and integration. A performance gain must be measured, not inferred from the language change.
 
 | Existing evidence | Implication for the engine feature |
 |---|---|
@@ -34,7 +36,7 @@ The entry point is already small: [`gaussian_splatting.lua`](../tutorials/gaussi
 | [`project.sc`](../tutorials/resources/gaussian_splatting/shaders/project.sc): hard-coded perspective camera parameters, already transformed input, no object transform | Replace the tutorial camera protocol with `ViewState`, an explicit viewport and instance transforms. |
 | [`splat_vs.sc`](../tutorials/resources/gaussian_splatting/shaders/splat_vs.sc): constant clip-space depth; `ComputePremultipliedRenderState`: no depth test/write | Mesh occlusion is not implemented. Merely drawing the existing model into a scene view cannot provide it. |
 | Lua file I/O plus executable `metadata.luadata`, HGS0 header checks, then a second file read for upload | Replace this with a single native validation/decode path and passive metadata usable through file and mounted-asset providers. |
-| [`prepare_gaussian_splat.py`](../tutorials/tools/prepare_gaussian_splat.py): one 32-byte `.splat` dialect, deterministic presets, 64-byte HGS0 records | Reuse the fixtures and conversion knowledge. This is not yet a general Gaussian asset pipeline or a PLY importer. |
+| `prepare_gaussian_splat.py` (historical source): one 32-byte `.splat` dialect, deterministic presets, 64-byte HGS0 records | Reuse the fixtures and conversion knowledge. This is not yet a general Gaussian asset pipeline or a PLY importer. |
 | [`bloom.h`](../harfang/engine/bloom.h), [`hiz.h`](../harfang/engine/hiz.h), [`scene_forward_pipeline.h`](../harfang/engine/scene_forward_pipeline.h) | HARFANG already uses native effect objects with `Create…FromFile/Assets`, `Destroy…`, and view-ID-consuming submission. Follow these conventions. |
 
 Recorded Metal results on M3 Pro include 28.64 MiB of persistent GPU payload and full-preset GPU p95 of 5.68 ms at 1280×720. These are the existing single-object workload's results. They do not predict multi-object, SH3, stereo, or mesh-composition costs. D3D11 and OpenGL remain unqualified for this feature in the recorded evidence, even though this study is being written on Windows.
@@ -374,7 +376,7 @@ Recommended source organization: `engine/gaussian_splat_data.*` for validated CP
 
 ## 8. Validation that distinguishes a robust feature from a viewer
 
-Reuse the existing [sort probe](../harfang/tests/run_gaussian_sort_probe.py), [pipeline oracle](../tutorials/tools/check_gaussian_pipeline.py), converter fixtures and [compute probe](../harfang/tests/COMPUTE_PROBE.md), then extend their scope:
+Reuse the existing [sort probe](../harfang/tests/run_gaussian_sort_probe.py), pipeline oracle (historical `check_gaussian_pipeline.py`), converter fixtures and [compute probe](../harfang/tests/COMPUTE_PROBE.md), then extend their scope:
 
 | Area | Necessary adversarial checks |
 |---|---|

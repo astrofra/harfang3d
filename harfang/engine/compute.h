@@ -54,6 +54,11 @@ bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_
 	const std::vector<UniformSetValue> &values = {}, const std::vector<UniformSetTexture> &textures = {},
 	const std::vector<ImageBinding> &images = {}, const std::vector<ComputeBufferBinding> &buffers = {}, const std::string &debug_name = {});
 
+// Internal scheduling hook: same validation/submission without advancing the view.
+bool DispatchComputeSameView(bgfx::ViewId view_id, bgfx::ProgramHandle program, uint32_t x, uint32_t y = 1, uint32_t z = 1,
+	const std::vector<UniformSetValue> &values = {}, const std::vector<UniformSetTexture> &textures = {},
+	const std::vector<ImageBinding> &images = {}, const std::vector<ComputeBufferBinding> &buffers = {}, const std::string &debug_name = {});
+
 // Persistent 16-bit batches; vertex POSITION = (corner.x, corner.y, sorted slot).
 Model CreateComputeQuadModel(uint32_t count);
 RenderState ComputePremultipliedRenderState(); // RGB/A writes, no depth test/write or face culling.

@@ -115,7 +115,7 @@ ImageBinding MakeImageBinding(const Texture &texture, uint32_t stage, bgfx::Acce
 	return {texture, stage, mip, access};
 }
 
-bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_t x, uint32_t y, uint32_t z,
+static bool DispatchComputeImpl(bgfx::ViewId view_id, bgfx::ProgramHandle program, uint32_t x, uint32_t y, uint32_t z,
 	const std::vector<UniformSetValue> &values, const std::vector<UniformSetTexture> &textures,
 	const std::vector<ImageBinding> &images, const std::vector<ComputeBufferBinding> &buffers, const std::string &debug_name) {
 	const auto caps = GetComputeCaps();
@@ -146,7 +146,22 @@ bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_
 	SetUniforms(values, textures);
 	for (const auto &b : buffers) bgfx::setBuffer(uint8_t(b.stage), b.buffer.storage->handle, b.access);
 	for (const auto &i : images) bgfx::setImage(uint8_t(i.stage), i.texture.handle, i.mip, i.access);
-	bgfx::dispatch(view_id++, program, x, y, z);
+	bgfx::dispatch(view_id, program, x, y, z);
+	return true;
+}
+
+bool DispatchComputeSameView(bgfx::ViewId view_id, bgfx::ProgramHandle program, uint32_t x, uint32_t y, uint32_t z,
+	const std::vector<UniformSetValue> &values, const std::vector<UniformSetTexture> &textures,
+	const std::vector<ImageBinding> &images, const std::vector<ComputeBufferBinding> &buffers, const std::string &debug_name) {
+	return DispatchComputeImpl(view_id, program, x, y, z, values, textures, images, buffers, debug_name);
+}
+
+bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_t x, uint32_t y, uint32_t z,
+	const std::vector<UniformSetValue> &values, const std::vector<UniformSetTexture> &textures,
+	const std::vector<ImageBinding> &images, const std::vector<ComputeBufferBinding> &buffers, const std::string &debug_name) {
+	if (!DispatchComputeImpl(view_id, program, x, y, z, values, textures, images, buffers, debug_name))
+		return false;
+	++view_id;
 	return true;
 }
 

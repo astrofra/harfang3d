@@ -2343,7 +2343,7 @@ def bind_render(gen):
 		('hg::Window *', ['const char *window_title', 'int width', 'int height', 'bgfx::RendererType::Enum type', '?uint32_t reset_flags', '?bgfx::TextureFormat::Enum format', '?uint32_t debug_flags'], {'constants_group': {'reset_flags': 'ResetFlags', 'debug_flags': 'DebugFlags'}})
 	])
 	gen.bind_function('hg::RenderShutdown', 'void', [])
-	if gen.get_language() == 'QuickJS':
+	if gen.get_language() in ['QuickJS', 'Lua']:
 		gen.bind_function('bgfx::requestScreenShot', 'void', ['bgfx::FrameBufferHandle handle', 'const char *path'], bound_name='RequestScreenShot')
 
 	gen.bind_function('hg::RenderResetToWindow', 'bool', ['hg::Window *win', 'int &width', 'int &height', '?uint32_t reset_flags'], {'arg_in_out': ['width', 'height']})
@@ -3163,6 +3163,64 @@ def bind_compute(gen):
 	]))
 	gen.bind_function('hg::CreateComputeQuadModel', 'hg::Model', ['uint32_t count'])
 	gen.bind_function('hg::ComputePremultipliedRenderState', 'hg::RenderState', [])
+
+
+def bind_gaussian_splat(gen):
+	gen.add_include('engine/gaussian_splat.h')
+	for name in ['GaussianSplatModel', 'GaussianSplatRenderer', 'GaussianSplatRenderData']:
+		handle = gen.begin_class('hg::' + name)
+		gen.end_class(handle)
+
+	options = gen.begin_class('hg::GaussianSplatLoadOptions')
+	gen.bind_constructor(options, [])
+	gen.bind_members(options, ['uint32_t max_file_bytes'])
+	gen.end_class(options)
+
+	settings = gen.begin_class('hg::GaussianSplatRenderSettings')
+	gen.bind_constructor(settings, [])
+	gen.bind_members(settings, ['uint32_t max_sh_degree', 'uint32_t view_limit', 'uint32_t max_splats', 'bool depth_test', 'bool compact_views', 'float max_pixel_radius'])
+	gen.end_class(settings)
+
+	instance = gen.begin_class('hg::GaussianSplatInstance')
+	gen.insert_binding_code('''
+static hg::GaussianSplatInstance *__ConstructGaussianSplatInstance(const hg::GaussianSplatModel &model, const hg::Mat4 &world = hg::Mat4::Identity, uint32_t id = 0, float opacity = 1.f) {
+	return new hg::GaussianSplatInstance{model, world, id, opacity};
+}
+''')
+	gen.bind_constructor(instance, ['const hg::GaussianSplatModel &model', '?const hg::Mat4 &world', '?uint32_t id', '?float opacity'], {'route': route_lambda('__ConstructGaussianSplatInstance')})
+	gen.bind_members(instance, ['hg::GaussianSplatModel model'], ['copy_obj'])
+	gen.bind_members(instance, ['hg::Mat4 world', 'uint32_t id', 'float opacity'])
+	gen.end_class(instance)
+	bind_std_vector(gen, instance)
+	gen.bind_function('hg::MakeGaussianSplatInstance', 'hg::GaussianSplatInstance', ['const hg::GaussianSplatModel &model', '?const hg::Mat4 &world', '?uint32_t id', '?float opacity'])
+
+	load_result = gen.begin_class('hg::GaussianSplatLoadResult')
+	gen.bind_members(load_result, ['bool ok', 'std::string message'])
+	gen.bind_members(load_result, ['hg::GaussianSplatModel model'], ['copy_obj'])
+	gen.end_class(load_result)
+	submit_result = gen.begin_class('hg::GaussianSplatSubmitResult')
+	gen.bind_members(submit_result, ['bool ok', 'std::string message', 'bgfx::ViewId draw_view', 'uint32_t count', 'uint32_t dispatches', 'uint64_t gpu_bytes', 'float max_pixel_radius'])
+	gen.end_class(submit_result)
+
+	for suffix in ['File', 'Assets']:
+		gen.bind_function('hg::LoadGaussianSplatModelFrom' + suffix, 'hg::GaussianSplatLoadResult', ['const char *path', '?const hg::GaussianSplatLoadOptions &options'])
+		gen.bind_function('hg::CreateGaussianSplatRendererFrom' + suffix, 'hg::GaussianSplatRenderer', ['const char *shader_root'])
+	gen.bind_function('hg::LoadGaussianSplatModelFromData', 'hg::GaussianSplatLoadResult', ['const hg::Data &data', '?const hg::GaussianSplatLoadOptions &options'])
+	gen.bind_function('hg::CreateGaussianSplatRenderData', 'hg::GaussianSplatRenderData', [])
+	for name in ['GaussianSplatModel', 'GaussianSplatRenderer', 'GaussianSplatRenderData']:
+		gen.bind_function('hg::IsValid', 'bool', ['const hg::' + name + ' &value'])
+		gen.bind_function('hg::Destroy' + name, 'void', ['hg::' + name + ' &value'])
+	gen.bind_function('hg::GetGaussianSplatCount', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatSourceCount', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatSHDegree', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatBoundsMin', 'hg::Vec3', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatBoundsMax', 'hg::Vec3', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::IsGaussianSplatAntialiased', 'bool', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function_overloads('hg::SubmitGaussianSplats', expand_std_vector_proto(gen, [
+		('hg::GaussianSplatSubmitResult', ['bgfx::ViewId &next_view', 'const hg::Rect<int> &rect', 'const hg::ViewState &view_state',
+			'const std::vector<hg::GaussianSplatInstance> &instances', 'hg::GaussianSplatRenderer &renderer', 'hg::GaussianSplatRenderData &render_data',
+			'?const hg::GaussianSplatRenderSettings &settings', '?bgfx::FrameBufferHandle target'], {'arg_in_out': ['next_view']})
+	]))
 
 
 def bind_data(gen):
@@ -4887,6 +4945,7 @@ def bind(gen):
 	bind_picture(gen)
 	bind_render(gen)
 	bind_compute(gen)
+	bind_gaussian_splat(gen)
 	bind_forward_pipeline(gen)
 	bind_font(gen)
 	bind_meta(gen)

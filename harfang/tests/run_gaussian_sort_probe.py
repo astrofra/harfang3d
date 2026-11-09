@@ -5,9 +5,15 @@ from pathlib import Path
 import shutil
 import struct
 import subprocess
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'tutorials/tools'))
-from run_gaussian_splatting import executable
+
+
+def executable(directory, name, configuration):
+    for folder in (directory / configuration, directory):
+        for suffix in ('.exe', ''):
+            path = folder / (name + suffix)
+            if path.is_file():
+                return path
+    raise FileNotFoundError(f'{name} under {directory}')
 
 
 def main():
@@ -23,9 +29,12 @@ def main():
     compiled.mkdir(exist_ok=True)
     for p in (repo / 'harfang/tests/data/gaussian_sort_probe').iterdir():
         shutil.copyfile(p, source / p.name)
-    shutil.copyfile(repo / 'tutorials/resources/gaussian_splatting/shaders/sort.sc', source / 'sort.sc')
+    (source / 'core/gaussian_splatting').mkdir(parents=True, exist_ok=True)
+    (source / 'core/shader').mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(repo / 'tutorials/resources/core/gaussian_splatting/sort.sc', source / 'core/gaussian_splatting/sort.sc')
     for name in ['bgfx_shader.sh', 'bgfx_compute.sh']:
         shutil.copyfile(repo / 'tutorials/resources/core/shader' / name, source / name)
+        shutil.copyfile(repo / 'tutorials/resources/core/shader' / name, source / 'core/shader' / name)
     depths = [float((i*73)%4096) if i<113648 and i%7 else -1.0 for i in range(131072)]
     (source / 'input.bin').write_bytes(b''.join(struct.pack('<4f', depth, i, 0, 0) for i,depth in enumerate(depths)))
     order = sorted(range(len(depths)), key=lambda i: (-depths[i], i))

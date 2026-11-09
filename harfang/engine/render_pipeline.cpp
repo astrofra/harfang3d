@@ -2,6 +2,7 @@
 
 #include "engine/render_pipeline.h"
 #include "engine/compute.h"
+#include "engine/gaussian_splat.h"
 #include "engine/assets_rw_interface.h"
 #include "engine/file_format.h"
 #include "engine/meta.h"
@@ -2733,6 +2734,7 @@ Window *RenderInit(
 }
 
 void RenderShutdown() {
+	ReleaseGaussianSplatResources();
 	ReleaseComputeResources();
 	bgfx::shutdown();
 	bgfx_is_up = false;
