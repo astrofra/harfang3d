@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compile the actual tutorial sorter and compare every sorted GPU ID to Python's total order."""
+"""Compile the reference core-package sorter and compare every sorted GPU ID to Python's total order."""
 import argparse
 from pathlib import Path
 import shutil
@@ -31,10 +31,10 @@ def main():
         shutil.copyfile(p, source / p.name)
     (source / 'core/gaussian_splatting').mkdir(parents=True, exist_ok=True)
     (source / 'core/shader').mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(repo / 'tutorials/resources/core/gaussian_splatting/sort.sc', source / 'core/gaussian_splatting/sort.sc')
+    shutil.copyfile(repo / 'core-package/core/gaussian_splatting/sort.sc', source / 'core/gaussian_splatting/sort.sc')
     for name in ['bgfx_shader.sh', 'bgfx_compute.sh']:
-        shutil.copyfile(repo / 'tutorials/resources/core/shader' / name, source / name)
-        shutil.copyfile(repo / 'tutorials/resources/core/shader' / name, source / 'core/shader' / name)
+        shutil.copyfile(repo / 'core-package/core/shader' / name, source / name)
+        shutil.copyfile(repo / 'core-package/core/shader' / name, source / 'core/shader' / name)
     depths = [float((i*73)%4096) if i<113648 and i%7 else -1.0 for i in range(131072)]
     (source / 'input.bin').write_bytes(b''.join(struct.pack('<4f', depth, i, 0, 0) for i,depth in enumerate(depths)))
     order = sorted(range(len(depths)), key=lambda i: (-depths[i], i))

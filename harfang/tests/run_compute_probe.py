@@ -75,7 +75,7 @@ def main():
             if path.is_file():
                 shutil.copyfile(path, source / path.name)
         for name in ["bgfx_shader.sh", "bgfx_compute.sh"]:
-            shutil.copyfile(repo / "tutorials/resources/core/shader" / name, source / name)
+            shutil.copyfile(repo / "core-package/core/shader" / name, source / name)
         (source / "input.bin").write_bytes(b"".join(struct.pack("<4f", (i*17+13)%200+20, (i*29+7)%200+20,
             (i*43+3)%200+20, 64+i) for i in range(256)))
         report["source_sha256"] = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(source.iterdir()) if p.is_file()}

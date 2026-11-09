@@ -8,6 +8,8 @@ For the thirty-two native JavaScript ports, launch commands and validation, see
 For the single-file Lua Gaussian tutorial with preloaded Houseplant/Saari models and an ImGui selector, see
 [Gaussian splatting](GAUSSIAN_SPLATTING.md).
 
+Shared rendering resources are maintained in [core-package](../core-package/README.md). The bundled `resources/core` directory is its synchronized copy; use `cmake -P tools/sync_core_package.cmake` from the repository root to check parity.
+
 To run the tutorials:
 
 1. Download or clone this repository to your computer _(eg. in `d:/tutorials-hg2`)_.
