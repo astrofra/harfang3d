@@ -1,46 +1,69 @@
--- Numerical checks for the interactive camera, independent of rendering/input devices.
--- lua gaussian_camera.lua MODULE_DIR TUTORIAL.lua
-local module_dir,tutorial=assert(arg[1]),assert(arg[2])
-package.cpath=module_dir..'/?.dll;'..module_dir..'/?.so;'..package.cpath
-local hg=require('harfang')
-local file=assert(io.open(tutorial,'rb'))
-local source=file:read('*a'); file:close()
-local camera_source=assert(source:match('^(.-)\nhg%.InputInit%(%)'),'Missing camera section')
-local Camera=assert(load(camera_source..'\nreturn Camera','@'..tutorial))()
--- Native math uses 32-bit floats.
-local function near(a,b) assert(math.abs(a-b)<1e-5,string.format('%.12f != %.12f',a,b)) end
-local camera=Camera.new(hg.Vec3(-1,-1,-1),hg.Vec3(1,1,1),0,0)
-local drag={active=true,orbit=true,drag_valid=true,x=150,y=100,dx=50,dy=0,width=200,height=200,wheel=0}
-camera:update(drag)
-local r,u,f=camera:basis()
-near(f.x,.5); near(f.y,0); near(f.z,math.sqrt(.75))
-near(camera.eye.x,-1.7); near(camera.eye.z,-3.4*math.sqrt(.75))
--- Reverse the same sphere path: no drift or radius change.
-drag.x,drag.dx=100,-50; camera:update(drag)
-near(camera.eye.x,0); near(camera.eye.z,-3.4)
--- Focus loss must ignore rotate, zoom, pan and reset.
-drag.active=false; drag.wheel=100; drag.reset=true; camera:update(drag)
-near(camera.eye.z,-3.4); near(camera.radius,3.4)
-camera:update({active=true,wheel=1000}); near(camera.radius,.15)
-camera:update({active=true,wheel=-1000}); near(camera.radius,50)
-camera:reset()
-camera:update({active=true,pan=true,drag_valid=true,dx=10,dy=0,height=200,wheel=0})
-near(camera.target.x,-10*2*3.4*math.tan(math.pi/6)/200)
-near(camera.eye.x,camera.target.x)
--- Quaternion normalization keeps the camera orthonormal during extended dragging.
-drag.active=true; drag.reset=false; drag.wheel=0; drag.x=140; drag.y=130; drag.dx=3; drag.dy=-2
-for _=1,10000 do camera:update(drag) end
-r,u,f=camera:basis()
-for _,v in ipairs({r,u,f}) do near(hg.Len2(v),1) end
-near(hg.Dot(r,u),0); near(hg.Dot(r,f),0); near(hg.Dot(u,f),0)
-camera:reset(); near(camera.eye.x,0); near(camera.eye.z,-3.4)
--- Preserve the original yaw/pitch signs and composition order.
-local posed=Camera.new(nil,nil,.4,-.18)
-local _,_,front=posed:basis()
-near(front.x,math.sin(.4)*math.cos(-.18))
-near(front.y,math.sin(-.18))
-near(front.z,math.cos(.4)*math.cos(-.18))
--- An exactly antipodal drag must leave the orientation valid.
-camera:update({active=true,orbit=true,drag_valid=true,x=200,y=100,dx=200,dy=0,width=200,height=200})
-near(camera.eye.x,0); near(camera.eye.z,-3.4)
-print('PASS native trackball: known rotation, reversible drag, focus gate, zoom bounds, pan, reset, orthonormality, yaw/pitch and antipodal drag')
+-- Headless binding checks for the native trackball controller.
+-- lua gaussian_camera.lua MODULE_DIR
+local module_dir = assert(arg[1])
+package.cpath = module_dir .. "/?.dll;" .. module_dir .. "/?.so;" .. package.cpath
+local hg = require("harfang")
+
+local function near(a, b)
+	assert(math.abs(a - b) < 1e-5, string.format("%.12f != %.12f", a, b))
+end
+
+local camera = hg.TrackballController(hg.Vec3(0, 0, 0), 3.4)
+camera:Update(true, false, 150, 100, 50, 0, 0, 200, 200)
+local world = camera:ComputeWorld()
+near(hg.GetZ(world).x, 0.5)
+near(hg.GetZ(world).z, math.sqrt(0.75))
+near(hg.GetT(world).x, -1.7)
+near(hg.GetT(world).z, -3.4 * math.sqrt(0.75))
+
+-- Reverse the sphere path, then exercise dolly, pan and reset.
+camera:Update(true, false, 100, 100, -50, 0, 0, 200, 200)
+near(hg.GetT(camera:ComputeWorld()).x, 0)
+near(hg.GetT(camera:ComputeWorld()).z, -3.4)
+camera:Update(false, false, 0, 0, 0, 0, 1000, 200, 200)
+near(camera.distance, 0.15)
+camera:Update(false, false, 0, 0, 0, 0, -1000, 200, 200)
+near(camera.distance, 50)
+camera:Reset()
+camera:Update(false, true, 0, 0, 10, 0, 0, 200, 200, math.pi / 3)
+near(camera.target.x, -10 * 2 * 3.4 * math.tan(math.pi / 6) / 200)
+camera:Reset()
+near(camera.target.x, 0)
+
+-- Explicit orientation, independent copies, editable settings and preserved reset pose.
+local posed = hg.TrackballController(hg.Vec3(2, 3, 4), 100, hg.QuaternionFromEuler(0.18, 0.4, 0, hg.RO_YXZ))
+posed.max_distance = 1000
+local copy = hg.TrackballController(posed)
+copy.target = hg.Vec3(0, 0, 0)
+copy.distance = 5
+copy.orientation = hg.Quaternion()
+copy:Reset()
+near(copy.target.x, 2)
+near(copy.distance, 100)
+near(copy.max_distance, 1000)
+near(posed.target.x, 2)
+local front = hg.GetZ(copy:ComputeWorld())
+near(front.x, math.sin(0.4) * math.cos(-0.18))
+near(front.y, math.sin(-0.18))
+near(front.z, math.cos(0.4) * math.cos(-0.18))
+
+-- Dispatch the Mouse overload with default, explicit FOV and explicit focus guard arguments.
+local mouse = hg.Mouse("trackball-no-input")
+local default_camera = hg.TrackballController()
+default_camera:Update(mouse, 200, 200)
+default_camera:Update(mouse, 200, 200, math.pi / 3)
+default_camera:Update(mouse, 200, 200, math.pi / 3, false)
+near(hg.GetT(default_camera:ComputeWorld()).z, -3.4)
+
+for _ = 1, 10000 do
+	camera:Update(true, false, 140, 130, 3, -2, 0, 200, 200)
+end
+world = camera:ComputeWorld()
+local right, up, forward = hg.GetX(world), hg.GetY(world), hg.GetZ(world)
+near(hg.Len2(right), 1)
+near(hg.Len2(up), 1)
+near(hg.Len2(forward), 1)
+near(hg.Dot(right, up), 0)
+near(hg.Dot(right, forward), 0)
+near(hg.Dot(up, forward), 0)
+print("PASS native trackball bindings: constructors, copies, both Update overloads, rotation, dolly, pan, reset and stability")

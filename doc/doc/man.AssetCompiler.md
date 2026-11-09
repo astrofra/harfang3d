@@ -133,13 +133,14 @@ does not import polygon meshes.
 
 The importer accepts Graphdeco/Postshot binary little-endian PLY with named
 scalar float properties. It validates the entire source, optionally selects
-evenly spaced splats, and writes the versioned HGS1 runtime format. The runtime
+evenly spaced splats, and writes the versioned HGS2 runtime format. The runtime
 loads this compiled asset through the native Gaussian model API.
 
 Parameter | Default | Meaning
 ----------|---------|--------
 `max-count` | 250000 | Maximum retained splats, integer 1–1048576. Naive decimation can reduce opacity coverage.
 `sh-degree` | 3 | Maximum stored spherical-harmonics degree, integer 0–3. Missing source bands are not invented.
+`storage` | `quantized` | `quantized` for adaptive quantization and block compression; `float32` for lossless canonical attributes with block compression.
 `normalize` | false | Boolean. Center the full source position bounds and uniformly scale their largest extent to two units; otherwise preserve source coordinates.
 
 Metadata changes participate in incremental compilation. Invalid Gaussian
@@ -162,3 +163,11 @@ with the same decimation and normalization options. Gzip integrity and exact
 attribute lengths are checked; decompressed input is capped at 512 MiB.
 SPZ v1/v4, extension flags and SH4 are unsupported and fail explicitly.
 SPZ quantization is retained; conversion cannot recover lost source precision.
+
+HGS2 stores blocks of up to 256 splats compressed with zlib/DEFLATE. Quantized
+storage is the default for every input format, including PLY. Adaptive block
+ranges avoid intentional color/SH clipping. `gsplatc --storage float32` (or
+`"storage": "float32"` in a metadata profile) provides a reference representation.
+The tool reports measured quantization errors and actual file size. Native
+loading reconstructs float buffers; GPU memory use is unchanged. HGS0/HGS1
+are not accepted: recompile existing Gaussian resources after updating.

@@ -35,9 +35,9 @@ std::string InputExtension(const std::string &path) {
 }
 
 void Usage() {
-	std::cout << "Usage: gsplatc INPUT.ply|INPUT.splat|INPUT.spz OUTPUT.hgs [--max-count N] [--sh-degree 0..3] [--normalize]\n"
+	std::cout << "Usage: gsplatc INPUT.ply|INPUT.splat|INPUT.spz OUTPUT.hgs [--max-count N] [--sh-degree 0..3] [--normalize] [--storage quantized|float32]\n"
 		"Supported inputs: strict binary_little_endian PLY, headerless 32-byte .splat, and gzip SPZ versions 2/3 (SH degree 0..3).\n"
-		"Default max-count: 250000. Reduction uses deterministic midpoint uniform selection.\n";
+		"Default storage: quantized HGS2 with compressed blocks. Default max-count: 250000. Reduction uses deterministic midpoint uniform selection.\n";
 }
 
 } // namespace
@@ -48,8 +48,10 @@ int main(int argc, char **argv) {
 		return 2;
 	}
 	hg::GaussianSplatImportOptions options;
+	hg::GaussianSplatWriteOptions write_options;
+	hg::GaussianSplatWriteStats stats;
 	std::string input, output;
-	bool max_seen = false, degree_seen = false, normalize_seen = false;
+	bool max_seen = false, degree_seen = false, normalize_seen = false, storage_seen = false;
 	for (int i = 1; i < argc; ++i) {
 		const std::string arg = argv[i];
 		if (arg == "--max-count" || arg == "--sh-degree") {
@@ -76,6 +78,21 @@ int main(int argc, char **argv) {
 				}
 				degree_seen = true;
 				options.sh_degree = value;
+			}
+		} else if (arg == "--storage") {
+			if (storage_seen || i + 1 >= argc) {
+				std::cerr << "--storage must be unique and followed by quantized or float32\n";
+				return 2;
+			}
+			storage_seen = true;
+			const std::string storage = argv[++i];
+			if (storage == "quantized")
+				write_options.storage = hg::GaussianSplatStorage::Quantized;
+			else if (storage == "float32")
+				write_options.storage = hg::GaussianSplatStorage::Float32;
+			else {
+				std::cerr << "--storage must be quantized or float32\n";
+				return 2;
 			}
 		} else if (arg == "--normalize") {
 			if (normalize_seen) {
@@ -117,16 +134,19 @@ int main(int argc, char **argv) {
 		return 1;
 	}
 	std::string error;
-	if (!hg::WriteGaussianSplatDataToFile(imported.data, output.c_str(), &error)) {
+	if (!hg::WriteGaussianSplatDataToFile(imported.data, output.c_str(), &error, write_options, &stats)) {
 		std::cerr << "gsplatc: " << error << '\n';
 		return 1;
 	}
 	const auto &data = imported.data;
-	const uint64_t coefficients = (uint64_t(data.sh_degree + 1) * (data.sh_degree + 1)) - 1;
-	const uint64_t bytes = 128 + uint64_t(data.count) * 64 + uint64_t(data.count) * coefficients * 16;
 	std::cout << "Source splats: " << data.source_count << "\nRetained splats: " << data.count << "\nSH degree: " << data.sh_degree
 		<< "\nBounds min: " << data.bounds_min.x << ' ' << data.bounds_min.y << ' ' << data.bounds_min.z << "\nBounds max: " << data.bounds_max.x << ' '
 		<< data.bounds_max.y << ' ' << data.bounds_max.z << "\nPostshot antialiasing: " << (data.antialiased ? 1 : 0) << "\nNormalized: "
-		<< (data.normalized ? 1 : 0) << "\nOutput bytes: " << bytes << '\n';
+		<< (data.normalized ? 1 : 0) << "\nStorage: " << (write_options.storage == hg::GaussianSplatStorage::Quantized ? "quantized" : "float32")
+		<< "\nUncompressed block bytes: " << stats.uncompressed_bytes << "\nOutput bytes: " << stats.stored_bytes
+		<< "\nMaximum quantization errors: position(L2)=" << stats.max_position_error << " scale(relative)=" << stats.max_scale_relative_error
+		<< " opacity=" << stats.max_opacity_error << " DC=" << stats.max_dc_error << " SH=" << stats.max_sh_error
+		<< " quaternion(sign-equivalent L2)=" << stats.max_quaternion_error
+		<< "\nQuantization clipping: none (adaptive block ranges)\n";
 	return 0;
 }

@@ -1,8 +1,8 @@
 # Houseplant: a single-file native Gaussian tutorial
 
-[gaussian_splatting.lua](gaussian_splatting.lua) displays the bundled Houseplant by Marcel Padilla (CC BY 4.0). It is one Lua source: window, quaternion trackball, RGB axis overlay and native API calls. No companion Lua modules or Python preparation/launch tools are needed.
+[gaussian_splatting.lua](gaussian_splatting.lua) displays the bundled Houseplant by Marcel Padilla (CC BY 4.0). It is one Lua source: window, native trackball controller, RGB axis overlay and native Gaussian API calls. No companion Lua modules or Python preparation/launch tools are needed.
 
-C++ owns HGS1 loading, GPU resources, covariance projection, global depth sorting and drawing. Lua submits one instance list per frame with `SubmitGaussianSplats`. The compiled shaders remain ordinary HARFANG resources; single-file refers to the Lua application, not an embedded asset bundle.
+C++ owns HGS2 loading, GPU resources, covariance projection, global depth sorting and drawing. Lua submits one instance list per frame with `SubmitGaussianSplats`. The compiled shaders remain ordinary HARFANG resources; single-file refers to the Lua application, not an embedded asset bundle.
 
 ## Compile and run
 
@@ -45,7 +45,11 @@ The native importer supports the headerless 32-byte `.splat` layout: little-endi
 
 Normalization centers the complete source position bounds and scales their largest extent to two units. The tutorial rotates the instance 180 degrees around X because the source is -Y up. The runtime transforms positions and covariances together. Source attribution and checksum are in [ATTRIBUTION.md](resources/gaussian_splatting/ATTRIBUTION.md).
 
+The default compiled asset uses quantized, zlib-compressed HGS2 blocks. A `reference` profile with `"storage": "float32"` preserves imported values for comparison. `gsplatc` quantifies reconstruction errors; the native loader decompresses/dequantizes before GPU upload. GPU memory usage is unchanged. Recompile any HGS1 assets; no legacy reader is retained. See the [format specification](../specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md).
+
 ## Controls and rendering
+
+Camera navigation uses [`hg.TrackballController`](../doc/doc/TrackballController.md). Lua chooses the initial pose from the model bounds, gates updates on window focus and handles the reset key. Orbit, dolly, pan and camera-world transform computation are native. The runtime or launcher supplies the module search paths; the tutorial does not modify `package.cpath`.
 
 | Input | Action |
 |---|---|
@@ -60,6 +64,12 @@ The native submission uses two views (compute and draw). The application clears 
 Splats use global center-depth sorting, premultiplied blending and depth testing without depth writes. Multiple instances can be passed in the same submission. Opaque meshes can share the target depth buffer; intersecting translucent meshes and exact per-pixel splat ordering remain outside this implementation.
 
 ## Regression checks
+
+The headless native `engine.trackball_controller` unit test checks arcball rotation, dolly, pan, reset, stability and injected mouse input. The Lua binding smoke check runs without rendering:
+
+```powershell
+& "$build/extern/lua/Release/lua.exe" ../harfang/tests/gaussian_camera.lua "$build/languages/hg_lua/Release"
+```
 
 Python remains only in developer tests, outside `tutorials/tools`: `harfang/tests/test_gaussian_splat_native.py` validates conversion and optional Lua/GPU composition, and `tools/assetc/tests/test_gsplat.py` exercises metadata, incremental compilation and failures. `harfang/tests/run_gaussian_sort_probe.py` checks every GPU-sorted ID using the actual native sort shader.
 

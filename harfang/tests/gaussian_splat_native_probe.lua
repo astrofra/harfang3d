@@ -161,7 +161,7 @@ local function probe()
     assert(caps.max_views >= 32, 'Insufficient view count for native Gaussian probe')
 
     -- Malformed native files must be rejected by both available loader routes.
-    local malformed = {'magic', 'length', 'count', 'sh_offsets', 'nan', 'zero_quat'}
+    local malformed = {'magic', 'legacy', 'length', 'count', 'sh_offsets', 'storage', 'block_size', 'raw_length', 'overlap', 'reserved', 'raw_crc', 'header_crc', 'table_crc', 'trailing', 'truncated', 'nan', 'zero_quat', 'compressed_trailing', 'inflate_overrun', 'sh_code'}
     local from_data_available = hg.Data ~= nil and hg.LoadDataFromFile ~= nil and hg.LoadGaussianSplatModelFromData ~= nil
     for _, name in ipairs(malformed) do
         local path = fixture_dir .. '/malformed_' .. name .. '.hgs'

@@ -52,6 +52,7 @@ extern void test_gamecontroller();
 #endif
 
 // engine tests
+extern void test_trackball_controller();
 extern void test_assets();
 extern void test_animation();
 extern void test_audio();
@@ -121,6 +122,7 @@ TEST_LIST = {
 	{"platform.window", test_window},
 
 	// engine
+	{"engine.trackball_controller", test_trackball_controller},
 	{"engine.assets", test_assets},
 	{"engine.animation", test_animation},
 	{"engine.audio", test_audio},

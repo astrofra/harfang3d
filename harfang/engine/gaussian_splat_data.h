@@ -28,6 +28,18 @@ struct GaussianSplatData {
 	bool antialiased{false}, normalized{false};
 };
 
+enum class GaussianSplatStorage : uint32_t { Float32 = 0, Quantized = 1 };
+
+struct GaussianSplatWriteOptions {
+	GaussianSplatStorage storage{GaussianSplatStorage::Quantized};
+};
+
+struct GaussianSplatWriteStats {
+	uint64_t uncompressed_bytes{0}, stored_bytes{0};
+	double max_position_error{0}, max_scale_relative_error{0}, max_opacity_error{0}, max_dc_error{0}, max_sh_error{0},
+		max_quaternion_error{0};
+};
+
 struct GaussianSplatImportOptions {
 	uint32_t max_count{GaussianSplatDefaultImportCount};
 	uint32_t sh_degree{3}; // maximum retained degree; never invents missing bands
@@ -52,11 +64,14 @@ GaussianSplatDataResult ImportGaussianSplatSPZFromFile(const char *path, const G
 GaussianSplatDataResult ImportGaussianSplatBinary(const Data &input, const GaussianSplatImportOptions &options = {});
 GaussianSplatDataResult ImportGaussianSplatBinaryFromFile(const char *path, const GaussianSplatImportOptions &options = {});
 
-// Versioned HGS1 native asset codec. No GPU objects are created by these functions.
+// HGS2 native asset codec. No GPU objects are created by these functions.
+// Format: specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md.
 GaussianSplatDataResult ReadGaussianSplatData(const Data &input);
 GaussianSplatDataResult ReadGaussianSplatDataFromFile(const char *path);
 GaussianSplatDataResult ReadGaussianSplatDataFromAssets(const char *name);
-bool WriteGaussianSplatData(const GaussianSplatData &data, Data &output, std::string *error = nullptr);
-bool WriteGaussianSplatDataToFile(const GaussianSplatData &data, const char *path, std::string *error = nullptr);
+bool WriteGaussianSplatData(const GaussianSplatData &data, Data &output, std::string *error = nullptr,
+	const GaussianSplatWriteOptions &options = {}, GaussianSplatWriteStats *stats = nullptr);
+bool WriteGaussianSplatDataToFile(const GaussianSplatData &data, const char *path, std::string *error = nullptr,
+	const GaussianSplatWriteOptions &options = {}, GaussianSplatWriteStats *stats = nullptr);
 
 } // namespace hg

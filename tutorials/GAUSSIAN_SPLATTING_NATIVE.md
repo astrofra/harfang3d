@@ -1,6 +1,6 @@
 # Saari through the native Gaussian API
 
-[gaussian_splatting_native.lua](gaussian_splatting_native.lua) is a single Lua source using native C++ loading, resource ownership, GPU projection, spherical harmonics, global sorting and drawing. It embeds its trackball camera. The [Houseplant tutorial](GAUSSIAN_SPLATTING.md) uses the same native implementation with a bundled SH0 sample.
+[gaussian_splatting_native.lua](gaussian_splatting_native.lua) is a single Lua source using native C++ loading, resource ownership, GPU projection, spherical harmonics, global sorting and drawing. Camera navigation uses the native [`TrackballController`](../doc/doc/TrackballController.md); Lua only chooses the initial pose and handles focus and reset. The [Houseplant tutorial](GAUSSIAN_SPLATTING.md) uses the same native implementation with a bundled SH0 sample.
 
 ## Prepare and run
 
@@ -25,15 +25,23 @@ Installed `assetc` finds `gsplatc`, `shaderc` and `texturec` together in its pla
 }
 ```
 
-Selected-profile fields individually override `default` fields, then built-in defaults. `.ply`, `.splat` and `.spz` files without `type: "gaussian-splat"` pass through unchanged. Conversion writes versioned HGS1; the runtime rejects legacy HGS0.
+Selected-profile fields individually override `default` fields, then built-in defaults. `.ply`, `.splat` and `.spz` files without `type: "gaussian-splat"` pass through unchanged. Conversion writes quantized, compressed HGS2 by default. HGS0/HGS1 are rejected; recompile old assets.
 
 To use PLY instead, copy the source as `resources/gaussian_splatting_native/saari-probe.ply` and rename the sidecar from `saari-probe.spz.meta` to `saari-probe.ply.meta`. Keep only one opted-in source for a given basename: both formats produce `saari-probe.hgs` and assetc rejects output collisions.
+
+## HGS2 storage and quality
+
+The default `.meta` now selects `"storage": "quantized"`. Every block of up to 256 splats gets adaptive ranges for position, scale, DC and higher SH, then zlib compression. This also works directly from a PLY source; conversion does not require SPZ. Adaptive ranges avoid introducing SPZ-style fixed-range color/SH clipping.
+
+The tracked `reference` profile selects `"storage": "float32"` for lossless imported attributes with the same block compression. Use `assetc -profile reference ...` to compare quality, then `-profile default` to restore compact assets. The CLI equivalent is `gsplatc INPUT.ply OUTPUT.hgs --storage quantized` (or `float32`). `gsplatc` reports maximum quantization errors and the actual file size.
+
+Loading reconstructs the existing native float buffers. Lua/rendering code and GPU memory requirements are unchanged. The [HGS2 specification](../specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md) documents the layout, error bounds and resource limits. No HGS1 compatibility path is retained.
 
 ## SPZ scope
 
 The native importer supports the gzip-based **SPZ v2/v3**, SH0-3 and the antialias flag. It validates the gzip header, CRC32, uncompressed size, exact attribute lengths and source records, with bounded decompression. Unsupported versions, extension flags and SH4 are rejected explicitly. SPZ v4 uses a different ZSTD container and is not supported by this importer; the supplied Saari file is v3.
 
-SPZ is quantized: positions use signed 24-bit fixed point, scales use quantized logarithms, opacity is linear byte alpha, and color/SH coefficients have reduced precision and representable ranges. In the local Saari comparison, 186 of 750,000 retained DC channel values exceed the SPZ range and are already clipped in the source SPZ; HGS conversion cannot restore those PLY values. The decoder preserves stored coordinate axes, decodes v2 first-three or v3 smallest-three quaternions, and expands attributes to HGS1. No gamma transform or invented SH bands are applied. Source coordinates match the local PLY within quantization precision; the tutorial keeps its existing X rotation.
+SPZ is quantized: positions use signed 24-bit fixed point, scales use quantized logarithms, opacity is linear byte alpha, and color/SH coefficients have reduced precision and representable ranges. In the local Saari comparison, 186 of 750,000 retained DC channel values exceed the SPZ range and are already clipped in the source SPZ; HGS conversion cannot restore those PLY values. The decoder preserves stored coordinate axes, decodes v2 first-three or v3 smallest-three quaternions, and expands attributes to canonical floats before HGS2 encoding. No gamma transform or invented SH bands are applied. Source coordinates match the local PLY within quantization precision; the tutorial keeps its existing X rotation.
 
 Format reference: [Niantic SPZ](https://github.com/nianticlabs/spz/tree/11312e4ad836ed06e3da2f3d5b633688d17ebebb), inspected at this revision. No upstream decoder or new library is bundled; gzip uses HARFANG's existing miniz dependency. SPZ decoding occurs in `gsplatc`, not in Lua or the render loop.
 
@@ -101,6 +109,6 @@ python harfang/tests/test_gaussian_splat_native.py `
   --mesh-shaders tutorials/resources_compiled/shaders --renderer dx11
 ```
 
-These developer tests cover PLY/`.splat`/SPZ conversion, malformed records, HGS1 loading, multiple Gaussian instances, an opaque triangle between splats, SH1/SH3 pixels, camera targets and lifetime through GC/shutdown. The [Houseplant guide](GAUSSIAN_SPLATTING.md#regression-checks) describes the real-tutorial smoke runner; substitute `gaussian_splatting_native.lua` to test Saari.
+These developer tests cover PLY/`.splat`/SPZ conversion, malformed records, HGS2 loading, multiple Gaussian instances, an opaque triangle between splats, SH1/SH3 pixels, camera targets and lifetime through GC/shutdown. The [Houseplant guide](GAUSSIAN_SPLATTING.md#regression-checks) describes the real-tutorial smoke runner; substitute `gaussian_splatting_native.lua` to test Saari.
 
 The [native API study](../specifications/SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md) and [validation record](../specifications/GSPLAT_NATIVE_PROGRESS.md) describe the implementation and remaining scope.

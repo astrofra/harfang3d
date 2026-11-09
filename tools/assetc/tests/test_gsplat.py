@@ -9,9 +9,11 @@ import subprocess
 import tempfile
 import time
 import unittest
+import sys
 
 
 FIXTURES = Path(__file__).resolve().parents[3] / 'harfang/tests/test_gaussian_splat_native.py'
+sys.path.insert(0, str(FIXTURES.parent))
 spec = importlib.util.spec_from_file_location('native_fixtures', FIXTURES)
 native = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(native)
@@ -192,6 +194,25 @@ class GaussianAssetTests(unittest.TestCase):
         self.metadata()
         self.invoke()
         self.assertEqual(native.read_hgs(self.hgs)['splat_count'], 3)
+
+    def test_storage_profiles_and_rebuild(self):
+        self.metadata()
+        self.invoke()
+        self.assertEqual(native.read_hgs(self.hgs)['storage'],1)
+        meta=json.loads(self.meta.read_text())
+        meta['profiles']['reference']={'storage':'float32'}
+        self.meta.write_text(json.dumps(meta))
+        self.invoke('-profile','reference')
+        data=native.read_hgs(self.hgs)
+        self.assertEqual((data['storage'],data['splat_count'],data['sh_degree']),(0,3,1))
+        stamp=self.hgs.stat().st_mtime_ns
+        self.invoke('-profile','reference')
+        self.assertEqual(stamp,self.hgs.stat().st_mtime_ns)
+        self.invoke()
+        self.assertEqual(native.read_hgs(self.hgs)['storage'],1)
+        for invalid in ('unknown',7,None,True,[]):
+            self.metadata(storage=invalid)
+            self.assertIn('InvalidGaussianSplatMetadata',self.invoke(success=False))
 
     def test_missing_tool_only_fails_opted_in_assets(self):
         missing = self.root / 'empty toolchain'

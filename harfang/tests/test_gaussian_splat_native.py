@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Native HGS1 converter and optional Lua/GPU integration probe (stdlib only)."""
+"""Native HGS2 converter and optional Lua/GPU integration probe (stdlib only)."""
 
 import argparse
 import gzip
@@ -10,6 +10,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import gaussian_splat_hgs2 as codec
 
 
 C0 = 0.28209479177387814
@@ -17,13 +18,6 @@ C1 = 0.4886025119029199
 BASE_PROPERTIES = [
     "x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
     "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3",
-]
-HEADER_FORMAT = "<4sHHIIQIIIIQQQQ3f3fIIII16s"
-HEADER_NAMES = [
-    "magic", "major", "minor", "endian_marker", "header_size", "total_size",
-    "flags", "sh_degree", "splat_count", "source_count", "base_offset",
-    "base_length", "sh_offset", "sh_length", "bounds_min", "bounds_max",
-    "base_stride", "sh_stride", "non_dc_coefficient_count", "color_encoding", "reserved",
 ]
 SENTINEL = b"pre-existing output must survive\x00\xff"
 
@@ -115,59 +109,10 @@ def write_ply(path, records, **kwargs):
 
 
 def read_hgs(path):
-    """Independent, strict HGS1 decoder; no native helper code is mirrored."""
-    raw = path.read_bytes()
-    require(len(raw) >= 128, f"{path.name}: truncated HGS header")
-    values = struct.unpack_from(HEADER_FORMAT, raw, 0)
-    grouped = (*values[:14], values[14:17], values[17:20], *values[20:])
-    header = dict(zip(HEADER_NAMES, grouped))
-    require(struct.calcsize(HEADER_FORMAT) == 128, "internal HGS header format error")
-    require(header["magic"] == b"HGS1", f"{path.name}: bad magic")
-    require((header["major"], header["minor"]) == (1, 0), f"{path.name}: bad version")
-    require(header["endian_marker"] == 0x01020304, f"{path.name}: bad endian marker")
-    require(header["header_size"] == 128, f"{path.name}: bad header size")
-    require(header["base_offset"] == 128, f"{path.name}: bad base offset")
-    require(header["base_stride"] == 64 and header["sh_stride"] == 16,
-            f"{path.name}: bad strides")
-    require(header["color_encoding"] == 0 and header["reserved"] == bytes(16),
-            f"{path.name}: bad color encoding or reserved header bytes")
-    require(header["flags"] & ~7 == 0, f"{path.name}: unknown flags")
-    degree = header["sh_degree"]
-    count = header["splat_count"]
-    require(degree <= 3, f"{path.name}: unsupported degree {degree}")
-    require(0 < count <= header["source_count"], f"{path.name}: invalid counts")
-    non_dc = (degree + 1) ** 2 - 1
-    require(header["non_dc_coefficient_count"] == non_dc, f"{path.name}: bad coefficient count")
-    require(bool(header["flags"] & 4) == bool(non_dc), f"{path.name}: inconsistent SH flag")
-    require(header["base_length"] == count * 64, f"{path.name}: bad base length")
-    require(header["sh_offset"] == 128 + count * 64, f"{path.name}: bad SH offset")
-    require(header["sh_length"] == count * non_dc * 16, f"{path.name}: bad SH length")
-    require(header["total_size"] == 128 + count * 64 + count * non_dc * 16,
-            f"{path.name}: bad total size")
-    require(len(raw) == header["total_size"], f"{path.name}: file size does not match header")
-    base = [struct.unpack_from("<16f", raw, 128 + i * 64) for i in range(count)]
-    higher = []
-    for splat in range(count):
-        records = []
-        for coefficient in range(non_dc):
-            offset = header["sh_offset"] + (splat * non_dc + coefficient) * 16
-            records.append(struct.unpack_from("<4f", raw, offset))
-        higher.append(records)
-    for splat, record in enumerate(base):
-        require(all(math.isfinite(value) for value in record), f"{path.name}: non-finite base record {splat}")
-        require(0.0 <= record[3] <= 1.0, f"{path.name}: invalid opacity {record[3]}")
-        require(all(value > 0.0 for value in record[4:7]), f"{path.name}: invalid scale")
-        require(record[7] == 0.0 and record[15] == 0.0, f"{path.name}: nonzero base padding")
-        require_float(math.sqrt(sum(value * value for value in record[8:12])), 1.0,
-                      f"{path.name}: quaternion norm")
-    for records in higher:
-        for record in records:
-            require(all(math.isfinite(value) for value in record) and record[3] == 0.0,
-                    f"{path.name}: invalid higher SH record")
-    header.update(raw=raw, base=base, higher=higher,
-                  base_bytes=raw[128:header["sh_offset"]],
-                  higher_bytes=raw[header["sh_offset"]:])
-    return header
+    try:
+        return codec.read_hgs(path)
+    except (ValueError, struct.error, zlib.error) as error:
+        raise TestFailure(f'{path}: {error}') from error
 
 
 def require_source_record(header, output_index, source, source_non_dc):
@@ -243,6 +188,9 @@ class Harness:
 
     def convert(self, label, source, destination, *options, expected=0):
         destination.parent.mkdir(parents=True, exist_ok=True)
+        # Importer tests use the lossless representation of HGS2 to isolate import accuracy.
+        if '--storage' not in options:
+            options = (*options, '--storage', 'float32')
         return self.run(label, [self.gsplatc, source, destination, *options], expected=expected)
 
 
@@ -579,30 +527,125 @@ def color_record(position, rgb, degree=0):
 
 
 def make_native_malformed_fixtures(valid_path, root):
-    valid = valid_path.read_bytes()
+    valid = read_hgs(valid_path)
+    raw = valid['raw']
     mutations = {}
-
     def mutate(name, offset, fmt, value):
-        data = bytearray(valid)
-        struct.pack_into(fmt, data, offset, value)
-        mutations[name] = bytes(data)
-
-    data = bytearray(valid)
-    data[0:4] = b"BAD!"
-    mutations["magic"] = bytes(data)
-    mutate("length", 16, "<Q", len(valid) - 1)
-    mutate("count", 32, "<I", 2)
-    mutate("sh_offsets", 56, "<Q", 128)
-    mutate("nan", 128, "<f", float("nan"))
-    data = bytearray(valid)
-    data[160:176] = bytes(16)
-    mutations["zero_quat"] = bytes(data)
+        changed = bytearray(raw)
+        struct.pack_into(fmt, changed, offset, value)
+        table_end = 128+32*valid['block_count']
+        if 128 <= offset < table_end:
+            struct.pack_into('<I',changed,108,codec.crc(changed[128:table_end]))
+        struct.pack_into('<I',changed,104,codec.header_crc(changed))
+        mutations[name] = bytes(changed)
+    mutate('magic', 0, '<4s', b'BAD!')
+    mutate('legacy', 0, '<4s', b'HGS1')
+    mutate('length',16,'<Q',len(raw)-1)
+    mutate('count',32,'<I',2)
+    mutate('sh_offsets',64,'<Q',128)
+    mutate('storage',40,'<I',99)
+    mutate('block_size',44,'<I',0xffffffff)
+    mutate('raw_length',140,'<I',0x7fffffff)
+    mutate('overlap',128,'<Q',0)
+    mutate('reserved',152,'<Q',1)
+    mutate('raw_crc',148,'<I',0)
+    for name, offset in [('header_crc',104),('table_crc',108)]:
+        changed=bytearray(raw);changed[offset]^=1;mutations[name]=changed
+    mutations['trailing']=raw+b'x'
+    mutations['truncated']=raw[:-1]
+    blocks=[bytearray(b['data']) for b in valid['blocks']]
+    changed=[bytearray(b) for b in blocks]
+    struct.pack_into('<f',changed[0],0,float('nan'))
+    mutations['nan']=codec.repack(raw,changed)
+    changed=[bytearray(b) for b in blocks]
+    if valid['storage']==0:
+        changed[0][32:48]=bytes(16)
+    else:
+        n=valid['blocks'][0]['count']
+        rotation=72+12*valid['non_dc_coefficient_count']+10*n
+        struct.pack_into('<I',changed[0],rotation,0x1fffffff)
+    mutations['zero_quat']=codec.repack(raw,changed)
+    def seal(changed):
+        end=128+32*valid['block_count']
+        struct.pack_into('<I',changed,108,codec.crc(changed[128:end]))
+        struct.pack_into('<I',changed,104,codec.header_crc(changed))
+        return bytes(changed)
+    # GPU fixtures have one block; put junk inside that block's declared compressed span.
+    changed=bytearray(raw+b'x')
+    struct.pack_into('<Q',changed,16,len(changed))
+    struct.pack_into('<I',changed,136,struct.unpack_from('<I',raw,136)[0]+1)
+    mutations['compressed_trailing']=seal(changed)
+    changed=bytearray(codec.repack(raw,[bytes(blocks[0])+b'x']))
+    struct.pack_into('<I',changed,140,len(blocks[0]))
+    struct.pack_into('<Q',changed,96,len(blocks[0]))
+    mutations['inflate_overrun']=seal(changed)
+    changed=[bytearray(b) for b in blocks]
+    n=valid['blocks'][0]['count']
+    if valid['storage']==1:
+        sh=72+12*valid['non_dc_coefficient_count']+17*n
+        changed[0][sh]=128  # forbidden signed -128
+    else:
+        struct.pack_into('<f',changed[0],n*64,float('inf'))
+    mutations['sh_code']=codec.repack(raw,changed)
     for name, data in mutations.items():
-        (root / f"malformed_{name}.hgs").write_bytes(data)
+        (root/f'malformed_{name}.hgs').write_bytes(data)
 
 
-def test_gpu_probe(h):
-    root = h.output / "gpu"
+def test_quantized_hgs(h):
+    root=h.output/'quantized'
+    root.mkdir(exist_ok=True)
+    for count, degree in [(1,0),(255,1),(256,2),(257,3),(513,3)]:
+        records=[]
+        for i in range(count):
+            r=make_record(i%11,degree)
+            r.update(x=math.sin(i*.13),y=2.0 if i//256==1 else math.cos(i*.17),z=i*.0123,
+                     opacity=(-40 if i%23==0 else 40 if i%19==0 else i%11-5),
+                     f_dc_0=(i%17-8)*3.0,f_dc_1=-12.0,f_dc_2=1.2345)
+            for j in range(4): r[f'rot_{j}']=(1 if j==i%4 else .13*(j+1))*(-1 if i%2 else 1)
+            records.append(r)
+        source=root/f'{count}-{degree}.ply'
+        write_ply(source,records,degree=degree)
+        reference, compressed=root/'reference.hgs',root/'quantized.hgs'
+        h.convert(f'hgs_float_{count}',source,reference,'--storage','float32')
+        log=h.convert(f'hgs_quantized_{count}',source,compressed,'--storage','quantized')
+        a,b=read_hgs(reference),read_hgs(compressed)
+        require(a['storage']==0 and b['storage']==1,'HGS2 storage selector')
+        require(b['block_count']==(count+255)//256,'HGS2 final partial block')
+        require('Quantization clipping: none' in log,'missing adaptive-range diagnostic')
+        non_dc=(degree+1)**2-1
+        require(b['raw_size']==b['block_count']*(72+12*non_dc)+count*(17+3*non_dc),'HGS2 quantized byte budget')
+        require_sequence(a['bounds_min'],b['bounds_min'],'quantized bounds min')
+        require_sequence(a['bounds_max'],b['bounds_max'],'quantized bounds max')
+        for first in range(0,count,256):
+            original=a['base'][first:first+256]
+            for local,x in enumerate(original):
+                y=b['base'][first+local]
+                for j in range(3):
+                    low,high=min(v[j] for v in original),max(v[j] for v in original)
+                    require(abs(x[j]-y[j]) <= (high-low)/131070+2e-6,'position quantization bound')
+                    logs=[math.log(v[4+j]) for v in original]
+                    bound=math.expm1((max(logs)-min(logs))/510)+2e-6
+                    require(abs(y[4+j]/x[4+j]-1)<=bound,'logarithmic scale error bound')
+                    dc=[v[12+j] for v in original]
+                    require(abs(x[12+j]-y[12+j]) <= (max(dc)-min(dc))/510+2e-6,'adaptive DC error bound')
+                require(abs(x[3]-y[3])<=1/510+2e-6,'linear alpha error bound')
+                q=min(math.sqrt(sum((x[j]-y[j])**2 for j in range(8,12))),math.sqrt(sum((x[j]+y[j])**2 for j in range(8,12))))
+                require(q<.003,'smallest-three rotation error bound')
+                for k in range(non_dc):
+                    for channel in range(3):
+                        scale=max(abs(a['higher'][i][k][channel]) for i in range(first,min(first+256,count)))
+                        require(abs(a['higher'][first+local][k][channel]-b['higher'][first+local][k][channel])<=scale/254+2e-6,'adaptive signed SH error bound')
+        again=root/'again.hgs'
+        h.convert(f'hgs_deterministic_{count}',source,again,'--storage','quantized')
+        require(compressed.read_bytes()==again.read_bytes(),'nondeterministic HGS2 encoding')
+    for args in [('--storage','unknown'),('--storage','quantized','--storage','float32'),('--storage',)]:
+        compressed.write_bytes(SENTINEL)
+        h.convert('hgs_bad_storage_'+str(len(args)),source,compressed,*args,expected='nonzero')
+        require(compressed.read_bytes()==SENTINEL,'invalid storage option overwrote output')
+
+
+def run_gpu_probe(h, storage):
+    root = h.output / ("gpu-" + storage)
     root.mkdir(parents=True, exist_ok=True)
     fixtures = {
         "red": ([color_record((0, 0, 3), (1, 0, 0))], 0),
@@ -620,7 +663,7 @@ def test_gpu_probe(h):
     for name, (records, degree) in fixtures.items():
         source, destination = root / f"{name}.ply", root / f"{name}.hgs"
         write_ply(source, records, degree=degree)
-        h.convert(f"gpu_fixture_{name}", source, destination, "--sh-degree", str(degree))
+        h.convert(f"gpu_fixture_{storage}_{name}", source, destination, "--sh-degree", str(degree), "--storage", storage)
         header = read_hgs(destination)
         require(header["splat_count"] == len(records) and header["sh_degree"] == degree,
                 f"GPU fixture {name}: wrong count or degree")
@@ -630,8 +673,13 @@ def test_gpu_probe(h):
     require(script.is_file(), f"missing Lua probe {script}")
     require(h.lua.is_file(), f"Lua executable not found: {h.lua}")
     require(h.shaders.is_dir(), f"compiled shader directory not found: {h.shaders}")
-    h.run("gpu_lua", [h.lua, script, h.module, h.shaders, root, h.renderer, h.mesh_shaders],
+    h.run("gpu_lua_" + storage, [h.lua, script, h.module, h.shaders, root, h.renderer, h.mesh_shaders],
           marker="PASS Gaussian splat native probe:", timeout=180)
+
+
+def test_gpu_probe(h):
+    for storage in ("float32", "quantized"):
+        run_gpu_probe(h, storage)
 
 
 def main():
@@ -649,6 +697,7 @@ def main():
         parser.error("--lua, --module and --shaders must be supplied together")
     h = Harness(args)
     tests = [
+        ("HGS2 quantized blocks, error bounds and determinism", test_quantized_hgs),
         ("SPZ v2/v3 attributes, SH, reduction and gzip options", test_spz_values),
         ("SPZ strict container and payload rejection", test_spz_rejections),
         ("binary .splat decoding, normalization and invalid records", test_binary_splat),

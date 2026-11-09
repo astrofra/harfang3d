@@ -726,6 +726,7 @@ void Scene(std::map<std::string, Hash> &hashes, const std::string &path) {
 void Copy(std::map<std::string, Hash> &hashes, const std::string &path);
 
 struct GaussianSplatConfig {
+	std::string storage = "quantized";
 	bool enabled = false;
 	int max_count = 250000;
 	int sh_degree = 3;
@@ -773,12 +774,18 @@ static bool ValidateGaussianProfileValues(const json &profile_js, const std::str
 		return false;
 	}
 
+	const auto storage = profile_js.find("storage");
+	if (storage != std::end(profile_js) && (!storage->is_string() || (*storage != "quantized" && *storage != "float32"))) {
+		error_message = "Profile '" + profile_name + "' field 'storage' must be quantized or float32";
+		return false;
+	}
+
 	return ValidateGaussianInteger(profile_js, "max-count", 1, 1048576, profile_name, error_message) &&
 		ValidateGaussianInteger(profile_js, "sh-degree", 0, 3, profile_name, error_message);
 }
 
 static bool ValidateGaussianProfileKeys(const json &profile_js, const std::string &profile_name, std::string &error_message) {
-	static const std::set<std::string> allowed_keys = {"type", "max-count", "sh-degree", "normalize"};
+	static const std::set<std::string> allowed_keys = {"type", "max-count", "sh-degree", "normalize", "storage"};
 	for (const auto &i : profile_js.items())
 		if (allowed_keys.find(i.key()) == std::end(allowed_keys)) {
 			error_message = "Unknown Gaussian splat field '" + i.key() + "' in profile '" + profile_name + "'";
@@ -869,9 +876,11 @@ static bool LoadGaussianSplatConfig(const std::string &path, GaussianSplatConfig
 	GetGaussianProfileValue(default_profile, "max-count", config.max_count);
 	GetGaussianProfileValue(default_profile, "sh-degree", config.sh_degree);
 	GetGaussianProfileValue(default_profile, "normalize", config.normalize);
+	GetGaussianProfileValue(default_profile, "storage", config.storage);
 	GetGaussianProfileValue(selected_profile, "max-count", config.max_count);
 	GetGaussianProfileValue(selected_profile, "sh-degree", config.sh_degree);
 	GetGaussianProfileValue(selected_profile, "normalize", config.normalize);
+	GetGaussianProfileValue(selected_profile, "storage", config.storage);
 	return true;
 }
 
@@ -954,10 +963,11 @@ static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::
 
 	Data build_ctx;
 	Write(build_ctx, std::string("gsplatc"));
-	Write(build_ctx, uint32_t(1)); // converter build context schema
+	Write(build_ctx, uint32_t(2)); // HGS2 storage participates in incremental builds
 	Write(build_ctx, config.max_count);
 	Write(build_ctx, config.sh_degree);
 	Write(build_ctx, config.normalize);
+	Write(build_ctx, config.storage);
 	Write(build_ctx, converter_hash);
 
 	std::set<std::string> inputs = {path};
@@ -971,12 +981,13 @@ static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::
 		CleanOutputs({hgs_path});
 
 		const auto src = FullInputPath(path), dst = FullOutputPath(hgs_path);
-		auto cmd = format("\"%1\" \"%2\" \"%3\" --max-count %4 --sh-degree %5")
+		auto cmd = format("\"%1\" \"%2\" \"%3\" --max-count %4 --sh-degree %5 --storage %6")
 					   .arg(toolchain.gsplatc)
 					   .arg(src)
 					   .arg(dst)
 					   .arg(config.max_count)
 					   .arg(config.sh_degree)
+					   .arg(config.storage)
 					   .str();
 		if (config.normalize)
 			cmd += " --normalize";

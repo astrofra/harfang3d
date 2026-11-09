@@ -2,97 +2,7 @@
 -- Drag left to orbit, wheel to dolly, drag right/middle to pan, R to reset.
 -- One Lua source; compile resources with assetc before running. Escape closes the window.
 
-local lua_dir = (arg[-1] or ""):match("^(.*[/\\])")
-if lua_dir then
-	package.cpath = lua_dir .. "?.dll;" .. lua_dir .. "?.so;" .. package.cpath
-end
-
 local hg = require("harfang")
-assert(hg.SubmitGaussianSplats, "Rebuild HARFANG with the native Gaussian API first")
-
--- arcball camera
--- Native vectors and quaternions permit free rotation, including roll.
-local Camera = {}
-Camera.__index = Camera
-
-local function sphere(x, y, width, height)
-	local radius = math.max(1, math.min(width, height) * 0.5)
-	x, y = (x - width * 0.5) / radius, (y - height * 0.5) / radius
-	local distance_squared = x * x + y * y
-
-	if distance_squared > 1 then
-		return hg.Normalize(hg.Vec3(x, y, 0))
-	end
-
-	return hg.Vec3(x, y, -math.sqrt(1 - distance_squared))
-end
-
-function Camera.new(bounds_min, bounds_max, yaw, pitch)
-	local lo = bounds_min or hg.Vec3(-1, -1, -1)
-	local hi = bounds_max or hg.Vec3(1, 1, 1)
-	local extent = hi - lo
-	local camera = setmetatable({
-		center = (lo + hi) * 0.5,
-		initial_radius = math.max(extent.x, extent.y, extent.z) * 1.7,
-		initial_yaw = yaw or 0.4,
-		initial_pitch = pitch or -0.18
-	}, Camera)
-
-	camera:reset()
-	return camera
-end
-
-function Camera:basis()
-	return hg.Rotate(self.q, hg.Vec3.Right), hg.Rotate(self.q, hg.Vec3.Up), hg.Rotate(self.q, hg.Vec3.Front)
-end
-
-function Camera:orbit_eye()
-	local _, _, forward = self:basis()
-	self.eye = self.target - forward * self.radius
-end
-
-function Camera:reset()
-	self.radius = math.max(0.5, self.initial_radius)
-	self.target = hg.Vec3(self.center)
-	self.q = hg.QuaternionFromEuler(-self.initial_pitch, self.initial_yaw, 0, hg.RO_YXZ)
-	self:orbit_eye()
-end
-
-function Camera:set_pose(eye, yaw, pitch)
-	self.eye = eye
-	self.q = hg.QuaternionFromEuler(-pitch, yaw, 0, hg.RO_YXZ)
-end
-
-function Camera:update(input)
-	if input.active then
-		if input.reset then
-			self:reset()
-		end
-
-		if input.orbit and input.drag_valid then
-			local a = sphere(input.x - input.dx, input.y - input.dy, input.width, input.height)
-			local b = sphere(input.x, input.y, input.width, input.height)
-			local dot = hg.Clamp(hg.Dot(a, b), -1, 1)
-
-			-- Inverse object rotation: move the camera around the target.
-			if dot > -0.999999 then
-				local axis = hg.Cross(b, a)
-				local delta = hg.Normalize(hg.Quaternion(axis.x, axis.y, axis.z, 1 + dot))
-				self.q = hg.Normalize(self.q * delta)
-			end
-		end
-
-		self.radius = hg.Clamp(self.radius * math.exp(-(input.wheel or 0) * 0.12), 0.15, 50)
-
-		if input.pan and input.drag_valid then
-			local right, up = self:basis()
-			local scale = 2 * self.radius * math.tan(math.pi / 6) / math.max(input.height, 1)
-			self.target = self.target - (right * input.dx + up * input.dy) * scale
-		end
-
-		self:orbit_eye()
-	end
-end
 
 -- initialize rendering
 hg.InputInit()
@@ -102,7 +12,6 @@ local windows = package.config:sub(1, 1) == "\\"
 local assets = "resources_compiled"
 local win = hg.RenderInit('HARFANG - Houseplant Gaussian splatting', 1280, 720,
 	windows and hg.RT_Direct3D11 or hg.RT_Metal)
-assert(win, "RenderInit failed")
 
 local renderer, data, model, gizmo_program
 
@@ -153,10 +62,8 @@ end
 local function main()
 	-- load model
 	renderer = hg.CreateGaussianSplatRendererFromFile(assets .. "/core/gaussian_splatting")
-	assert(hg.IsValid(renderer), "Missing compiled Gaussian shaders; compile resources with assetc first")
 
 	local loaded = hg.LoadGaussianSplatModelFromFile(assets .. "/gaussian_splatting/source/plant.hgs")
-	assert(loaded.ok, loaded.message)
 	model = loaded.model
 	data = hg.CreateGaussianSplatRenderData()
 
@@ -168,7 +75,11 @@ local function main()
 
 	-- camera and input
 	local lo, hi = hg.GetGaussianSplatBoundsMin(model), hg.GetGaussianSplatBoundsMax(model)
-	local camera = Camera.new(hg.Vec3(lo.x, -hi.y, -hi.z), hg.Vec3(hi.x, -lo.y, -lo.z))
+	local extent = hi - lo
+	local distance = math.max(0.5, math.max(extent.x, extent.y, extent.z) * 1.7)
+	local target = instance.world * ((lo + hi) * 0.5)
+	local camera = hg.TrackballController(target, distance, hg.QuaternionFromEuler(0.18, 0.4, 0, hg.RO_YXZ))
+	local fov = math.pi / 3
 	local keyboard, mouse = hg.Keyboard(), hg.Mouse()
 	local width, height, was_focused = 0, 0, false
 
@@ -198,27 +109,16 @@ local function main()
 			end
 
 			-- update camera
-			local client_ok, client_w, client_h = hg.GetWindowClientSize(win)
-			assert(client_ok)
-			camera:update({
-				active = focused,
-				reset = keyboard:Pressed(hg.K_R),
-				orbit = mouse:Down(hg.MB_0),
-				pan = mouse:Down(hg.MB_1) or mouse:Down(hg.MB_2),
-				drag_valid = was_focused and not mouse:Pressed(hg.MB_0) and not mouse:Pressed(hg.MB_1)
-					and not mouse:Pressed(hg.MB_2),
-				x = mouse:X(),
-				y = mouse:Y(),
-				dx = mouse:DtX(),
-				dy = mouse:DtY(),
-				width = client_w,
-				height = client_h,
-				wheel = mouse:Wheel()
-			})
+			local _, client_w, client_h = hg.GetWindowClientSize(win)
+			if focused then
+				if keyboard:Pressed(hg.K_R) then
+					camera:Reset()
+				end
+				camera:Update(mouse, client_w, client_h, fov, was_focused)
+			end
 
-			local right, up, forward = camera:basis()
-			local camera_world = hg.Mat4LookTowardUp(camera.eye, forward, up)
-			local view_state = hg.ComputePerspectiveViewState(camera_world, math.pi / 3, 0.01, 100,
+			local camera_world = camera:ComputeWorld()
+			local view_state = hg.ComputePerspectiveViewState(camera_world, fov, 0.01, 100,
 				hg.ComputeAspectRatioX(width, height))
 
 			-- draw Gaussian splats
@@ -227,15 +127,14 @@ local function main()
 			hg.SetViewClear(0, hg.CF_Color | hg.CF_Depth, hg.Color(0.025, 0.03, 0.04, 1), 1)
 			hg.Touch(0)
 
-			local result, next_view = hg.SubmitGaussianSplats(1, hg.IntRect(0, 0, width, height),
+			local _, next_view = hg.SubmitGaussianSplats(1, hg.IntRect(0, 0, width, height),
 				view_state, instances, renderer, data, settings)
-			assert(result.ok, result.message)
 
 			-- draw orientation gizmo
 			hg.SetViewRect(next_view, 0, 0, width, height)
 			hg.SetViewClear(next_view, 0)
 			hg.SetViewMode(next_view, hg.VM_Sequential)
-			draw_gizmo(next_view, gizmo_program, gizmo_state, width, height, right, up)
+			draw_gizmo(next_view, gizmo_program, gizmo_state, width, height, hg.GetX(camera_world), hg.GetY(camera_world))
 
 			hg.Frame()
 		else

@@ -4,6 +4,37 @@ Date: 2026-11-09. Base revision: `2114a55`, branch `gsplat`.
 
 This is an implemented, D3D11-tested slice of the [native API study](SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md). It provides [Saari](../tutorials/gaussian_splatting_native.lua) and [Houseplant](../tutorials/gaussian_splatting.lua) tutorials using the same native API. This does not complete every proposed engine feature. See the [preparation and launch guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md).
 
+## HGS2 quantized/compressed storage (2026-11-09)
+
+HGS1 has been replaced outright, as requested: no legacy decoder is retained. Recompile existing assets. The [HGS2 specification](SPECS_GAUSSIAN_SPLATTING_HGS2.md) defines the new 128-byte header, checksummed block table, 256-splat adaptive quantization and per-block zlib compression through existing miniz. The default `storage` is `quantized`; `float32` is a lossless, compressed representation inside HGS2 for reference comparisons. Native loading reconstructs the same canonical float arrays and GPU buffers; the Lua rendering API is unchanged.
+
+Copilot/Kimi implemented the codec and public write options/statistics. Codex reviewed it, handled CLI/assetc integration, added independent decoding and adversarial format tests, updated metadata/documentation, and performed builds and runtime comparisons.
+
+### Actual sizes, at identical retained counts
+
+Sizes below are exact bytes, measured on the local Saari SPZ and bundled plant source. Quantized source attributes are not clipped to fixed SPZ ranges: ranges adapt per block, including direct PLY conversion.
+
+| Asset | Splats / degree | Old HGS1 | HGS2 float32 compressed | HGS2 quantized compressed |
+|---|---:|---:|---:|---:|
+| Saari from SPZ | 250,000 / SH3 | 76,000,128 | 15,884,337 | **8,493,320** |
+| Houseplant | 113,648 / SH0 | 7,273,600 | 5,572,167 | **1,966,399** |
+
+The compact files are 88.82% and 72.97% smaller respectively than the old HGS assets. The original Saari SPZ remains 38,221,014 bytes for 1,307,339 splats; that different-count file is not the basis of the reduction percentages above.
+
+Direct PLY -> quantized HGS2 at 250,000 splats/SH3/normalized produced **14,678,839 bytes**. The PLY retains coefficient precision already lost by the SPZ source, so the two routes are not bit-equivalent. Direct PLY conversion reports maximum errors: position L2 2.1394e-5, relative scale 0.0205363, opacity 0.00196078, DC 0.0393994, higher SH 0.00352322, quaternion sign-equivalent L2 0.0020833. No fixed-range saturation is introduced.
+
+### Verification
+
+- Release `assetc`, `gsplatc`, and Lua module build successfully. All tutorial resources are recompiled; the default quantized profile is left active.
+- Eleven native regression groups pass. Tests include independent HGS2 inspection, both storage modes, counts 1/255/256/257/513, SH0-3, zero-width ranges, numerical error bounds, deterministic output, existing source import checks, malformed HGS2 header/table/compression/payload rejection and HGS1 rejection.
+- The existing Lua GPU composition/SH/lifetime probe runs against both float32 and quantized HGS2 fixtures. Invalid files are checked through file and Data loading routes; compressed trailing bytes and inflation overruns are rejected.
+- Twelve assetc integration tests pass, including storage-profile inheritance, invalid storage values, cache invalidation and source conversion behavior.
+- Both actual tutorials complete 60 D3D11 frames in both storage modes with two resizes, repeated GC, captures and clean shutdown. Native GPU memory requirements are unchanged.
+
+Whole-frame RGB screenshot comparison (1280x720, identical initial camera): Houseplant mean absolute error 0.02291 on the 0-255 scale, p99 error 1, PSNR 62.52 dB; Saari mean error 0.52333, p99 error 3, PSNR 46.46 dB. Quantization is not pixel-identical: Saari's maximum local channel difference is 218, with 155 of 921,600 pixels differing by more than 8 in at least one channel. These are single-camera observations, not a guarantee for every viewpoint. Captures were visually inspected.
+
+Evidence: local `.codex_tmp/gsplat-hgs2-duo/`, including converter/GPU/assetc logs, both-mode HGS assets, screenshots and `comparison.json`. Earlier HGS1 sizes/commands below remain historical evidence.
+
 ## SPZ import and Saari source migration (2026-11-09)
 
 Native `gsplatc` and assetc now accept gzip SPZ **versions 2 and 3**, with the same `.meta` profiles, deterministic reduction, full-source normalization and HGS1 output as PLY. Source axes, SH0-3 and antialiasing are preserved. Runtime Lua continues to load HGS1 only.
@@ -122,7 +153,7 @@ The application additionally uses one clear view. Local screenshots/logs/manifes
 
 ## Remaining scope
 
-SPZ v1/v4, extension records, SH4 and glTF adapters, compressed/quantized native storage, streaming, radix/tile sorting, orthographic/reversed-Z projections, nonuniform/reflected instance transforms, explicit prepare/draw tokens, scene serialization, full forward/AAA insertion and arbitrary transparent-mesh composition remain unimplemented. The renderer uses center-depth ordering/occlusion and a configurable per-axis standard-deviation cap, so it is still an approximation for large overlapping Gaussians. The cap defaults to 256 pixels; quads extend to three standard deviations.
+SPZ v1/v4, extension records, SH4 and glTF adapters, direct GPU decoding of quantized storage, streaming, radix/tile sorting, orthographic/reversed-Z projections, nonuniform/reflected instance transforms, explicit prepare/draw tokens, scene serialization, full forward/AAA insertion and arbitrary transparent-mesh composition remain unimplemented. The renderer uses center-depth ordering/occlusion and a configurable per-axis standard-deviation cap, so it is still an approximation for large overlapping Gaussians. The cap defaults to 256 pixels; quads extend to three standard deviations.
 
 Metal/OpenGL/Vulkan execution has not been qualified for this native slice. The PLY importer is intentionally strict, not a generic polygon PLY reader. Postshot antialias compensation is implemented, but pixel identity against Postshot is not claimed. Mounted-asset loading is implemented through HARFANG providers; this validation exercised File and FromData.
 

@@ -19,6 +19,7 @@ set(HDRS
 	font.h
 	forward_pipeline.h
 	fps_controller.h
+	trackball_controller.h
 	vertex.h
 	geometry.h
 	geometry_builder.h
@@ -81,6 +82,7 @@ set(SRCS
 	font.cpp
 	forward_pipeline.cpp
 	fps_controller.cpp
+	trackball_controller.cpp
 	geometry.cpp
 	geometry_builder.cpp
 	iso_surface.cpp

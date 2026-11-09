@@ -3001,6 +3001,27 @@ def bind_fps_controller(gen):
 	gen.bind_function('hg::FpsController', 'void', ['const hg::Keyboard &keyboard', 'const hg::Mouse &mouse', 'hg::Vec3 &pos', 'hg::Vec3 &rot', 'float speed', 'hg::time_ns dt'])
 
 
+def bind_trackball_controller(gen):
+	gen.add_include('engine/trackball_controller.h')
+
+	controller = gen.begin_class('hg::TrackballController')
+	gen.bind_constructor_overloads(controller, [
+		([], []),
+		(['const hg::Vec3 &target', 'float distance', '?const hg::Quaternion &orientation'], []),
+		(['const hg::TrackballController &controller'], [])
+	])
+	gen.bind_members(controller, ['hg::Vec3 target', 'hg::Quaternion orientation', 'float distance',
+		'float min_distance', 'float max_distance', 'float dolly_speed'])
+	gen.bind_method(controller, 'Reset', 'void', [])
+	gen.bind_method_overloads(controller, 'Update', [
+		('void', ['bool orbit', 'bool pan', 'float x', 'float y', 'float dx', 'float dy', 'float wheel',
+			'float width', 'float height', '?float fov'], []),
+		('void', ['const hg::Mouse &mouse', 'float width', 'float height', '?float fov', '?bool drag_valid'], [])
+	])
+	gen.bind_method(controller, 'ComputeWorld', 'hg::Mat4', [])
+	gen.end_class(controller)
+
+
 def bind_forward_pipeline(gen):
 	gen.add_include('engine/forward_pipeline.h')
 	
@@ -4969,6 +4990,7 @@ def bind(gen):
 	bind_imgui(gen)
 	bind_platform(gen)
 	bind_fps_controller(gen)
+	bind_trackball_controller(gen)
 	bind_extras(gen)
 	bind_audio(gen)
 	bind_openvr(gen)

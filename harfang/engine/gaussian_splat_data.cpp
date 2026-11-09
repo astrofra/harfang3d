@@ -23,10 +23,13 @@
 namespace hg {
 namespace {
 
+// HGS2 is specified in specifications/SPECS_GAUSSIAN_SPLATTING_HGS2.md.
 constexpr size_t HGSHeaderSize = 128;
 constexpr uint32_t HGSEndianMarker = 0x01020304u;
 constexpr uint32_t HGSAntialiased = 1u, HGSNormalized = 2u, HGSHigherSH = 4u;
 constexpr uint32_t HGSKnownFlags = HGSAntialiased | HGSNormalized | HGSHigherSH;
+constexpr uint32_t HGSBlockSize = 256, HGSTableEntrySize = 32;
+constexpr uint32_t HGSMaxSHCoefficients = 45;
 constexpr size_t MaxPLYHeaderSize = 64 * 1024, MaxPLYLineSize = 4096;
 constexpr size_t SplatRecordSize = 32;
 
@@ -70,6 +73,26 @@ void PutF32(Data &out, float v) {
 	uint32_t bits;
 	std::memcpy(&bits, &v, sizeof(bits));
 	PutU32(out, bits);
+}
+
+void SetU16(uint8_t *p, uint16_t v) {
+	p[0] = uint8_t(v);
+	p[1] = uint8_t(v >> 8);
+}
+void SetU32(uint8_t *p, uint32_t v) {
+	p[0] = uint8_t(v);
+	p[1] = uint8_t(v >> 8);
+	p[2] = uint8_t(v >> 16);
+	p[3] = uint8_t(v >> 24);
+}
+void SetU64(uint8_t *p, uint64_t v) {
+	SetU32(p, uint32_t(v));
+	SetU32(p + 4, uint32_t(v >> 32));
+}
+void SetF32(uint8_t *p, float v) {
+	uint32_t bits;
+	std::memcpy(&bits, &v, sizeof(bits));
+	SetU32(p, bits);
 }
 
 bool CheckedMul(uint64_t a, uint64_t b, uint64_t &out) {
@@ -280,41 +303,433 @@ GaussianSplatDataResult FinalizeGaussianSplatImport(GaussianSplatData &data, con
 	return result;
 }
 
+bool HGS2RawBlockSize(GaussianSplatStorage storage, uint32_t count, uint32_t non_dc, uint64_t &size) {
+	if (storage == GaussianSplatStorage::Float32) {
+		uint64_t base, sh;
+		if (!CheckedMul(count, 64, base) || !CheckedMul(uint64_t(count) * non_dc, 16, sh) || !CheckedAdd(base, sh, size))
+			return false;
+		return true;
+	}
+	if (storage != GaussianSplatStorage::Quantized)
+		return false;
+	uint64_t metadata, records;
+	if (!CheckedMul(non_dc, 12, metadata) || !CheckedAdd(72, metadata, metadata) ||
+		!CheckedMul(count, 17 + uint64_t(non_dc) * 3, records) || !CheckedAdd(metadata, records, size))
+		return false;
+	return true;
+}
+
+bool HGS2CanonicalSize(uint32_t count, uint32_t non_dc, uint64_t &size) {
+	uint64_t base, sh;
+	return CheckedMul(count, 64, base) && CheckedMul(uint64_t(count) * non_dc, 16, sh) && CheckedAdd(base, sh, size);
+}
+
+uint32_t HGS2HeaderCRC(const uint8_t *header) {
+	const uint8_t zero[4] = {};
+	mz_ulong crc = mz_crc32(MZ_CRC32_INIT, header, 104);
+	crc = mz_crc32(crc, zero, sizeof(zero));
+	crc = mz_crc32(crc, header + 108, HGSHeaderSize - 108);
+	return uint32_t(crc);
+}
+
+uint32_t HGS2QuantizeUnit(double value, uint32_t max_code) {
+	value = std::max(0.0, std::min(1.0, value));
+	return uint32_t(std::floor(value * max_code + 0.5));
+}
+
+uint32_t HGS2EncodeLinear(float value, float min_value, float max_value, uint32_t max_code) {
+	if (min_value == max_value || value == min_value)
+		return 0;
+	if (value == max_value)
+		return max_code;
+	return HGS2QuantizeUnit((double(value) - min_value) / (double(max_value) - min_value), max_code);
+}
+
+float HGS2DecodeLinear(float min_value, float max_value, uint32_t code, uint32_t max_code) {
+	if (!code || min_value == max_value)
+		return min_value;
+	if (code >= max_code)
+		return max_value;
+	double value = double(min_value) + (double(max_value) - min_value) * (double(code) / max_code);
+	value = std::max(double(min_value), std::min(double(max_value), value));
+	return float(value);
+}
+
+uint32_t HGS2EncodeScale(float value, float min_value, float max_value) {
+	if (min_value == max_value || value == min_value)
+		return 0;
+	if (value == max_value)
+		return 255;
+	const double min_log = std::log(double(min_value)), max_log = std::log(double(max_value));
+	return HGS2QuantizeUnit((std::log(double(value)) - min_log) / (max_log - min_log), 255);
+}
+
+float HGS2DecodeScale(float min_value, float max_value, uint32_t code) {
+	if (!code || min_value == max_value)
+		return min_value;
+	if (code >= 255)
+		return max_value;
+	const double min_log = std::log(double(min_value)), max_log = std::log(double(max_value));
+	double value = std::exp(min_log + (max_log - min_log) * (double(code) / 255));
+	value = std::max(double(min_value), std::min(double(max_value), value));
+	return float(value);
+}
+
+int HGS2EncodeSH(float value, float absmax) {
+	if (!absmax || !value)
+		return 0;
+	const double scaled = double(value) / absmax * 127.0;
+	const int code = scaled < 0.0 ? int(std::ceil(scaled - 0.5)) : int(std::floor(scaled + 0.5));
+	return std::max(-127, std::min(127, code));
+}
+
+bool HGS2EncodeQuaternion(const float *source, uint32_t &packed) {
+	float wxyz[4];
+	if (!NormalizeQuaternion(source, wxyz))
+		return false;
+	float xyzw[] = {wxyz[1], wxyz[2], wxyz[3], wxyz[0]};
+	uint32_t largest = 0;
+	for (uint32_t i = 1; i < 4; ++i)
+		if (std::abs(xyzw[i]) > std::abs(xyzw[largest]))
+			largest = i;
+	if (xyzw[largest] < 0.f)
+		for (float &value : xyzw)
+			value = -value;
+	packed = largest << 30;
+	uint32_t shift = 0;
+	for (int i = 3; i >= 0; --i) {
+		if (i == int(largest))
+			continue;
+		const double magnitude = std::min(511.0, std::floor(std::abs(double(xyzw[i])) * (511.0 * 1.4142135623730950488) + 0.5));
+		const uint32_t code = uint32_t(magnitude) | (xyzw[i] < 0.f ? 512u : 0u);
+		packed |= code << shift;
+		shift += 10;
+	}
+	return true;
+}
+
+void HGS2EncodeFloat32Block(const GaussianSplatData &data, uint32_t first, uint32_t count, std::vector<uint8_t> &raw) {
+	size_t cursor = 0;
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *source = data.base.data() + size_t(first + i) * 16;
+		for (uint32_t j = 0; j < 16; ++j, cursor += 4)
+			SetF32(raw.data() + cursor, source[j]);
+	}
+	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
+	if (!non_dc)
+		return;
+	if (!non_dc)
+		return;
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *source = data.higher_sh.data() + size_t(first + i) * non_dc * 4;
+		for (uint32_t j = 0; j < non_dc * 4; ++j, cursor += 4)
+			SetF32(raw.data() + cursor, source[j]);
+	}
+}
+
+bool HGS2EncodeQuantizedBlock(const GaussianSplatData &data, uint32_t first, uint32_t count, std::vector<uint8_t> &raw,
+	std::string &error) {
+	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
+	uint64_t expected_size;
+	if (!HGS2RawBlockSize(GaussianSplatStorage::Quantized, count, non_dc, expected_size) || raw.size() != expected_size)
+		return SetError(&error, "Internal HGS2 quantized block size mismatch");
+	std::array<float, 3> pos_min, pos_max, scale_min, scale_max, dc_min, dc_max;
+	const float *initial = data.base.data() + size_t(first) * 16;
+	for (uint32_t axis = 0; axis < 3; ++axis) {
+		pos_min[axis] = pos_max[axis] = initial[axis];
+		scale_min[axis] = scale_max[axis] = initial[4 + axis];
+		dc_min[axis] = dc_max[axis] = initial[12 + axis];
+	}
+	std::array<float, HGSMaxSHCoefficients> sh_absmax{};
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *record = data.base.data() + size_t(first + i) * 16;
+		for (uint32_t axis = 0; axis < 3; ++axis) {
+			pos_min[axis] = std::min(pos_min[axis], record[axis]);
+			pos_max[axis] = std::max(pos_max[axis], record[axis]);
+			scale_min[axis] = std::min(scale_min[axis], record[4 + axis]);
+			scale_max[axis] = std::max(scale_max[axis], record[4 + axis]);
+			dc_min[axis] = std::min(dc_min[axis], record[12 + axis]);
+			dc_max[axis] = std::max(dc_max[axis], record[12 + axis]);
+		}
+		for (uint32_t k = 0; k < non_dc; ++k)
+			for (uint32_t channel = 0; channel < 3; ++channel) {
+				const float value = data.higher_sh[(size_t(first + i) * non_dc + k) * 4 + channel];
+				sh_absmax[k * 3 + channel] = std::max(sh_absmax[k * 3 + channel], std::abs(value));
+			}
+	}
+
+	size_t cursor = 0;
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, pos_min[axis]);
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, pos_max[axis]);
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, scale_min[axis]);
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, scale_max[axis]);
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, dc_min[axis]);
+	for (uint32_t axis = 0; axis < 3; ++axis, cursor += 4)
+		SetF32(raw.data() + cursor, dc_max[axis]);
+	for (uint32_t k = 0; k < non_dc; ++k)
+		for (uint32_t channel = 0; channel < 3; ++channel, cursor += 4)
+			SetF32(raw.data() + cursor, sh_absmax[k * 3 + channel]);
+
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *record = data.base.data() + size_t(first + i) * 16;
+		for (uint32_t axis = 0; axis < 3; ++axis, cursor += 2)
+			SetU16(raw.data() + cursor, uint16_t(HGS2EncodeLinear(record[axis], pos_min[axis], pos_max[axis], 65535)));
+	}
+	for (uint32_t i = 0; i < count; ++i)
+		raw[cursor++] = uint8_t(HGS2EncodeLinear(data.base[size_t(first + i) * 16 + 3], 0.f, 1.f, 255));
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *record = data.base.data() + size_t(first + i) * 16;
+		for (uint32_t axis = 0; axis < 3; ++axis)
+			raw[cursor++] = uint8_t(HGS2EncodeScale(record[4 + axis], scale_min[axis], scale_max[axis]));
+	}
+	for (uint32_t i = 0; i < count; ++i, cursor += 4) {
+		uint32_t packed;
+		if (!HGS2EncodeQuaternion(data.base.data() + size_t(first + i) * 16 + 8, packed))
+			return SetError(&error, "Cannot encode HGS2 quaternion");
+		SetU32(raw.data() + cursor, packed);
+	}
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *record = data.base.data() + size_t(first + i) * 16;
+		for (uint32_t channel = 0; channel < 3; ++channel)
+			raw[cursor++] = uint8_t(HGS2EncodeLinear(record[12 + channel], dc_min[channel], dc_max[channel], 255));
+	}
+	for (uint32_t i = 0; i < count; ++i)
+		for (uint32_t k = 0; k < non_dc; ++k)
+			for (uint32_t channel = 0; channel < 3; ++channel) {
+				const float value = data.higher_sh[(size_t(first + i) * non_dc + k) * 4 + channel];
+				const int code = HGS2EncodeSH(value, sh_absmax[k * 3 + channel]);
+				raw[cursor++] = uint8_t(code < 0 ? 256 + code : code);
+			}
+	if (cursor != raw.size())
+		return SetError(&error, "Internal HGS2 quantized serialization length mismatch");
+	return true;
+}
+
+bool HGS2DecodeQuantizedBlock(const uint8_t *raw, size_t raw_size, uint32_t count, uint32_t non_dc, float *base, float *higher_sh,
+	std::string &error) {
+	uint64_t expected_size;
+	if (!HGS2RawBlockSize(GaussianSplatStorage::Quantized, count, non_dc, expected_size) || raw_size != expected_size)
+		return SetError(&error, "HGS2 quantized block length mismatch");
+	std::array<float, 3> pos_min, pos_max, scale_min, scale_max, dc_min, dc_max;
+	for (uint32_t axis = 0; axis < 3; ++axis) {
+		pos_min[axis] = GetF32(raw + axis * 4);
+		pos_max[axis] = GetF32(raw + (3 + axis) * 4);
+		scale_min[axis] = GetF32(raw + (6 + axis) * 4);
+		scale_max[axis] = GetF32(raw + (9 + axis) * 4);
+		dc_min[axis] = GetF32(raw + (12 + axis) * 4);
+		dc_max[axis] = GetF32(raw + (15 + axis) * 4);
+		if (!std::isfinite(pos_min[axis]) || !std::isfinite(pos_max[axis]) || pos_min[axis] > pos_max[axis] ||
+			!std::isfinite(scale_min[axis]) || !std::isfinite(scale_max[axis]) || scale_min[axis] <= 0.f ||
+			scale_min[axis] > scale_max[axis] || !std::isfinite(dc_min[axis]) || !std::isfinite(dc_max[axis]) ||
+			dc_min[axis] > dc_max[axis])
+			return SetError(&error, "Invalid HGS2 quantized position/scale/DC range");
+	}
+	std::array<float, HGSMaxSHCoefficients> sh_absmax{};
+	for (uint32_t k = 0; k < non_dc; ++k)
+		for (uint32_t channel = 0; channel < 3; ++channel) {
+			const float value = GetF32(raw + 72 + (k * 3 + channel) * 4);
+			if (!std::isfinite(value) || value < 0.f)
+				return SetError(&error, "Invalid HGS2 quantized SH absolute maximum");
+			sh_absmax[k * 3 + channel] = value;
+		}
+
+	const size_t positions = 72 + size_t(non_dc) * 12;
+	const size_t alpha = positions + size_t(count) * 6;
+	const size_t scales = alpha + count;
+	const size_t rotations = scales + size_t(count) * 3;
+	const size_t dc = rotations + size_t(count) * 4;
+	const size_t sh = dc + size_t(count) * 3;
+	for (uint32_t i = 0; i < count; ++i) {
+		float *record = base + size_t(i) * 16;
+		for (uint32_t axis = 0; axis < 3; ++axis)
+			record[axis] = HGS2DecodeLinear(pos_min[axis], pos_max[axis], GetU16(raw + positions + (size_t(i) * 3 + axis) * 2), 65535);
+		record[3] = HGS2DecodeLinear(0.f, 1.f, raw[alpha + i], 255);
+		for (uint32_t axis = 0; axis < 3; ++axis)
+			record[4 + axis] = HGS2DecodeScale(scale_min[axis], scale_max[axis], raw[scales + size_t(i) * 3 + axis]);
+		record[7] = 0.f;
+		if (!DecodeSPZQuaternion(raw + rotations + size_t(i) * 4, true, record + 8))
+			return SetError(&error, "Invalid HGS2 quantized quaternion");
+		for (uint32_t channel = 0; channel < 3; ++channel)
+			record[12 + channel] = HGS2DecodeLinear(dc_min[channel], dc_max[channel], raw[dc + size_t(i) * 3 + channel], 255);
+		record[15] = 0.f;
+		for (uint32_t j = 0; j < 16; ++j)
+			if (!std::isfinite(record[j]))
+				return SetError(&error, "Non-finite HGS2 quantized base value");
+		for (uint32_t k = 0; k < non_dc; ++k) {
+			float *output = higher_sh + (size_t(i) * non_dc + k) * 4;
+			output[3] = 0.f;
+			for (uint32_t channel = 0; channel < 3; ++channel) {
+				const uint8_t packed = raw[sh + (size_t(i) * non_dc + k) * 3 + channel];
+				const int code = packed < 128 ? int(packed) : int(packed) - 256;
+				const float absmax = sh_absmax[k * 3 + channel];
+				if (code == -128 || (!absmax && code))
+					return SetError(&error, "Invalid HGS2 quantized SH code");
+				if (!absmax || !code)
+					output[channel] = 0.f;
+				else if (code == 127)
+					output[channel] = absmax;
+				else if (code == -127)
+					output[channel] = -absmax;
+				else {
+					double value = double(absmax) * code / 127.0;
+					value = std::max(-double(absmax), std::min(double(absmax), value));
+					output[channel] = float(value);
+				}
+				if (!std::isfinite(output[channel]))
+					return SetError(&error, "Non-finite HGS2 quantized SH value");
+			}
+		}
+	}
+	return true;
+}
+
+bool HGS2InflateBlock(const uint8_t *compressed, uint32_t compressed_size, uint32_t raw_size, uint32_t expected_crc,
+	std::vector<uint8_t> &raw, std::string &error) {
+	try {
+		raw.resize(raw_size);
+	} catch (const std::bad_alloc &) {
+		return SetError(&error, "Insufficient memory for HGS2 block");
+	}
+	mz_stream stream{};
+	stream.next_in = compressed;
+	stream.avail_in = compressed_size;
+	stream.next_out = raw.data();
+	stream.avail_out = raw_size;
+	int status = mz_inflateInit2(&stream, MZ_DEFAULT_WINDOW_BITS);
+	if (status != MZ_OK)
+		return SetError(&error, status == MZ_MEM_ERROR ? "Insufficient memory for HGS2 inflater" : "Cannot initialize HGS2 inflater");
+	status = mz_inflate(&stream, MZ_FINISH);
+	const mz_ulong consumed = stream.total_in, produced = stream.total_out;
+	const int end_status = mz_inflateEnd(&stream);
+	if (status == MZ_MEM_ERROR)
+		return SetError(&error, "Insufficient memory while inflating HGS2 block");
+	if (status != MZ_STREAM_END)
+		return SetError(&error, "Corrupt/truncated HGS2 zlib stream or decompressed size overrun");
+	if (end_status != MZ_OK)
+		return SetError(&error, "Cannot finalize HGS2 inflater");
+	if (consumed != compressed_size)
+		return SetError(&error, "HGS2 compressed block has trailing bytes");
+	if (produced != raw_size)
+		return SetError(&error, "HGS2 decompressed block length mismatch");
+	if (uint32_t(mz_crc32(MZ_CRC32_INIT, raw.data(), raw.size())) != expected_crc)
+		return SetError(&error, "HGS2 raw block CRC32 mismatch");
+	return true;
+}
+
+void HGS2UpdateStats(const GaussianSplatData &data, uint32_t first, uint32_t count, const std::vector<float> &decoded_base,
+	const std::vector<float> &decoded_sh, GaussianSplatWriteStats &stats) {
+	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
+	for (uint32_t i = 0; i < count; ++i) {
+		const float *source = data.base.data() + size_t(first + i) * 16;
+		const float *decoded = decoded_base.data() + size_t(i) * 16;
+		const double dx = double(source[0]) - decoded[0], dy = double(source[1]) - decoded[1], dz = double(source[2]) - decoded[2];
+		stats.max_position_error = std::max(stats.max_position_error, std::sqrt(dx * dx + dy * dy + dz * dz));
+		stats.max_opacity_error = std::max(stats.max_opacity_error, std::abs(double(source[3]) - decoded[3]));
+		for (uint32_t axis = 0; axis < 3; ++axis) {
+			stats.max_scale_relative_error = std::max(stats.max_scale_relative_error,
+				std::abs(double(source[4 + axis]) - decoded[4 + axis]) / double(source[4 + axis]));
+			stats.max_dc_error = std::max(stats.max_dc_error, std::abs(double(source[12 + axis]) - decoded[12 + axis]));
+		}
+		double difference = 0.0, negated_difference = 0.0;
+		for (uint32_t j = 0; j < 4; ++j) {
+			const double d = double(source[8 + j]) - decoded[8 + j], n = double(source[8 + j]) + decoded[8 + j];
+			difference += d * d;
+			negated_difference += n * n;
+		}
+		stats.max_quaternion_error = std::max(stats.max_quaternion_error, std::sqrt(std::min(difference, negated_difference)));
+		for (uint32_t k = 0; k < non_dc; ++k)
+			for (uint32_t channel = 0; channel < 3; ++channel) {
+				const size_t index = (size_t(first + i) * non_dc + k) * 4 + channel;
+				const float value = decoded_sh[(size_t(i) * non_dc + k) * 4 + channel];
+				stats.max_sh_error = std::max(stats.max_sh_error, std::abs(double(data.higher_sh[index]) - value));
+			}
+	}
+}
+
 GaussianSplatDataResult ReadNative(const Data &input, uint64_t byte_cap) {
-	if (!input.GetData() || input.GetSize() < HGSHeaderSize)
-		return ErrorResult("Missing HGS1 header");
+	if (!input.GetData())
+		return ErrorResult("Missing HGS2 header");
+	if (input.GetSize() >= 4 && (!std::memcmp(input.GetData(), "HGS0", 4) || !std::memcmp(input.GetData(), "HGS1", 4)))
+		return ErrorResult("HGS0/HGS1 assets are no longer supported; recompile the asset to HGS2");
+	if (input.GetSize() < HGSHeaderSize)
+		return ErrorResult("Missing HGS2 header");
 	if (input.GetSize() > byte_cap || input.GetSize() > GaussianSplatMaxNativeBytes)
 		return ErrorResult("Native Gaussian asset exceeds the configured byte budget");
 	const uint8_t *bytes = input.GetData();
-	if (std::memcmp(bytes, "HGS1", 4) != 0)
-		return ErrorResult("Unsupported Gaussian magic (expected HGS1; HGS0 is not accepted)");
-	if (GetU16(bytes + 4) != 1 || GetU16(bytes + 6) != 0)
-		return ErrorResult("Unsupported HGS major/minor version");
+	if (std::memcmp(bytes, "HGS2", 4) != 0)
+		return ErrorResult("Unsupported Gaussian magic (expected HGS2; recompile HGS0/HGS1 assets)");
+	if (GetU16(bytes + 4) != 2 || GetU16(bytes + 6) != 0)
+		return ErrorResult("Unsupported HGS2 major/minor version");
 	if (GetU32(bytes + 8) != HGSEndianMarker || GetU32(bytes + 12) != HGSHeaderSize)
-		return ErrorResult("Invalid HGS1 endian marker or header size");
+		return ErrorResult("Invalid HGS2 endian marker or header size");
 	const uint64_t total_size = GetU64(bytes + 16);
 	if (total_size != input.GetSize() || total_size > GaussianSplatMaxNativeBytes)
-		return ErrorResult("HGS1 total length is invalid or exceeds 512 MiB");
+		return ErrorResult("HGS2 total length is invalid or exceeds 512 MiB");
 	const uint32_t flags = GetU32(bytes + 24), degree = GetU32(bytes + 28), count = GetU32(bytes + 32), source_count = GetU32(bytes + 36);
 	if (flags & ~HGSKnownFlags)
-		return ErrorResult("HGS1 contains unsupported required flags");
+		return ErrorResult("HGS2 contains unsupported required flags");
 	if (degree > 3 || !count || count > GaussianSplatMaxCount || source_count < count)
-		return ErrorResult("HGS1 count/source count/SH degree is invalid");
+		return ErrorResult("HGS2 count/source count/SH degree is invalid");
 	if (!!(flags & HGSHigherSH) != (degree > 0))
-		return ErrorResult("HGS1 higher-SH flag disagrees with SH degree");
-	const uint64_t base_offset = GetU64(bytes + 40), base_length = GetU64(bytes + 48), sh_offset = GetU64(bytes + 56), sh_length = GetU64(bytes + 64);
+		return ErrorResult("HGS2 higher-SH flag disagrees with SH degree");
+	const uint32_t storage_value = GetU32(bytes + 40);
+	if (storage_value > uint32_t(GaussianSplatStorage::Quantized))
+		return ErrorResult("Unsupported HGS2 storage encoding");
+	const GaussianSplatStorage storage = static_cast<GaussianSplatStorage>(storage_value);
 	const uint32_t non_dc = CoefficientCount(degree) - 1;
-	uint64_t expected_base, expected_sh, expected_sh_offset, expected_total;
-	if (!CheckedMul(count, 64, expected_base) || !CheckedMul(uint64_t(count) * non_dc, 16, expected_sh) ||
-		!CheckedAdd(HGSHeaderSize, expected_base, expected_sh_offset) || !CheckedAdd(expected_sh_offset, expected_sh, expected_total))
-		return ErrorResult("HGS1 section length overflow");
-	if (base_offset != HGSHeaderSize || base_length != expected_base || sh_offset != expected_sh_offset || sh_length != expected_sh || total_size != expected_total)
-		return ErrorResult("HGS1 section offsets/lengths are not canonical or overlap");
-	if (GetU32(bytes + 96) != 64 || GetU32(bytes + 100) != 16 || GetU32(bytes + 104) != non_dc || GetU32(bytes + 108) != 0)
-		return ErrorResult("HGS1 stride/coefficient count/color encoding is unsupported");
+	const uint32_t expected_block_count = uint32_t((uint64_t(count) + HGSBlockSize - 1) / HGSBlockSize);
+	uint64_t table_size, expected_payload_offset, canonical_size;
+	if (!CheckedMul(expected_block_count, HGSTableEntrySize, table_size) ||
+		!CheckedAdd(HGSHeaderSize, table_size, expected_payload_offset) || !HGS2CanonicalSize(count, non_dc, canonical_size))
+		return ErrorResult("HGS2 section length overflow");
+	if (GetU32(bytes + 44) != HGSBlockSize || GetU32(bytes + 48) != expected_block_count || GetU32(bytes + 52) != HGSTableEntrySize ||
+		GetU64(bytes + 56) != HGSHeaderSize || GetU64(bytes + 64) != expected_payload_offset)
+		return ErrorResult("HGS2 block/table layout is not canonical");
+	const uint64_t payload_offset = GetU64(bytes + 64);
+	if (payload_offset > total_size)
+		return ErrorResult("HGS2 payload offset exceeds the file length");
+	if (canonical_size > GaussianSplatMaxNativeBytes || canonical_size > std::numeric_limits<size_t>::max())
+		return ErrorResult("HGS2 expanded canonical payload exceeds 512 MiB");
+	const Vec3 bounds_min{GetF32(bytes + 72), GetF32(bytes + 76), GetF32(bytes + 80)};
+	const Vec3 bounds_max{GetF32(bytes + 84), GetF32(bytes + 88), GetF32(bytes + 92)};
+	if (!IsFinite(bounds_min) || !IsFinite(bounds_max) || bounds_min.x > bounds_max.x || bounds_min.y > bounds_max.y ||
+		bounds_min.z > bounds_max.z)
+		return ErrorResult("HGS2 bounds are invalid");
 	for (size_t i = 112; i < HGSHeaderSize; ++i)
 		if (bytes[i] != 0)
-			return ErrorResult("HGS1 reserved header bytes must be zero");
+			return ErrorResult("HGS2 reserved header bytes must be zero");
+	if (HGS2HeaderCRC(bytes) != GetU32(bytes + 104))
+		return ErrorResult("HGS2 header CRC32 mismatch");
+	if (uint32_t(mz_crc32(MZ_CRC32_INIT, bytes + HGSHeaderSize, size_t(table_size))) != GetU32(bytes + 108))
+		return ErrorResult("HGS2 table CRC32 mismatch");
+
+	uint64_t expected_offset = payload_offset, uncompressed_size = 0;
+	for (uint32_t block = 0; block < expected_block_count; ++block) {
+		const uint8_t *entry = bytes + HGSHeaderSize + size_t(block) * HGSTableEntrySize;
+		const uint32_t first = block * HGSBlockSize;
+		const uint32_t block_count = std::min(HGSBlockSize, count - first);
+		uint64_t expected_raw_size;
+		if (!HGS2RawBlockSize(storage, block_count, non_dc, expected_raw_size) || expected_raw_size > std::numeric_limits<uint32_t>::max())
+			return ErrorResult("HGS2 raw block length overflow");
+		const uint64_t offset = GetU64(entry);
+		const uint32_t compressed_size = GetU32(entry + 8), raw_size = GetU32(entry + 12);
+		if (offset != expected_offset || !compressed_size || raw_size != expected_raw_size || GetU32(entry + 16) != block_count ||
+			GetU64(entry + 24) != 0)
+			return ErrorResult("HGS2 table entry is invalid or non-canonical");
+		if (expected_offset > total_size || compressed_size > total_size - expected_offset)
+			return ErrorResult("HGS2 compressed block exceeds the file length");
+		if (!CheckedAdd(expected_offset, compressed_size, expected_offset) || !CheckedAdd(uncompressed_size, raw_size, uncompressed_size))
+			return ErrorResult("HGS2 payload length overflow");
+	}
+	if (expected_offset != total_size)
+		return ErrorResult("HGS2 payload blocks are not consecutive or the file has trailing bytes");
+	if (uncompressed_size != GetU64(bytes + 96))
+		return ErrorResult("HGS2 total uncompressed length mismatch");
 
 	GaussianSplatData data;
 	data.count = count;
@@ -322,18 +737,37 @@ GaussianSplatDataResult ReadNative(const Data &input, uint64_t byte_cap) {
 	data.sh_degree = degree;
 	data.antialiased = (flags & HGSAntialiased) != 0;
 	data.normalized = (flags & HGSNormalized) != 0;
-	data.bounds_min = {GetF32(bytes + 72), GetF32(bytes + 76), GetF32(bytes + 80)};
-	data.bounds_max = {GetF32(bytes + 84), GetF32(bytes + 88), GetF32(bytes + 92)};
+	data.bounds_min = bounds_min;
+	data.bounds_max = bounds_max;
+	std::vector<uint8_t> raw;
 	try {
-		data.base.resize(size_t(expected_base / 4));
-		data.higher_sh.resize(size_t(expected_sh / 4));
+		data.base.resize(size_t(count) * 16);
+		data.higher_sh.resize(size_t(count) * non_dc * 4);
 	} catch (const std::bad_alloc &) {
 		return ErrorResult("Insufficient memory for native Gaussian payload");
 	}
-	for (size_t i = 0; i < data.base.size(); ++i)
-		data.base[i] = GetF32(bytes + base_offset + i * 4);
-	for (size_t i = 0; i < data.higher_sh.size(); ++i)
-		data.higher_sh[i] = GetF32(bytes + sh_offset + i * 4);
+	for (uint32_t block = 0; block < expected_block_count; ++block) {
+		const uint8_t *entry = bytes + HGSHeaderSize + size_t(block) * HGSTableEntrySize;
+		const uint32_t first = block * HGSBlockSize;
+		const uint32_t block_count = std::min(HGSBlockSize, count - first);
+		std::string codec_error;
+		if (!HGS2InflateBlock(bytes + size_t(GetU64(entry)), GetU32(entry + 8), GetU32(entry + 12), GetU32(entry + 20), raw, codec_error))
+			return ErrorResult("HGS2 block " + std::to_string(block) + ": " + codec_error);
+		if (storage == GaussianSplatStorage::Float32) {
+			const uint8_t *cursor = raw.data();
+			for (uint32_t i = 0; i < block_count; ++i)
+				for (uint32_t j = 0; j < 16; ++j, cursor += 4)
+					data.base[(size_t(first + i) * 16) + j] = GetF32(cursor);
+			for (uint32_t i = 0; i < block_count; ++i)
+				for (uint32_t j = 0; j < non_dc * 4; ++j, cursor += 4)
+					data.higher_sh[(size_t(first + i) * non_dc * 4) + j] = GetF32(cursor);
+		} else {
+			float *higher = non_dc ? data.higher_sh.data() + size_t(first) * non_dc * 4 : nullptr;
+			if (!HGS2DecodeQuantizedBlock(raw.data(), raw.size(), block_count, non_dc, data.base.data() + size_t(first) * 16, higher,
+				codec_error))
+				return ErrorResult("HGS2 block " + std::to_string(block) + ": " + codec_error);
+		}
+	}
 	std::string validation_error;
 	if (!ValidateCanonical(data, validation_error))
 		return ErrorResult(validation_error);
@@ -890,61 +1324,128 @@ GaussianSplatDataResult ReadGaussianSplatDataFromAssets(const char *name) {
 	return ReadNative(input, size);
 }
 
-bool WriteGaussianSplatData(const GaussianSplatData &data, Data &output, std::string *error) {
+bool WriteGaussianSplatData(const GaussianSplatData &data, Data &output, std::string *error, const GaussianSplatWriteOptions &options,
+	GaussianSplatWriteStats *stats) {
 	output.Reset();
+	if (stats)
+		*stats = {};
 	std::string validation_error;
 	if (!ValidateCanonical(data, validation_error))
 		return SetError(error, validation_error);
+	if (options.storage != GaussianSplatStorage::Float32 && options.storage != GaussianSplatStorage::Quantized)
+		return SetError(error, "Unsupported HGS2 storage encoding");
 	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
-	const uint64_t base_length = uint64_t(data.count) * 64, sh_offset = HGSHeaderSize + base_length;
-	const uint64_t sh_length = uint64_t(data.count) * non_dc * 16, total_size = sh_offset + sh_length;
-	if (total_size > GaussianSplatMaxNativeBytes || total_size > std::numeric_limits<size_t>::max())
+	const uint32_t block_count = (data.count + HGSBlockSize - 1) / HGSBlockSize;
+	uint64_t table_size, payload_offset, canonical_size;
+	if (!CheckedMul(block_count, HGSTableEntrySize, table_size) || !CheckedAdd(HGSHeaderSize, table_size, payload_offset) ||
+		!HGS2CanonicalSize(data.count, non_dc, canonical_size))
+		return SetError(error, "HGS2 output length overflow");
+	if (canonical_size > GaussianSplatMaxNativeBytes || canonical_size > std::numeric_limits<size_t>::max())
+		return SetError(error, "HGS2 expanded canonical payload exceeds 512 MiB");
+	if (payload_offset > GaussianSplatMaxNativeBytes)
 		return SetError(error, "Native Gaussian output exceeds its size budget");
 	try {
+		std::vector<uint8_t> table(size_t(table_size), 0), raw;
+		std::vector<std::vector<uint8_t>> compressed_blocks(block_count);
+		std::vector<float> decoded_base, decoded_sh;
+		GaussianSplatWriteStats actual_stats;
+		uint64_t payload_size = 0, total_size = payload_offset;
+		for (uint32_t block = 0; block < block_count; ++block) {
+			const uint32_t first = block * HGSBlockSize;
+			const uint32_t count = std::min(HGSBlockSize, data.count - first);
+			uint64_t raw_size;
+			if (!HGS2RawBlockSize(options.storage, count, non_dc, raw_size) || raw_size > std::numeric_limits<uint32_t>::max())
+				return SetError(error, "HGS2 raw block length overflow");
+			raw.resize(size_t(raw_size));
+			std::string codec_error;
+			if (options.storage == GaussianSplatStorage::Float32)
+				HGS2EncodeFloat32Block(data, first, count, raw);
+			else if (!HGS2EncodeQuantizedBlock(data, first, count, raw, codec_error))
+				return SetError(error, codec_error);
+			if (stats && options.storage == GaussianSplatStorage::Quantized) {
+				decoded_base.resize(size_t(count) * 16);
+				decoded_sh.resize(size_t(count) * non_dc * 4);
+				float *higher = non_dc ? decoded_sh.data() : nullptr;
+				if (!HGS2DecodeQuantizedBlock(raw.data(), raw.size(), count, non_dc, decoded_base.data(), higher, codec_error))
+					return SetError(error, "Internal HGS2 quantization decode failed: " + codec_error);
+				HGS2UpdateStats(data, first, count, decoded_base, decoded_sh, actual_stats);
+			}
+			if (!CheckedAdd(actual_stats.uncompressed_bytes, raw_size, actual_stats.uncompressed_bytes))
+				return SetError(error, "HGS2 uncompressed length overflow");
+			const uint32_t raw_crc = uint32_t(mz_crc32(MZ_CRC32_INIT, raw.data(), raw.size()));
+			mz_ulong compressed_size = mz_compressBound(static_cast<mz_ulong>(raw.size()));
+			std::vector<uint8_t> &compressed = compressed_blocks[block];
+			compressed.resize(size_t(compressed_size));
+			const int status = mz_compress2(compressed.data(), &compressed_size, raw.data(), static_cast<mz_ulong>(raw.size()), 6);
+			if (status != MZ_OK)
+				return SetError(error, status == MZ_MEM_ERROR ? "Insufficient memory while compressing HGS2 block" : "Cannot compress HGS2 block");
+			if (!compressed_size || compressed_size > std::numeric_limits<uint32_t>::max())
+				return SetError(error, "Invalid HGS2 compressed block length");
+			compressed.resize(size_t(compressed_size));
+			uint64_t next_payload_size;
+			if (!CheckedAdd(payload_size, compressed_size, next_payload_size) || !CheckedAdd(payload_offset, next_payload_size, total_size))
+				return SetError(error, "HGS2 output length overflow");
+			if (total_size > GaussianSplatMaxNativeBytes || total_size > std::numeric_limits<size_t>::max())
+				return SetError(error, "Native Gaussian output exceeds its size budget");
+			uint8_t *entry = table.data() + size_t(block) * HGSTableEntrySize;
+			SetU64(entry, payload_offset + payload_size);
+			SetU32(entry + 8, uint32_t(compressed_size));
+			SetU32(entry + 12, uint32_t(raw_size));
+			SetU32(entry + 16, count);
+			SetU32(entry + 20, raw_crc);
+			payload_size = next_payload_size;
+		}
+		const uint32_t table_crc = uint32_t(mz_crc32(MZ_CRC32_INIT, table.data(), table.size()));
 		if (!output.Resize(size_t(total_size)))
 			return SetError(error, "Cannot allocate native Gaussian output");
-	} catch (const std::bad_alloc &) {
-		return SetError(error, "Cannot allocate native Gaussian output");
-	}
-	output.SetCursor(0);
-	output.Write("HGS1", 4);
-	PutU16(output, 1);
-	PutU16(output, 0);
-	PutU32(output, HGSEndianMarker);
-	PutU32(output, HGSHeaderSize);
-	PutU64(output, total_size);
-	PutU32(output, (data.antialiased ? HGSAntialiased : 0) | (data.normalized ? HGSNormalized : 0) | (data.sh_degree ? HGSHigherSH : 0));
-	PutU32(output, data.sh_degree);
-	PutU32(output, data.count);
-	PutU32(output, data.source_count);
-	PutU64(output, HGSHeaderSize);
-	PutU64(output, base_length);
-	PutU64(output, sh_offset);
-	PutU64(output, sh_length);
-	for (uint32_t axis = 0; axis < 3; ++axis)
-		PutF32(output, data.bounds_min[axis]);
-	for (uint32_t axis = 0; axis < 3; ++axis)
-		PutF32(output, data.bounds_max[axis]);
-	PutU32(output, 64);
-	PutU32(output, 16);
-	PutU32(output, non_dc);
-	PutU32(output, 0);
-	for (uint32_t i = 0; i < 8; ++i)
+		output.SetCursor(0);
+		output.Write("HGS2", 4);
+		PutU16(output, 2);
 		PutU16(output, 0);
-	for (float value : data.base)
-		PutF32(output, value);
-	for (float value : data.higher_sh)
-		PutF32(output, value);
-	if (output.GetCursor() != total_size)
-		return SetError(error, "Internal HGS1 serialization length mismatch");
-	return true;
+		PutU32(output, HGSEndianMarker);
+		PutU32(output, HGSHeaderSize);
+		PutU64(output, total_size);
+		PutU32(output, (data.antialiased ? HGSAntialiased : 0) | (data.normalized ? HGSNormalized : 0) | (data.sh_degree ? HGSHigherSH : 0));
+		PutU32(output, data.sh_degree);
+		PutU32(output, data.count);
+		PutU32(output, data.source_count);
+		PutU32(output, uint32_t(options.storage));
+		PutU32(output, HGSBlockSize);
+		PutU32(output, block_count);
+		PutU32(output, HGSTableEntrySize);
+		PutU64(output, HGSHeaderSize);
+		PutU64(output, payload_offset);
+		for (uint32_t axis = 0; axis < 3; ++axis)
+			PutF32(output, data.bounds_min[axis]);
+		for (uint32_t axis = 0; axis < 3; ++axis)
+			PutF32(output, data.bounds_max[axis]);
+		PutU64(output, actual_stats.uncompressed_bytes);
+		PutU32(output, 0);
+		PutU32(output, table_crc);
+		PutU64(output, 0);
+		PutU64(output, 0);
+		output.Write(table.data(), table.size());
+		for (const std::vector<uint8_t> &compressed : compressed_blocks)
+			output.Write(compressed.data(), compressed.size());
+		if (output.GetCursor() != total_size)
+			return SetError(error, "Internal HGS2 serialization length mismatch");
+		SetU32(output.GetData() + 104, HGS2HeaderCRC(output.GetData()));
+		actual_stats.stored_bytes = total_size;
+		if (stats)
+			*stats = actual_stats;
+		return true;
+	} catch (const std::bad_alloc &) {
+		output.Reset();
+		return SetError(error, "Cannot allocate HGS2 codec buffers");
+	}
 }
 
-bool WriteGaussianSplatDataToFile(const GaussianSplatData &data, const char *path, std::string *error) {
+bool WriteGaussianSplatDataToFile(const GaussianSplatData &data, const char *path, std::string *error, const GaussianSplatWriteOptions &options,
+	GaussianSplatWriteStats *stats) {
 	if (!path || !*path)
 		return SetError(error, "Empty output path");
 	Data output;
-	if (!WriteGaussianSplatData(data, output, error))
+	if (!WriteGaussianSplatData(data, output, error, options, stats))
 		return false;
 	// The complete asset is validated and serialized before the destination is opened.
 	if (!SaveDataToFile(path, output))
