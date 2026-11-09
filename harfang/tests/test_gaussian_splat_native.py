@@ -2,6 +2,8 @@
 """Native HGS1 converter and optional Lua/GPU integration probe (stdlib only)."""
 
 import argparse
+import gzip
+import zlib
 import json
 import math
 from pathlib import Path
@@ -244,6 +246,120 @@ class Harness:
         return self.run(label, [self.gsplatc, source, destination, *options], expected=expected)
 
 
+def spz_payload(version=3, degree=3, count=7):
+    """Small independently packed SPZ fixture with signed positions and all SH channels."""
+    header = struct.pack('<III4B', 0x5053474e, version, count, degree, 12, 1, 0)
+    positions = b''.join(int(value * 4096).to_bytes(3, 'little', signed=True)
+                         for i in range(count) for value in (i - 3, i / 4, i * 2))
+    alpha = bytes(0 if i == 1 else 255 if i == 3 else 128 for i in range(count))
+    colors = bytes(v for i in range(count) for v in (32 + i, 128, 224 - i))
+    scales = bytes([128, 144, 160]) * count
+    if version == 2:
+        rotations = bytes([153, 102, 128]) * count
+    else:
+        # Slots in descending XYZW index order: +100, -200, +50 (signed magnitude).
+        rotations = b''.join(struct.pack('<I', ((i % 4) << 30) | 100 | ((512 + 200) << 10) | (50 << 20))
+                             for i in range(count))
+    sh = bytes((i * 7 + k * 3 + c * 41) % 256 for i in range(count)
+               for k in range((degree + 1) ** 2 - 1) for c in range(3))
+    return header + positions + alpha + colors + scales + rotations + sh
+
+
+def spz_bytes(version=3, degree=3, count=7):
+    return gzip.compress(spz_payload(version, degree, count), mtime=0)
+
+
+def test_spz_values(h):
+    root = h.output / 'cpu'
+    root.mkdir(exist_ok=True)
+    source, destination = root / 'fixture.SPZ', root / 'spz.hgs'
+    for version in (2, 3):
+        source.write_bytes(spz_bytes(version))
+        h.convert(f'spz_v{version}', source, destination, '--max-count', '7')
+        data = read_hgs(destination)
+        require((data['source_count'], data['splat_count'], data['sh_degree'], data['flags']) == (7, 7, 3, 5),
+                'SPZ metadata/AA preservation')
+        for i, base in enumerate(data['base']):
+            require_sequence(base[:3], (i - 3, i / 4, i * 2), 'SPZ signed fixed-point position')
+            require_sequence(base[4:7], (math.exp(-2), math.exp(-1), 1), 'SPZ logarithmic scales')
+            require_float(base[3], 0 if i == 1 else 1 if i == 3 else 128 / 255, 'SPZ alpha')
+            require_sequence(base[12:15], [(v / 255 - .5) / .15 for v in (32 + i, 128, 224 - i)], 'SPZ DC')
+            if version == 2:
+                xyz = [v / 127.5 - 1 for v in (153, 102, 128)]
+                q = [math.sqrt(1 - sum(v * v for v in xyz))] + xyz
+            else:
+                # Independent explicit placement, not an implementation bit-unpacking oracle.
+                a, b, c = [v / (511 * math.sqrt(2)) for v in (50, -200, 100)]
+                largest = math.sqrt(1 - a*a - b*b - c*c)
+                xyzw = list((a, b, c))
+                xyzw.insert(i % 4, largest)
+                q = [xyzw[3], *xyzw[:3]]
+            require_sequence(base[8:12], q, 'SPZ quaternion WXYZ')
+            for k, coefficients in enumerate(data['higher'][i]):
+                require_sequence(coefficients, [((i * 7 + k * 3 + c * 41) % 256 - 128) / 128
+                                                for c in range(3)] + [0], 'SPZ coefficient-major RGB')
+        for degree in range(4):
+            h.convert(f'spz_v{version}_cap{degree}', source, destination, '--max-count', '3',
+                      '--sh-degree', str(degree), '--normalize')
+            reduced = read_hgs(destination)
+            require((reduced['splat_count'], reduced['sh_degree']) == (3, degree), 'SPZ reduction metadata')
+            require(reduced['flags'] & 3 == 3, 'SPZ normalization/AA flags')
+            for j, i in enumerate((1, 3, 5)):
+                original = data['base'][i]
+                require_sequence(reduced['base'][j][:3], [(original[k] - (0, .75, 6)[k]) / 6 for k in range(3)],
+                                 'SPZ normalize full-source bounds')
+                require_sequence(reduced['base'][j][4:7], [v / 6 for v in original[4:7]], 'SPZ normalized scales')
+                require(reduced['higher'][j] == data['higher'][i][:(degree + 1)**2 - 1], 'SPZ truncated SH stride')
+    source.write_bytes(spz_bytes(degree=0))
+    h.convert('spz_no_invented_bands', source, destination)
+    require(read_hgs(destination)['sh_degree'] == 0, 'SPZ invented missing bands')
+    # Valid optional gzip fields including header CRC16 must be accepted.
+    compressed = spz_bytes()
+    header = bytes([31,139,8,30,0,0,0,0,0,255]) + struct.pack('<H',3) + b'xyz' + b'name.spz\0comment\0'
+    header += struct.pack('<H', zlib.crc32(header) & 65535)
+    source.write_bytes(header + compressed[10:])
+    h.convert('spz_gzip_optional_fields', source, destination)
+
+
+def test_spz_rejections(h):
+    root = h.output / 'cpu'
+    source, destination = root / 'invalid.spz', root / 'invalid-spz.hgs'
+    raw = spz_payload()
+    compressed = spz_bytes()
+    invalid = {'empty': b'', 'truncated_gzip': compressed[:-5], 'trailing_gzip': compressed + b'x',
+               'concatenated_gzip': compressed + compressed, 'not_gzip': raw,
+               'raw_v4': struct.pack('<II', 0x5053474e, 4) + bytes(24),
+               'short_header': gzip.compress(raw[:15]), 'short_payload': gzip.compress(raw[:-1]),
+               'trailing_payload': gzip.compress(raw + b'x')}
+    for name, offset, fmt, value in [('magic',0,'<I',0),('version1',4,'<I',1),('version4',4,'<I',4),
+                                    ('count0',8,'<I',0),('huge_count',8,'<I',0xffffffff),
+                                    ('degree4',12,'<B',4),('fractional',13,'<B',255),
+                                    ('extensions',14,'<B',2),('flags',14,'<B',128),('reserved',15,'<B',1)]:
+        bad = bytearray(raw)
+        struct.pack_into(fmt, bad, offset, value)
+        invalid[name] = gzip.compress(bad)
+    # Invalid quaternion belongs to source index 0, discarded by midpoint selection.
+    bad = bytearray(raw)
+    struct.pack_into('<I', bad, 16 + 7 * (9 + 1 + 3 + 3), 0x1fffffff)
+    invalid['dropped_quaternion'] = gzip.compress(bad)
+    for name, offset, value in [('crc',-8,1),('size',-4,1),('deflate',10,255),('gzip_flags',3,224),('method',2,0)]:
+        bad = bytearray(compressed)
+        bad[offset] ^= value
+        if name == 'method': bad[offset] = 0
+        invalid[name] = bad
+    header = bytes([31,139,8,2,0,0,0,0,0,255])
+    invalid['header_crc'] = header + struct.pack('<H', (zlib.crc32(header) ^ 1) & 65535) + compressed[10:]
+    invalid['unterminated_name'] = bytes([31,139,8,8,0,0,0,0,0,255]) + b'A' * 30 + bytes(8)
+    bad = bytearray(compressed)
+    struct.pack_into('<I', bad, len(bad) - 4, 0x7fffffff)
+    invalid['expansion_budget'] = bad
+    for name, payload in invalid.items():
+        source.write_bytes(payload)
+        destination.write_bytes(SENTINEL)
+        h.convert('spz_reject_' + name, source, destination, '--max-count', '3', expected='nonzero')
+        require(destination.read_bytes() == SENTINEL, 'Invalid SPZ overwrote destination')
+
+
 def splat_bytes(count=7):
     return b''.join(struct.pack('<6f8B', i - 3, i * .25, i * 2, .25, .5, 1,
                                 255, 64, 0, 0 if i == 1 else 128, 255, 160, 128, 96)
@@ -286,7 +402,7 @@ def test_binary_splat(h):
         destination.write_bytes(SENTINEL)
         h.convert('splat_' + name, source, destination, '--max-count', '3', expected='nonzero')
         require(destination.read_bytes() == SENTINEL, 'Invalid binary input overwrote destination')
-    unknown = root / 'unknown.spz'
+    unknown = root / 'unknown.unsupported'
     unknown.write_bytes(splat_bytes())
     h.convert('splat_unknown_extension', unknown, destination, expected='nonzero')
 
@@ -533,6 +649,8 @@ def main():
         parser.error("--lua, --module and --shaders must be supplied together")
     h = Harness(args)
     tests = [
+        ("SPZ v2/v3 attributes, SH, reduction and gzip options", test_spz_values),
+        ("SPZ strict container and payload rejection", test_spz_rejections),
         ("binary .splat decoding, normalization and invalid records", test_binary_splat),
         ("midpoint selection, base values and bounds", test_midpoint_selection_and_values),
         ("SH degrees, channel mapping and missing bands", test_sh_degrees_and_missing_bands),

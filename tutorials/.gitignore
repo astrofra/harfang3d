@@ -3,3 +3,6 @@
 /assetc-ubuntu-x64-2.3.0
 
 /resources/gaussian_splatting_native/saari.ply
+
+/resources/gaussian_splatting_native/saari-probe.spz
+/resources/gaussian_splatting_native/saari-probe.ply

@@ -35,8 +35,8 @@ std::string InputExtension(const std::string &path) {
 }
 
 void Usage() {
-	std::cout << "Usage: gsplatc INPUT.ply|INPUT.splat OUTPUT.hgs [--max-count N] [--sh-degree 0..3] [--normalize]\n"
-		"Supported inputs: strict binary_little_endian PLY and headerless 32-byte .splat.\n"
+	std::cout << "Usage: gsplatc INPUT.ply|INPUT.splat|INPUT.spz OUTPUT.hgs [--max-count N] [--sh-degree 0..3] [--normalize]\n"
+		"Supported inputs: strict binary_little_endian PLY, headerless 32-byte .splat, and gzip SPZ versions 2/3 (SH degree 0..3).\n"
 		"Default max-count: 250000. Reduction uses deterministic midpoint uniform selection.\n";
 }
 
@@ -106,8 +106,10 @@ int main(int argc, char **argv) {
 		imported = hg::ImportGaussianSplatPLYFromFile(input.c_str(), options);
 	else if (extension == "splat")
 		imported = hg::ImportGaussianSplatBinaryFromFile(input.c_str(), options);
+	else if (extension == "spz")
+		imported = hg::ImportGaussianSplatSPZFromFile(input.c_str(), options);
 	else {
-		std::cerr << "gsplatc: Unsupported input extension for '" << input << "' (expected .ply or .splat)\n";
+		std::cerr << "gsplatc: Unsupported input extension for '" << input << "' (expected .ply, .splat or .spz)\n";
 		return 2;
 	}
 	if (!imported.ok) {

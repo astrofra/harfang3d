@@ -103,9 +103,9 @@ compiler invalidates the texture's compilation cache automatically.
 
 See [man.GLTF] and [man.FBX] to convert common 3d formats to Harfang resources.
 
-## Gaussian PLY and splat compilation
+## Gaussian PLY, splat and SPZ compilation
 
-`assetc` delegates Gaussian PLY and `.splat` conversion to `gsplatc`, installed in the same
+`assetc` delegates Gaussian PLY, `.splat` and `.spz` conversion to `gsplatc`, installed in the same
 toolchain directory as `texturec` and `shaderc`. For a resource named
 `island.ply`, create `island.ply.meta`:
 
@@ -127,7 +127,7 @@ toolchain directory as `texturec` and `shaderc`. For a resource named
 ```
 
 Compiling the resources produces `island.hgs` in the corresponding output
-directory. Use `-profile preview` to select the example override. PLY and `.splat` resources
+directory. Use `-profile preview` to select the example override. PLY, `.splat` and `.spz` resources
 without `type: "gaussian-splat"` retain pass-through behavior; this converter
 does not import polygon meshes.
 
@@ -153,5 +153,12 @@ Headerless 32-byte `.splat` sources use the same metadata schema, for example
 XYZ position and linear XYZ scale, byte RGBA, and packed byte WXYZ quaternion.
 RGB becomes SH0 coefficients; alpha is linear, including zero. No higher SH
 bands are invented. Every source record is validated before output is written.
-Two opted-in `.ply`/`.splat` sources with the same basename are rejected because
+Two opted-in `.ply`/`.splat`/`.spz` sources with the same basename are rejected because
 they would produce the same HGS file.
+
+Gzip SPZ versions 2 and 3 use the same metadata: `island.spz.meta` produces
+`island.hgs`. Import preserves SH0-3, antialiasing and stored coordinate axes,
+with the same decimation and normalization options. Gzip integrity and exact
+attribute lengths are checked; decompressed input is capped at 512 MiB.
+SPZ v1/v4, extension flags and SH4 are unsupported and fail explicitly.
+SPZ quantization is retained; conversion cannot recover lost source precision.

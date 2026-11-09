@@ -1,4 +1,4 @@
--- Saari: native Gaussian loading, SH evaluation, projection, sorting and drawing.
+-- Saari (compiled from SPZ through assetc): native Gaussian loading, SH evaluation, projection, sorting and drawing.
 -- Drag left to orbit, wheel to dolly, drag right/middle to pan, R to reset.
 -- Keys 1..4 select SH degree 0..3. Escape closes the window.
 local lua_dir = (arg[-1] or ''):match('^(.*[/\\])')
@@ -87,7 +87,7 @@ local renderer, data, model
 local function main()
     renderer = hg.CreateGaussianSplatRendererFromFile(assets .. '/core/gaussian_splatting')
     assert(hg.IsValid(renderer), 'Missing compiled Gaussian shaders; compile resources with assetc first')
-    local loaded = hg.LoadGaussianSplatModelFromFile(assets .. '/gaussian_splatting_native/saari.hgs')
+    local loaded = hg.LoadGaussianSplatModelFromFile(assets .. '/gaussian_splatting_native/saari-probe.hgs')
     assert(loaded.ok, loaded.message)
     model = loaded.model
     data = hg.CreateGaussianSplatRenderData()

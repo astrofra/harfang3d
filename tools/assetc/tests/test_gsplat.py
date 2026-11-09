@@ -52,6 +52,44 @@ class GaussianAssetTests(unittest.TestCase):
         self.assertIn('GaussianSplatOutputCollision', log)
         self.assertFalse(self.hgs.exists())
 
+    def test_spz_metadata_profiles_and_passthrough(self):
+        self.ply.unlink()
+        self.ply = self.source / 'island.spz'
+        self.ply.write_bytes(native.spz_bytes())
+        self.meta = self.ply.with_suffix('.spz.meta')
+        self.hgs = self.compiled / 'island.hgs'
+        self.invoke()
+        self.assertEqual((self.compiled / self.ply.name).read_bytes(), self.ply.read_bytes())
+        self.metadata()
+        self.invoke()
+        data = native.read_hgs(self.hgs)
+        self.assertEqual((data['splat_count'], data['source_count'], data['sh_degree'], data['flags']), (3, 7, 1, 5))
+        self.assertFalse((self.compiled / self.ply.name).exists())
+        direct = self.root / 'direct.hgs'
+        subprocess.run([str(GSPLATC), str(self.ply), str(direct), '--max-count', '3', '--sh-degree', '1'],
+                       check=True, capture_output=True, timeout=60)
+        self.assertEqual(self.hgs.read_bytes(), direct.read_bytes())
+        stamp = self.hgs.stat().st_mtime_ns
+        self.invoke()
+        self.assertEqual(stamp, self.hgs.stat().st_mtime_ns)
+        meta = json.loads(self.meta.read_text())
+        meta['profiles']['preview'] = {'max-count': 2, 'sh-degree': 0}
+        self.meta.write_text(json.dumps(meta))
+        self.invoke('-profile', 'preview')
+        data = native.read_hgs(self.hgs)
+        self.assertEqual((data['splat_count'], data['sh_degree']), (2, 0))
+        # SPZ / PLY collision must also be detected (different compressed dialect).
+        sibling = self.ply.with_suffix('.ply')
+        native.write_ply(sibling, [native.make_record(i) for i in range(7)])
+        sibling.with_suffix('.ply.meta').write_text(self.meta.read_text())
+        self.assertIn('GaussianSplatOutputCollision', self.invoke(success=False))
+        sibling.with_suffix('.ply.meta').unlink()
+        sibling.unlink()
+        self.meta.unlink()
+        self.invoke()
+        self.assertFalse(self.hgs.exists())
+        self.assertEqual((self.compiled / self.ply.name).read_bytes(), self.ply.read_bytes())
+
     def test_binary_splat_optin_and_passthrough(self):
         self.ply.unlink()
         self.ply = self.source / 'plant.splat'

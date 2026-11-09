@@ -6,6 +6,8 @@
 #include "foundation/file.h"
 #include "foundation/rw_interface.h"
 
+#include <miniz/miniz.h>
+
 #include <algorithm>
 #include <array>
 #include <cerrno>
@@ -149,6 +151,33 @@ bool NormalizeQuaternion(const float *source, float *rotation) {
 	rotation[2] = float(y / norm);
 	rotation[3] = float(z / norm);
 	return std::isfinite(rotation[0]) && std::isfinite(rotation[1]) && std::isfinite(rotation[2]) && std::isfinite(rotation[3]);
+}
+
+bool DecodeSPZQuaternion(const uint8_t *packed, bool smallest_three, float *rotation) {
+	float xyzw[4] = {};
+	if (smallest_three) {
+		uint32_t components = GetU32(packed);
+		const uint32_t largest = components >> 30;
+		float sum_squares = 0.f;
+		for (int i = 3; i >= 0; --i) {
+			if (i == int(largest))
+				continue;
+			const uint32_t magnitude = components & 511u, negative = (components >> 9) & 1u;
+			components >>= 10;
+			xyzw[i] = 0.7071067811865475244f * float(magnitude) / 511.f;
+			if (negative)
+				xyzw[i] = -xyzw[i];
+			sum_squares += xyzw[i] * xyzw[i];
+		}
+		xyzw[largest] = std::sqrt(1.0f - sum_squares);
+	} else {
+		for (uint32_t i = 0; i < 3; ++i)
+			xyzw[i] = float(packed[i]) / 127.5f - 1.f;
+		const float sum_squares = xyzw[0] * xyzw[0] + xyzw[1] * xyzw[1] + xyzw[2] * xyzw[2];
+		xyzw[3] = std::sqrt(std::max(0.f, 1.f - sum_squares));
+	}
+	const float wxyz[] = {xyzw[3], xyzw[0], xyzw[1], xyzw[2]};
+	return NormalizeQuaternion(wxyz, rotation);
 }
 
 bool ValidateCanonical(const GaussianSplatData &data, std::string &error) {
@@ -313,6 +342,90 @@ GaussianSplatDataResult ReadNative(const Data &input, uint64_t byte_cap) {
 	result.message = "OK";
 	result.data = std::move(data);
 	return result;
+}
+
+bool InflateSPZGzip(const Data &input, std::vector<uint8_t> &output, std::string &error) {
+	output.clear();
+	const uint8_t *bytes = input.GetData();
+	const size_t size = input.GetSize();
+	if (!bytes || size < 18)
+		return SetError(&error, "Empty or truncated SPZ gzip stream");
+	if (bytes[0] != 0x1f || bytes[1] != 0x8b)
+		return SetError(&error, "SPZ input does not have a gzip header");
+	if (bytes[2] != 8)
+		return SetError(&error, "SPZ gzip compression method is not DEFLATE");
+	const uint8_t flags = bytes[3];
+	if (flags & 0xe0)
+		return SetError(&error, "SPZ gzip header has reserved flags");
+
+	const size_t footer_offset = size - 8;
+	size_t cursor = 10;
+	if (flags & 4) { // FEXTRA
+		if (cursor > footer_offset || footer_offset - cursor < 2)
+			return SetError(&error, "Truncated SPZ gzip FEXTRA length");
+		const uint16_t extra_size = GetU16(bytes + cursor);
+		cursor += 2;
+		if (extra_size > footer_offset - cursor)
+			return SetError(&error, "Truncated SPZ gzip FEXTRA payload");
+		cursor += extra_size;
+	}
+	for (uint8_t flag : {uint8_t(8), uint8_t(16)}) { // FNAME, FCOMMENT
+		if (!(flags & flag))
+			continue;
+		const void *terminator = std::memchr(bytes + cursor, 0, footer_offset - cursor);
+		if (!terminator)
+			return SetError(&error, "Unterminated SPZ gzip FNAME/FCOMMENT field");
+		cursor = size_t(static_cast<const uint8_t *>(terminator) - bytes) + 1;
+	}
+	if (flags & 2) { // FHCRC
+		if (cursor > footer_offset || footer_offset - cursor < 2)
+			return SetError(&error, "Truncated SPZ gzip header CRC");
+		const uint16_t expected = GetU16(bytes + cursor);
+		const uint16_t actual = uint16_t(mz_crc32(MZ_CRC32_INIT, bytes, cursor) & 0xffffu);
+		if (actual != expected)
+			return SetError(&error, "SPZ gzip header CRC mismatch");
+		cursor += 2;
+	}
+	if (cursor >= footer_offset)
+		return SetError(&error, "Missing SPZ raw DEFLATE payload");
+
+	const uint32_t expected_crc = GetU32(bytes + footer_offset);
+	const uint32_t payload_size = GetU32(bytes + footer_offset + 4);
+	if (payload_size > GaussianSplatMaxNativeBytes)
+		return SetError(&error, "SPZ decompressed payload exceeds the 512 MiB budget");
+	try {
+		output.resize(payload_size);
+	} catch (const std::bad_alloc &) {
+		return SetError(&error, "Insufficient memory for SPZ decompressed payload");
+	}
+
+	const size_t deflate_size = footer_offset - cursor;
+	mz_stream stream{};
+	stream.next_in = bytes + cursor;
+	stream.avail_in = static_cast<unsigned int>(deflate_size);
+	std::array<uint8_t, 1> empty_output{};
+	stream.next_out = payload_size ? output.data() : empty_output.data();
+	stream.avail_out = payload_size ? payload_size : 1u;
+	int status = mz_inflateInit2(&stream, -MZ_DEFAULT_WINDOW_BITS);
+	if (status != MZ_OK)
+		return SetError(&error, status == MZ_MEM_ERROR ? "Insufficient memory for SPZ inflater" : "Cannot initialize SPZ raw DEFLATE inflater");
+	status = mz_inflate(&stream, MZ_FINISH);
+	const mz_ulong consumed = stream.total_in, produced = stream.total_out;
+	const int end_status = mz_inflateEnd(&stream);
+	if (status == MZ_MEM_ERROR)
+		return SetError(&error, "Insufficient memory while inflating SPZ payload");
+	if (status != MZ_STREAM_END)
+		return SetError(&error, "Corrupt/truncated SPZ DEFLATE stream or decompressed size overrun");
+	if (end_status != MZ_OK)
+		return SetError(&error, "Cannot finalize SPZ DEFLATE inflater");
+	if (produced != payload_size)
+		return SetError(&error, "SPZ gzip ISIZE does not match the decompressed payload size");
+	if (consumed != deflate_size)
+		return SetError(&error, "SPZ gzip has extra DEFLATE bytes, concatenated members, or trailing data");
+	const uint32_t actual_crc = uint32_t(mz_crc32(MZ_CRC32_INIT, payload_size ? output.data() : empty_output.data(), payload_size));
+	if (actual_crc != expected_crc)
+		return SetError(&error, "SPZ gzip payload CRC32 mismatch");
+	return true;
 }
 
 bool LoadBoundedFile(const char *path, uint64_t cap, Data &data, std::string &error) {
@@ -604,6 +717,152 @@ GaussianSplatDataResult ImportGaussianSplatBinaryFromFile(const char *path, cons
 	if (!LoadBoundedFile(path, GaussianSplatMaxBinaryBytes, input, error))
 		return ErrorResult(error);
 	return ImportGaussianSplatBinary(input, options);
+}
+
+GaussianSplatDataResult ImportGaussianSplatSPZ(const Data &input, const GaussianSplatImportOptions &options) {
+	if (input.GetSize() > GaussianSplatMaxSPZBytes)
+		return ErrorResult("Compressed SPZ input exceeds the 1 GiB input budget");
+	if (!options.max_count || options.max_count > GaussianSplatMaxCount || options.sh_degree > 3)
+		return ErrorResult("Import max-count must be in 1..1048576 and SH degree in 0..3");
+
+	if (input.GetData() && input.GetSize() >= 8 && std::memcmp(input.GetData(), "NGSP", 4) == 0)
+		return ErrorResult("Unsupported plaintext SPZ container (including v4/ZSTD); only gzip SPZ versions 2 and 3 are supported");
+
+	std::vector<uint8_t> payload;
+	std::string error;
+	if (!InflateSPZGzip(input, payload, error))
+		return ErrorResult(error);
+	if (payload.size() < 16)
+		return ErrorResult("Truncated SPZ NGSP header");
+	const uint8_t *header = payload.data();
+	if (std::memcmp(header, "NGSP", 4) != 0)
+		return ErrorResult("Invalid SPZ magic (expected NGSP)");
+	const uint32_t version = GetU32(header + 4), source_count = GetU32(header + 8);
+	if (version != 2 && version != 3)
+		return ErrorResult("Unsupported SPZ version " + std::to_string(version) + "; only gzip versions 2 and 3 are supported");
+	const uint32_t source_degree = header[12], fractional_bits = header[13], flags = header[14];
+	if (source_degree > 3)
+		return ErrorResult("Unsupported SPZ SH degree " + std::to_string(source_degree) + "; only degrees 0..3 are supported");
+	if (flags & 2)
+		return ErrorResult("SPZ extensions are not supported");
+	if (flags & ~1u)
+		return ErrorResult("Unsupported SPZ flags " + std::to_string(flags) + "; only the antialiasing flag is supported");
+	if (header[15] != 0)
+		return ErrorResult("SPZ reserved header byte 15 must be zero");
+	if (fractional_bits > 24)
+		return ErrorResult("SPZ fractionalBits must be in 0..24");
+	if (!source_count)
+		return ErrorResult("SPZ point count must be non-zero");
+
+	const uint32_t source_non_dc = CoefficientCount(source_degree) - 1;
+	const uint32_t source_sh_stride = source_non_dc * 3;
+	const uint32_t rotation_stride = version == 2 ? 3 : 4;
+	const std::array<uint64_t, 6> strides = {9, 1, 3, 3, rotation_stride, source_sh_stride};
+	std::array<uint64_t, 6> offsets{};
+	uint64_t expected_size = 16;
+	for (size_t i = 0; i < offsets.size(); ++i) {
+		uint64_t section_size;
+		offsets[i] = expected_size;
+		if (!CheckedMul(source_count, strides[i], section_size) || !CheckedAdd(expected_size, section_size, expected_size))
+			return ErrorResult("SPZ packed payload length overflow");
+	}
+	if (expected_size != payload.size() || expected_size > GaussianSplatMaxNativeBytes)
+		return ErrorResult("SPZ packed payload length does not exactly match its header or exceeds 512 MiB");
+
+	GaussianSplatData data;
+	data.count = std::min(source_count, options.max_count);
+	data.source_count = source_count;
+	data.sh_degree = std::min(source_degree, options.sh_degree);
+	data.antialiased = (flags & 1) != 0;
+	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
+	uint64_t base_bytes, sh_bytes, sh_offset, native_size;
+	if (!CheckedMul(data.count, 64, base_bytes) || !CheckedMul(uint64_t(data.count) * non_dc, 16, sh_bytes) ||
+		!CheckedAdd(HGSHeaderSize, base_bytes, sh_offset) || !CheckedAdd(sh_offset, sh_bytes, native_size))
+		return ErrorResult("Retained SPZ native payload length overflow");
+	if (native_size > GaussianSplatMaxNativeBytes)
+		return ErrorResult("Retained SPZ native payload exceeds the 512 MiB HGS budget");
+	try {
+		data.base.resize(size_t(data.count) * 16);
+		data.higher_sh.resize(size_t(data.count) * non_dc * 4);
+	} catch (const std::bad_alloc &) {
+		return ErrorResult("Insufficient memory for retained SPZ Gaussian payload");
+	}
+
+	const uint8_t *positions = payload.data() + offsets[0];
+	const uint8_t *alphas = payload.data() + offsets[1];
+	const uint8_t *colors = payload.data() + offsets[2];
+	const uint8_t *scales = payload.data() + offsets[3];
+	const uint8_t *rotations = payload.data() + offsets[4];
+	const uint8_t *sh = payload.data() + offsets[5];
+	const float position_scale = std::ldexp(1.0f, -int(fractional_bits));
+	uint32_t retained = 0;
+	Vec3 bounds_min, bounds_max;
+	Vec3 source_min, source_max;
+	for (uint32_t source = 0; source < source_count; ++source) {
+		const uint64_t numerator = (uint64_t(retained) * 2 + 1) * source_count;
+		const uint32_t selected_index = retained < data.count ? uint32_t(numerator / (uint64_t(data.count) * 2)) : source_count;
+		const bool selected = retained < data.count && source == selected_index;
+		std::array<float, 16> discarded{};
+		float *base = selected ? data.base.data() + size_t(retained) * 16 : discarded.data();
+		for (uint32_t axis = 0; axis < 3; ++axis) {
+			const uint8_t *packed_position = positions + size_t(source) * 9 + axis * 3;
+			const uint32_t raw = uint32_t(packed_position[0]) | (uint32_t(packed_position[1]) << 8) | (uint32_t(packed_position[2]) << 16);
+			int32_t fixed = int32_t(raw & 0x7fffffu);
+			if (raw & 0x800000u)
+				fixed -= 0x800000;
+			base[axis] = float(fixed) * position_scale;
+			base[12 + axis] = float((double(colors[size_t(source) * 3 + axis]) / 255.0 - 0.5) / 0.15);
+			if (!std::isfinite(base[axis]) || !std::isfinite(base[12 + axis]))
+				return ErrorResult("Non-finite SPZ position/DC color at source record " + std::to_string(source));
+			if (!RobustScale(float(scales[size_t(source) * 3 + axis]) / 16.f - 10.f, base[4 + axis]))
+				return ErrorResult("Invalid SPZ exponential scale at source record " + std::to_string(source));
+		}
+		base[3] = float(alphas[source]) / 255.f;
+		if (!std::isfinite(base[3]) || base[3] < 0.f || base[3] > 1.f)
+			return ErrorResult("Invalid SPZ alpha at source record " + std::to_string(source));
+		if (!DecodeSPZQuaternion(rotations + size_t(source) * rotation_stride, version == 3, base + 8))
+			return ErrorResult("Zero/invalid SPZ quaternion at source record " + std::to_string(source));
+		for (uint32_t axis = 0; axis < 3; ++axis) {
+			source_min[axis] = source ? std::min(source_min[axis], base[axis]) : base[axis];
+			source_max[axis] = source ? std::max(source_max[axis], base[axis]) : base[axis];
+		}
+
+		if (selected) {
+			for (uint32_t k = 0; k < non_dc; ++k)
+				for (uint32_t channel = 0; channel < 3; ++channel) {
+					const uint8_t packed_sh = sh[size_t(source) * source_sh_stride + k * 3 + channel];
+					float &value = data.higher_sh[(size_t(retained) * non_dc + k) * 4 + channel];
+					value = (float(packed_sh) - 128.f) / 128.f;
+					if (!std::isfinite(value))
+						return ErrorResult("Non-finite SPZ SH coefficient at source record " + std::to_string(source));
+				}
+			const Vec3 p{base[0], base[1], base[2]};
+			if (!retained)
+				bounds_min = bounds_max = p;
+			else {
+				bounds_min.x = std::min(bounds_min.x, p.x);
+				bounds_min.y = std::min(bounds_min.y, p.y);
+				bounds_min.z = std::min(bounds_min.z, p.z);
+				bounds_max.x = std::max(bounds_max.x, p.x);
+				bounds_max.y = std::max(bounds_max.y, p.y);
+				bounds_max.z = std::max(bounds_max.z, p.z);
+			}
+			++retained;
+		}
+	}
+	if (retained != data.count)
+		return ErrorResult("Internal midpoint selection did not retain the requested SPZ count");
+	data.bounds_min = bounds_min;
+	data.bounds_max = bounds_max;
+	return FinalizeGaussianSplatImport(data, source_min, source_max, options.normalize);
+}
+
+GaussianSplatDataResult ImportGaussianSplatSPZFromFile(const char *path, const GaussianSplatImportOptions &options) {
+	Data input;
+	std::string error;
+	if (!LoadBoundedFile(path, GaussianSplatMaxSPZBytes, input, error))
+		return ErrorResult(error);
+	return ImportGaussianSplatSPZ(input, options);
 }
 
 GaussianSplatDataResult ReadGaussianSplatData(const Data &input) { return ReadNative(input, GaussianSplatMaxNativeBytes); }

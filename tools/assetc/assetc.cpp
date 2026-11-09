@@ -920,7 +920,7 @@ static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::
 	for (const auto &entry : ListDir(FullInputPath(directory).c_str(), DE_File)) {
 		const auto sibling = PathJoin({directory, entry.name});
 		const auto extension = tolower(GetFileExtension(sibling));
-		if (sibling == path || (extension != "ply" && extension != "splat"))
+		if (sibling == path || (extension != "ply" && extension != "splat" && extension != "spz"))
 			continue;
 		if (CutFileExtension(sibling) != CutFileExtension(path))
 			continue;
@@ -2036,7 +2036,7 @@ static AssetType GetAssetFileType(std::string path, const std::vector<std::strin
 	} else if (ext == "geo") {
 		out_files.push_back(path);
 		return AssetType::Geometry;
-	} else if (ext == "ply" || ext == "splat") {
+	} else if (ext == "ply" || ext == "splat" || ext == "spz") {
 		out_files.push_back(path);
 		return AssetType::GaussianSplat;
 	} else if (ext == "lua") {

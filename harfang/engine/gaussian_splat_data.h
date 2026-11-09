@@ -16,6 +16,7 @@ static constexpr uint32_t GaussianSplatDefaultImportCount = 250000;
 static constexpr uint64_t GaussianSplatMaxNativeBytes = 512 * 1024 * 1024;
 static constexpr uint64_t GaussianSplatMaxPLYBytes = 1024 * 1024 * 1024;
 static constexpr uint64_t GaussianSplatMaxBinaryBytes = 1024 * 1024 * 1024;
+static constexpr uint64_t GaussianSplatMaxSPZBytes = 1024 * 1024 * 1024;
 
 // Canonical CPU representation. base contains 16 floats per splat:
 // position.xyz/opacity, linear_scale.xyz/0, rotation.wxyz, dc.rgb/0.
@@ -42,6 +43,10 @@ struct GaussianSplatDataResult {
 // Strict Graphdeco/Postshot binary_little_endian float PLY import.
 GaussianSplatDataResult ImportGaussianSplatPLY(const Data &input, const GaussianSplatImportOptions &options = {});
 GaussianSplatDataResult ImportGaussianSplatPLYFromFile(const char *path, const GaussianSplatImportOptions &options = {});
+
+// Strict gzip SPZ version 2/3 import with SH degree 0..3 and no coordinate conversion.
+GaussianSplatDataResult ImportGaussianSplatSPZ(const Data &input, const GaussianSplatImportOptions &options = {});
+GaussianSplatDataResult ImportGaussianSplatSPZFromFile(const char *path, const GaussianSplatImportOptions &options = {});
 
 // Strict headerless 32-byte .splat import: LE float32 position/linear scale, RGBA and packed WXYZ bytes.
 GaussianSplatDataResult ImportGaussianSplatBinary(const Data &input, const GaussianSplatImportOptions &options = {});

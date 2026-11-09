@@ -4,6 +4,21 @@ Date: 2026-11-09. Base revision: `2114a55`, branch `gsplat`.
 
 This is an implemented, D3D11-tested slice of the [native API study](SPECS_GAUSSIAN_SPLATTING_NATIVE_API_STUDY.md). It provides [Saari](../tutorials/gaussian_splatting_native.lua) and [Houseplant](../tutorials/gaussian_splatting.lua) tutorials using the same native API. This does not complete every proposed engine feature. See the [preparation and launch guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md).
 
+## SPZ import and Saari source migration (2026-11-09)
+
+Native `gsplatc` and assetc now accept gzip SPZ **versions 2 and 3**, with the same `.meta` profiles, deterministic reduction, full-source normalization and HGS1 output as PLY. Source axes, SH0-3 and antialiasing are preserved. Runtime Lua continues to load HGS1 only.
+
+- The local source was copied to `tutorials/resources/gaussian_splatting_native/saari-probe.spz` (gitignored), with tracked `saari-probe.spz.meta`. The verified former local PLY staging copy was removed; the original external PLY was untouched. The tutorial loads `gaussian_splatting_native/saari-probe.hgs`.
+- Copilot/Kimi implemented the bounded gzip decoder, v2/v3 attribute import and CLI routing. Codex reviewed the code, added explicit plaintext-v4 diagnostics, assetc routing/collision handling, source staging, fixtures, documentation and validation. Existing miniz supplies raw DEFLATE and CRC32; no new dependency or Python conversion tool is introduced.
+- Gzip optional fields/header CRC, footer CRC32/ISIZE, exact stream consumption, payload lengths and all source rotations are validated, including discarded records. Decompression is capped at 512 MiB; compressed input remains capped at 1 GiB. Unsupported v1/v4, extension flags and SH4 fail explicitly. This is not an unrestricted import of every SPZ revision.
+- Source: 38,221,014 bytes, SHA-256 `34b352905666508d92d19f5d97b7168588985177bb7992792c0d89f22bc77739`, 1,307,339 splats, SH3, antialiasing. Default output: 250,000 splats, SH3, 76,000,128-byte HGS1, flags 7 (AA/normalization/higher SH).
+- Release converter, assetc and Lua binding build successfully. Nine CPU test groups pass, including independent v2/v3 fixtures, all quaternion largest-component indices, signed positions, SH truncation/stride, alpha endpoints, normalization, optional gzip fields and malformed containers. Eleven assetc integration tests pass, including SPZ metadata/incremental/pass-through/profile handling and SPZ/PLY output collisions. Existing GPU composition/SH/lifetime regression passes.
+- The actual Saari Lua tutorial completes 60 D3D11 frames, two resizes, repeated GC and clean shutdown with the SPZ-derived asset. Screenshot inspected. Evidence is in local `.codex_tmp/gsplat-spz-duo/`.
+
+The full 250,000-record HGS payload was compared with the previous PLY-derived HGS. Maximum normalized position error is 1.44e-6; alpha error 0.001961; relative scale error 3.175%; sign-equivalent quaternion norm error 0.002084. These agree with the source's quantization. The retained PLY has 186 DC channel values outside SPZ's representable range; those are already clipped in the SPZ source. After accounting for this clipping, maximum DC error is 0.013073. Maximum higher-SH error is 0.066407, within the two-stage 4-bit quantization bound (1/16 + 1/256). Conversion cannot recover information removed by SPZ encoding.
+
+Format reference: [Niantic SPZ source](https://github.com/nianticlabs/spz/tree/11312e4ad836ed06e3da2f3d5b633688d17ebebb). Current preparation/launch instructions are in the [Saari guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md). Earlier PLY-only commands below remain historical evidence.
+
 ## Single-file tutorials and Python cleanup (2026-11-09)
 
 The current workflow is documented in the [Houseplant guide](../tutorials/GAUSSIAN_SPLATTING.md) and [Saari guide](../tutorials/GAUSSIAN_SPLATTING_NATIVE.md). Earlier commands and timings below describe the previous staging/launcher workflow and remain historical evidence.
@@ -107,7 +122,7 @@ The application additionally uses one clear view. Local screenshots/logs/manifes
 
 ## Remaining scope
 
-SPZ, `.splat` and glTF adapters, compressed/quantized native storage, streaming, radix/tile sorting, orthographic/reversed-Z projections, nonuniform/reflected instance transforms, explicit prepare/draw tokens, scene serialization, full forward/AAA insertion and arbitrary transparent-mesh composition remain unimplemented. The renderer uses center-depth ordering/occlusion and a configurable per-axis standard-deviation cap, so it is still an approximation for large overlapping Gaussians. The cap defaults to 256 pixels; quads extend to three standard deviations.
+SPZ v1/v4, extension records, SH4 and glTF adapters, compressed/quantized native storage, streaming, radix/tile sorting, orthographic/reversed-Z projections, nonuniform/reflected instance transforms, explicit prepare/draw tokens, scene serialization, full forward/AAA insertion and arbitrary transparent-mesh composition remain unimplemented. The renderer uses center-depth ordering/occlusion and a configurable per-axis standard-deviation cap, so it is still an approximation for large overlapping Gaussians. The cap defaults to 256 pixels; quads extend to three standard deviations.
 
 Metal/OpenGL/Vulkan execution has not been qualified for this native slice. The PLY importer is intentionally strict, not a generic polygon PLY reader. Postshot antialias compensation is implemented, but pixel identity against Postshot is not claimed. Mounted-asset loading is implemented through HARFANG providers; this validation exercised File and FromData.
 

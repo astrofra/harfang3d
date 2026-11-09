@@ -6,7 +6,7 @@ For the thirty-two native JavaScript ports, launch commands and validation, see
 [the JavaScript tutorial guide](README_JS.md).
 
 For the single-file Lua Gaussian tutorials using the native C++ API, see
-[Houseplant](GAUSSIAN_SPLATTING.md) (bundled sample) and [Saari](GAUSSIAN_SPLATTING_NATIVE.md) (local PLY).
+[Houseplant](GAUSSIAN_SPLATTING.md) (bundled sample) and [Saari](GAUSSIAN_SPLATTING_NATIVE.md) (local SPZ/PLY).
 
 To run the tutorials:
 

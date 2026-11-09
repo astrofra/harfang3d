@@ -3596,6 +3596,10 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 
 	gen.bind_function('hg::Normalize', 'hg::Quaternion', ['const hg::Quaternion &q'])
 	gen.bind_function('hg::Inverse', 'hg::Quaternion', ['const hg::Quaternion &q'])
+	gen.bind_function_overloads('hg::Rotate', [
+		('hg::Vec3', ['const hg::Quaternion &q', 'const hg::Vec3 &v'], []),
+		('hg::Vec4', ['const hg::Quaternion &q', 'const hg::Vec4 &v'], [])
+	])
 
 	gen.bind_function('hg::Len2', 'float', ['const hg::Quaternion &q'])
 	gen.bind_function('hg::Len', 'float', ['const hg::Quaternion &q'])
