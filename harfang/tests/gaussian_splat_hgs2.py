@@ -43,7 +43,7 @@ def read_hgs(path):
     lo, hi = struct.unpack_from('<3f', raw, 72), struct.unpack_from('<3f', raw, 84)
     raw_size, checksum, table_checksum = struct.unpack_from('<QII', raw, 96)
     check(total == len(raw) and total <= 512*1024*1024, 'invalid HGS2 file size')
-    check(0 < count <= 1048576 and source_count >= count and degree <= 3 and flags & ~7 == 0, 'invalid HGS2 counts/flags')
+    check(0 < count <= 2097152 and source_count >= count and degree <= 3 and flags & ~7 == 0, 'invalid HGS2 counts/flags')
     check(storage in (0, 1) and block_size == 256 and entry_size == 32 and block_count == (count+255)//256, 'invalid HGS2 storage/blocks')
     check(table_offset == 128 and payload_offset == 128 + 32*block_count and payload_offset <= len(raw), 'invalid HGS2 table offsets')
     check(raw[112:128] == bytes(16) and checksum == header_crc(raw), 'invalid HGS2 header CRC/reserved')

@@ -31,6 +31,7 @@
 #include <foundation/xxhash.h>
 
 #include <engine/forward_pipeline.h>
+#include <engine/gaussian_splat_data.h>
 #include <engine/collision_geometry.h>
 #include <engine/geometry.h>
 #include <engine/meta.h>
@@ -728,7 +729,7 @@ void Copy(std::map<std::string, Hash> &hashes, const std::string &path);
 struct GaussianSplatConfig {
 	std::string storage = "quantized";
 	bool enabled = false;
-	int max_count = 250000;
+	int max_count = int(hg::GaussianSplatDefaultImportCount);
 	int sh_degree = 3;
 	bool normalize = false;
 };
@@ -780,7 +781,7 @@ static bool ValidateGaussianProfileValues(const json &profile_js, const std::str
 		return false;
 	}
 
-	return ValidateGaussianInteger(profile_js, "max-count", 1, 1048576, profile_name, error_message) &&
+	return ValidateGaussianInteger(profile_js, "max-count", 1, int(hg::GaussianSplatMaxCount), profile_name, error_message) &&
 		ValidateGaussianInteger(profile_js, "sh-degree", 0, 3, profile_name, error_message);
 }
 
@@ -963,7 +964,7 @@ static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::
 
 	Data build_ctx;
 	Write(build_ctx, std::string("gsplatc"));
-	Write(build_ctx, uint32_t(2)); // HGS2 storage participates in incremental builds
+	Write(build_ctx, uint32_t(3)); // HGS2 storage and all-source import semantics participate in incremental builds
 	Write(build_ctx, config.max_count);
 	Write(build_ctx, config.sh_degree);
 	Write(build_ctx, config.normalize);
@@ -981,14 +982,15 @@ static void GaussianSplatSource(std::map<std::string, Hash> &hashes, const std::
 		CleanOutputs({hgs_path});
 
 		const auto src = FullInputPath(path), dst = FullOutputPath(hgs_path);
-		auto cmd = format("\"%1\" \"%2\" \"%3\" --max-count %4 --sh-degree %5 --storage %6")
+		auto cmd = format("\"%1\" \"%2\" \"%3\" --sh-degree %4 --storage %5")
 					   .arg(toolchain.gsplatc)
 					   .arg(src)
 					   .arg(dst)
-					   .arg(config.max_count)
 					   .arg(config.sh_degree)
 					   .arg(config.storage)
 					   .str();
+		if (config.max_count > 0)
+			cmd += " --max-count " + std::to_string(config.max_count);
 		if (config.normalize)
 			cmd += " --normalize";
 		PushAsyncProcessTask(path + " (Gaussian Splat)", cmd, cwd, dst);

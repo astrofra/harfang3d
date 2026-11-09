@@ -79,6 +79,10 @@ Vec3 GetGaussianSplatBoundsMax(const GaussianSplatModel &model);
 bool IsGaussianSplatAntialiased(const GaussianSplatModel &model);
 
 // Owns compute/graphics views, never clears the target and never calls Frame.
+// Retained render data reuses projection/sort/gather for identical validated inputs;
+// dispatches is zero on a cache hit, but graphics always redraw against current target/depth.
+// Submissions sharing render data must execute in increasing view order (compute, draw,
+// next compute). Use separate render data for independently ordered cameras/passes.
 // Only rigid view transforms, positive-uniform-scale instance transforms and standard/off-axis
 // perspective projections are supported. Sorting/rasterization use center depth; source-domain
 // color and the pixel-radius cap are explicit approximations, not arbitrary mesh/AAA equivalence.

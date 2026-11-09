@@ -40,7 +40,7 @@ foreach(hg_part vs.sc fs.sc varying.def)
 	hg_stage("${REPO}/tutorials/resources/gaussian_splatting/shaders/gizmo_${hg_part}"
 		"gaussian_splatting/shaders/gizmo_${hg_part}")
 endforeach()
-foreach(hg_model gaussian_splatting/source/plant.splat gaussian_splatting_native/saari-probe.spz)
+foreach(hg_model gaussian_splatting/source/plant.splat gaussian_splatting/source/saari-probe.spz)
 	if(NOT EXISTS "${REPO}/tutorials/resources/${hg_model}")
 		message(FATAL_ERROR "Two-model tutorial requires tutorials/resources/${hg_model}")
 	endif()
@@ -92,11 +92,12 @@ if(NOT hg_result EQUAL 0 OR NOT hg_log MATCHES "[\r\n] +0 failed")
 	message(FATAL_ERROR "Tutorial asset compilation failed; see ${ROOT}/assetc.log")
 endif()
 set(hg_outputs core/gaussian_splatting/clear.sc core/gaussian_splatting/project.sc
-	core/gaussian_splatting/sort.sc core/gaussian_splatting/gather.sc
+	core/gaussian_splatting/sort.sc core/gaussian_splatting/sort_local.sc core/gaussian_splatting/gather.sc
+	core/gaussian_splatting/radix_histogram.sc core/gaussian_splatting/radix_prefix.sc core/gaussian_splatting/radix_scatter.sc
 	core/gaussian_splatting/splat.vsb core/gaussian_splatting/splat.fsb
 	core/shader/imgui.vsb core/shader/imgui.fsb core/shader/imgui_image.vsb core/shader/imgui_image.fsb
 	gaussian_splatting/shaders/gizmo.vsb gaussian_splatting/shaders/gizmo.fsb
-	gaussian_splatting/source/plant.hgs gaussian_splatting_native/saari-probe.hgs)
+	gaussian_splatting/source/plant.hgs gaussian_splatting/source/saari-probe.hgs)
 set(hg_hashes "")
 foreach(hg_output IN LISTS hg_outputs)
 	if(NOT EXISTS "${hg_compiled}/${hg_output}")

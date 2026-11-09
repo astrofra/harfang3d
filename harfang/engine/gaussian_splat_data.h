@@ -11,8 +11,8 @@
 
 namespace hg {
 
-static constexpr uint32_t GaussianSplatMaxCount = 1024 * 1024;
-static constexpr uint32_t GaussianSplatDefaultImportCount = 250000;
+static constexpr uint32_t GaussianSplatMaxCount = 2 * 1024 * 1024;
+static constexpr uint32_t GaussianSplatDefaultImportCount = 0;
 static constexpr uint64_t GaussianSplatMaxNativeBytes = 512 * 1024 * 1024;
 static constexpr uint64_t GaussianSplatMaxPLYBytes = 1024 * 1024 * 1024;
 static constexpr uint64_t GaussianSplatMaxBinaryBytes = 1024 * 1024 * 1024;
@@ -41,7 +41,7 @@ struct GaussianSplatWriteStats {
 };
 
 struct GaussianSplatImportOptions {
-	uint32_t max_count{GaussianSplatDefaultImportCount};
+	uint32_t max_count{GaussianSplatDefaultImportCount}; // 0 retains all source splats; positive values explicitly cap the import.
 	uint32_t sh_degree{3}; // maximum retained degree; never invents missing bands
 	bool normalize{false};
 };

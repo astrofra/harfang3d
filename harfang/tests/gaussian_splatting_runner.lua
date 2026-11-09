@@ -81,6 +81,7 @@ hg.SubmitGaussianSplats = function(first, viewport, view_state, instances, rende
     if index == 2 then sh_degrees[settings.max_sh_degree] = true end
     local result, next_view = original_submit(first, viewport, view_state, instances, renderer, data, settings)
     assert(result.ok, result.message)
+    assert(result.count == hg.GetGaussianSplatCount(loaded_models[index]), 'Submission silently reduced the loaded model')
     assert(next_view == first + 2, 'Compact native schedule must consume two views')
     submissions = submissions + 1
     return result, next_view

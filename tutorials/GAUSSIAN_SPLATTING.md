@@ -15,9 +15,9 @@ assetc -api DX11 -platform windows resources resources_compiled
 lua gaussian_splatting.lua
 ```
 
-The `gaussian_splatting_native` resource directory retains its existing name; it is a dataset directory, not a second tutorial. The Lua application takes no arguments and loads only compiled resources, including the shared Gaussian and ImGui shaders.
+Both datasets are under `gaussian_splatting/source`. The Lua application takes no arguments and loads only compiled resources, including the shared Gaussian and ImGui shaders.
 
-On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The unchanged application has been tested on macOS/arm64, Apple M3 Pro, including a 2560×1440 framebuffer for a 1280×720 client window. See the [Mac validation record](../specifications/GSPLAT_MACOS_VALIDATION.md) for the tested scope and remaining qualification work.
+On macOS compile with `-api MTL -platform osx`; the tutorial selects Metal there. The unchanged application has been tested on macOS/arm64, Apple M3 Pro, including a 2560Ã—1440 framebuffer for a 1280Ã—720 client window. See the [Mac validation record](../specifications/GSPLAT_MACOS_VALIDATION.md) for the tested scope and remaining qualification work.
 
 ## Build and run on macOS
 
@@ -54,7 +54,7 @@ The runtime or launcher supplies module search paths; the tutorial does not modi
 | Model | Compiled resource | Default retained data | Initial pose |
 |---|---|---|---|
 | Houseplant | `gaussian_splatting/source/plant.hgs` | All 113,648 splats, SH0 | Bounds-based framing; 180-degree X rotation converts -Y up |
-| Saari | `gaussian_splatting_native/saari-probe.hgs` | 250,000 of 1,307,339 splats, SH3 | Inside the sky shell, facing the island; -90-degree X rotation converts Z up |
+| Saari | `gaussian_splatting/source/saari-probe.hgs` | All 1,307,339 splats, SH3 | Inside the sky shell, facing the island; -90-degree X rotation converts Z up |
 
 The model transforms apply to positions, covariances and SH directions together. The GUI shows the retained count and stored SH degree. Both models' native buffers are loaded during setup. Per-view GPU scratch is allocated on first submission and retained independently for each model.
 
@@ -69,8 +69,8 @@ The local Saari SPZ v3 source is 38,221,014 bytes, contains SH3 and has antialia
 ```json
 {
   "profiles": {
-    "default": {"type": "gaussian-splat", "max-count": 250000, "sh-degree": 3, "normalize": true, "storage": "quantized"},
-    "preview": {"max-count": 50000, "sh-degree": 1},
+    "default": {"type": "gaussian-splat", "sh-degree": 3, "normalize": true, "storage": "quantized"},
+    "preview": {"max-count": 250000, "sh-degree": 1},
     "reference": {"storage": "float32"}
   }
 }
@@ -78,7 +78,9 @@ The local Saari SPZ v3 source is 38,221,014 bytes, contains SH3 and has antialia
 
 Houseplant's metadata caps storage at SH0 and its `preview` profile selects 30,000 splats. Selected-profile fields override `default` fields, then built-in defaults. Files without `type: "gaussian-splat"` pass through unchanged. See the [Asset Compiler manual](../doc/doc/man.AssetCompiler.md#gaussian-ply-splat-and-spz-compilation) for the complete schema.
 
-Conversion validates every source record, even when decimating. Retained records are evenly spaced midpoint samples; this naive reduction can introduce holes and does not merge splats or compensate opacity. The maximum budget is 1,048,576 records. `normalize: true` centers the full position bounds and scales their largest extent to two units.
+Omitting `max-count` preserves every source splat. Use `assetc -profile preview resources` for the reduced Saari profile above, or provide an explicit positive cap. A profile inherits any explicit cap from `default`; `preview` is never selected automatically. Explicit zero is invalid.
+
+Conversion validates every source record, even when decimating. With an explicit cap, retained records are evenly spaced midpoint samples; this naive reduction can introduce holes and does not merge splats or compensate opacity. The supported maximum is 2,097,152 retained records, subject to a 512 MiB expanded-data budget per model. Exceeding either budget fails rather than silently decimating. `normalize: true` centers the full position bounds and scales their largest extent to two units.
 
 The compiled format is quantized, zlib-compressed HGS2, in blocks of up to 256 splats. Adaptive ranges cover position, scale, DC and higher SH. `assetc -profile reference ...` selects compressed `float32` storage for lossless imported attributes; `-profile default` restores compact storage. The CLI equivalent is `gsplatc INPUT.ply OUTPUT.hgs --storage quantized` (or `float32`). The converter reports file size and reconstruction errors.
 
@@ -106,6 +108,14 @@ Camera navigation uses [`hg.TrackballController`](../doc/doc/TrackballController
 The application clears view 0, submits the selected model through two native views, draws the orientation overlay in the returned next view, then draws ImGui after the overlay. It handles resize and explicitly releases both models, both render-data objects, the shared renderer and GUI resources before render shutdown.
 
 Splats use global center-depth sorting, premultiplied blending and depth testing without depth writes. Submit overlapping Gaussian instances together for a global sort. The native renderer supports translation, rotation and positive uniform scale. Opaque meshes can share the target depth buffer; arbitrary translucent mesh composition and exact per-pixel splat ordering remain outside this implementation.
+
+## Full-count rendering performance
+
+The native renderer keeps uploaded source/SH data in immutable GPU buffers, uses a stable 24-dispatch radix sort above 256 padded entries, and reuses projection/sort/gather when camera and scene inputs are unchanged. The Lua call sequence and SH quality are unchanged. One full Saari instance requires 27 compute dispatches while moving and zero on a cache hit; both cases still draw every frame and use the current target/depth buffer. Compact scheduling continues to reserve two views.
+
+Retain one `GaussianSplatRenderData` per independently rendered camera/pass. Changes to camera, projection, viewport size, model/instance IDs, transforms, opacity, SH degree, radius cap or renderer invalidate cached compute results. Reordering an otherwise identical instance list does not. Multiple submissions sharing render data must execute in increasing BGFX view order; do not reorder their compute/draw dependencies afterward.
+
+Rebuild the Lua module **and compile the updated core shaders** together. The canonical package now also includes `sort_local.sc`, `radix_histogram.sc`, `radix_prefix.sc` and `radix_scatter.sc`; `sort.sc` remains the correctness reference. Existing compiled HGS2 assets need no reconversion. See the [performance report and reproducible benchmark](../specifications/SPECS_GAUSSIAN_SPLATTING_NATIVE_PERFORMANCE.md) for measured results and backend coverage.
 
 ## Building locally on Windows
 

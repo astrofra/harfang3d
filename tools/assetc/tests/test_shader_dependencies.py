@@ -17,7 +17,7 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[3]
 COMPUTE = {f"core/gaussian_splatting/{name}.sc"
-           for name in ("clear", "gather", "project", "sort")}
+           for name in ("clear", "gather", "project", "sort", "sort_local", "radix_histogram", "radix_prefix", "radix_scatter")}
 SHADERS = COMPUTE | {f"{name}.{stage}" for name in (
     "core/gaussian_splatting/splat", "gaussian_splatting/shaders/gizmo")
     for stage in ("vsb", "fsb")}

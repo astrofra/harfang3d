@@ -17,7 +17,7 @@
 namespace hg {
 
 struct GaussianScratch {
-	ComputeBuffer projected, keys[2];
+	ComputeBuffer projected, keys[2], histogram, prefixes;
 	Texture center, basis, color;
 	Model quads;
 	uint32_t capacity{0}, atlas_width{0}, atlas_height{0};
@@ -35,7 +35,8 @@ struct GaussianSplatModelStorage {
 };
 
 struct GaussianSplatRendererStorage {
-	bgfx::ProgramHandle project{BGFX_INVALID_HANDLE}, sort{BGFX_INVALID_HANDLE}, gather{BGFX_INVALID_HANDLE}, clear{BGFX_INVALID_HANDLE},
+	bgfx::ProgramHandle project{BGFX_INVALID_HANDLE}, radix_histogram{BGFX_INVALID_HANDLE},
+		radix_prefix{BGFX_INVALID_HANDLE}, radix_scatter{BGFX_INVALID_HANDLE}, sort_local{BGFX_INVALID_HANDLE}, gather{BGFX_INVALID_HANDLE}, clear{BGFX_INVALID_HANDLE},
 		splat{BGFX_INVALID_HANDLE};
 	ComputeBuffer dummy_sh;
 	bool valid{false};
@@ -44,7 +45,13 @@ struct GaussianSplatRendererStorage {
 
 struct GaussianSplatRenderDataStorage {
 	std::shared_ptr<GaussianScratch> scratch;
-	std::vector<GaussianSplatModel> submitted_models;
+	std::vector<GaussianSplatInstance> submitted_instances;
+	Mat4 cached_view;
+	Mat44 cached_projection;
+	int cached_width{0}, cached_height{0};
+	uint32_t cached_sh_degree{0};
+	float cached_radius{0.f};
+	bool cached_compact{true}, cached_homogeneous_depth{false}, cache_valid{false};
 	GaussianSplatRenderer submitted_renderer;
 	bool valid{false};
 	~GaussianSplatRenderDataStorage();
@@ -96,6 +103,8 @@ void ReleaseScratch(GaussianScratch &scratch) {
 	DestroyComputeBuffer(scratch.projected);
 	DestroyComputeBuffer(scratch.keys[0]);
 	DestroyComputeBuffer(scratch.keys[1]);
+	DestroyComputeBuffer(scratch.histogram);
+	DestroyComputeBuffer(scratch.prefixes);
 	if (IsRenderUp()) {
 		Destroy(scratch.center);
 		Destroy(scratch.basis);
@@ -119,16 +128,13 @@ uint32_t NextPowerOfTwo(uint32_t value) {
 	return result;
 }
 
-uint32_t SortPassCount(uint32_t padded) {
-	uint32_t count = 0;
-	for (uint32_t k = 2; k <= padded; k <<= 1)
-		for (uint32_t stride = k >> 1; stride; stride >>= 1)
-			++count;
-	return count;
-}
+// Small inputs fit one shared-memory sort; larger inputs use eight stable 4-bit digits.
+uint32_t SortPassCount(uint32_t padded) { return padded > 256 ? 24 : (padded > 1 ? 1 : 0); }
+
+uint32_t RadixHistogramSize(uint32_t capacity) { return capacity > 256 ? (capacity / 256) * 16 : 0; }
 
 uint64_t ScratchSize(uint32_t capacity, uint32_t atlas_width, uint32_t atlas_height) {
-	return uint64_t(capacity) * 3 * 16 + uint64_t(capacity) * 2 * 16 + uint64_t(atlas_width) * atlas_height * 3 * 16 + uint64_t(capacity) * 60;
+	return uint64_t(capacity) * 3 * 16 + uint64_t(capacity) * 2 * 16 + uint64_t(atlas_width) * atlas_height * 3 * 16 + uint64_t(capacity) * 60 + uint64_t(RadixHistogramSize(capacity)) * 2 * 16;
 }
 
 std::shared_ptr<GaussianScratch> CreateScratch(uint32_t capacity) {
@@ -144,6 +150,10 @@ std::shared_ptr<GaussianScratch> CreateScratch(uint32_t capacity) {
 	scratch->projected = CreateComputeBuffer(capacity * 3);
 	scratch->keys[0] = CreateComputeBuffer(capacity);
 	scratch->keys[1] = CreateComputeBuffer(capacity);
+	if (capacity > 256) {
+		scratch->histogram = CreateComputeBuffer(RadixHistogramSize(capacity), CBT_UInt4);
+		scratch->prefixes = CreateComputeBuffer(RadixHistogramSize(capacity), CBT_UInt4);
+	}
 	const uint64_t flags = BGFX_TEXTURE_COMPUTE_WRITE | BGFX_SAMPLER_MIN_POINT | BGFX_SAMPLER_MAG_POINT | BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
 	scratch->center = CreateTexture(scratch->atlas_width, scratch->atlas_height, "gsplat-center", flags, bgfx::TextureFormat::RGBA32F);
 	scratch->basis = CreateTexture(scratch->atlas_width, scratch->atlas_height, "gsplat-basis", flags, bgfx::TextureFormat::RGBA32F);
@@ -153,7 +163,8 @@ std::shared_ptr<GaussianScratch> CreateScratch(uint32_t capacity) {
 	for (const auto &list : scratch->quads.lists)
 		valid_quads = valid_quads && bgfx::isValid(list.vertex_buffer) && bgfx::isValid(list.index_buffer);
 	if (!IsValid(scratch->projected) || !IsValid(scratch->keys[0]) || !IsValid(scratch->keys[1]) || !bgfx::isValid(scratch->center.handle) ||
-		!bgfx::isValid(scratch->basis.handle) || !bgfx::isValid(scratch->color.handle) || !valid_quads)
+		!bgfx::isValid(scratch->basis.handle) || !bgfx::isValid(scratch->color.handle) || !valid_quads ||
+		(capacity > 256 && (!IsValid(scratch->histogram) || !IsValid(scratch->prefixes))))
 		return {};
 	scratch->gpu_bytes = ScratchSize(capacity, scratch->atlas_width, scratch->atlas_height);
 	return scratch;
@@ -161,7 +172,8 @@ std::shared_ptr<GaussianScratch> CreateScratch(uint32_t capacity) {
 
 bool ScratchUsable(const std::shared_ptr<GaussianScratch> &scratch, uint32_t capacity) {
 	if (!scratch || scratch->capacity < capacity || !IsValid(scratch->projected) || !IsValid(scratch->keys[0]) || !IsValid(scratch->keys[1]) ||
-		!bgfx::isValid(scratch->center.handle) || !bgfx::isValid(scratch->basis.handle) || !bgfx::isValid(scratch->color.handle) || scratch->quads.lists.empty())
+		!bgfx::isValid(scratch->center.handle) || !bgfx::isValid(scratch->basis.handle) || !bgfx::isValid(scratch->color.handle) || scratch->quads.lists.empty() ||
+		(capacity > 256 && (!IsValid(scratch->histogram) || !IsValid(scratch->prefixes))))
 		return false;
 	for (const auto &list : scratch->quads.lists)
 		if (!bgfx::isValid(list.vertex_buffer) || !bgfx::isValid(list.index_buffer))
@@ -306,17 +318,21 @@ GaussianSplatRenderer CreateRenderer(const Reader &reader, const ReadProvider &p
 	} catch (const std::bad_alloc &) {
 		return {};
 	}
-	const auto project = ShaderPath(shader_root, "project.sc"), sort = ShaderPath(shader_root, "sort.sc");
+	const auto project = ShaderPath(shader_root, "project.sc");
 	const auto gather = ShaderPath(shader_root, "gather.sc"), clear = ShaderPath(shader_root, "clear.sc"), splat = ShaderPath(shader_root, "splat");
 	storage->project = LoadComputeProgram(reader, provider, project.c_str());
-	storage->sort = LoadComputeProgram(reader, provider, sort.c_str());
+	storage->radix_histogram = LoadComputeProgram(reader, provider, ShaderPath(shader_root, "radix_histogram.sc").c_str());
+	storage->radix_prefix = LoadComputeProgram(reader, provider, ShaderPath(shader_root, "radix_prefix.sc").c_str());
+	storage->radix_scatter = LoadComputeProgram(reader, provider, ShaderPath(shader_root, "radix_scatter.sc").c_str());
+	storage->sort_local = LoadComputeProgram(reader, provider, ShaderPath(shader_root, "sort_local.sc").c_str());
 	storage->gather = LoadComputeProgram(reader, provider, gather.c_str());
 	storage->clear = LoadComputeProgram(reader, provider, clear.c_str());
 	storage->splat = LoadProgram(reader, provider, splat.c_str());
 	const float zeros[] = {0.f, 0.f, 0.f, 0.f};
 	const Data dummy_data(zeros, sizeof(zeros));
 	storage->dummy_sh = CreateComputeBufferFromData(dummy_data, CBT_Float4);
-	if (!bgfx::isValid(storage->project) || !bgfx::isValid(storage->sort) || !bgfx::isValid(storage->gather) || !bgfx::isValid(storage->clear) ||
+	if (!bgfx::isValid(storage->project) || !bgfx::isValid(storage->radix_histogram) ||
+		!bgfx::isValid(storage->radix_prefix) || !bgfx::isValid(storage->radix_scatter) || !bgfx::isValid(storage->sort_local) || !bgfx::isValid(storage->gather) || !bgfx::isValid(storage->clear) ||
 		!bgfx::isValid(storage->splat) || !IsValid(storage->dummy_sh))
 		return {};
 	storage->valid = true;
@@ -333,7 +349,7 @@ GaussianSplatRendererStorage::~GaussianSplatRendererStorage() { DestroyRendererS
 GaussianSplatRenderDataStorage::~GaussianSplatRenderDataStorage() {
 	valid = false;
 	scratch.reset();
-	submitted_models.clear();
+	submitted_instances.clear();
 	submitted_renderer = {};
 }
 
@@ -350,8 +366,14 @@ void DestroyRendererStorage(GaussianSplatRendererStorage &storage) {
 	if (IsRenderUp()) {
 		if (bgfx::isValid(storage.project))
 			bgfx::destroy(storage.project);
-		if (bgfx::isValid(storage.sort))
-			bgfx::destroy(storage.sort);
+		if (bgfx::isValid(storage.radix_histogram))
+			bgfx::destroy(storage.radix_histogram);
+		if (bgfx::isValid(storage.radix_prefix))
+			bgfx::destroy(storage.radix_prefix);
+		if (bgfx::isValid(storage.radix_scatter))
+			bgfx::destroy(storage.radix_scatter);
+		if (bgfx::isValid(storage.sort_local))
+			bgfx::destroy(storage.sort_local);
 		if (bgfx::isValid(storage.gather))
 			bgfx::destroy(storage.gather);
 		if (bgfx::isValid(storage.clear))
@@ -359,7 +381,7 @@ void DestroyRendererStorage(GaussianSplatRendererStorage &storage) {
 		if (bgfx::isValid(storage.splat))
 			bgfx::destroy(storage.splat);
 	}
-	storage.project = storage.sort = storage.gather = storage.clear = storage.splat = BGFX_INVALID_HANDLE;
+	storage.project = storage.radix_histogram = storage.radix_prefix = storage.radix_scatter = storage.sort_local = storage.gather = storage.clear = storage.splat = BGFX_INVALID_HANDLE;
 	DestroyComputeBuffer(storage.dummy_sh);
 }
 
@@ -405,8 +427,9 @@ bool IsValid(const GaussianSplatModel &model) {
 	return model.storage && model.storage->valid && IsValid(model.storage->base) && (!model.storage->sh_degree || IsValid(model.storage->higher_sh));
 }
 bool IsValid(const GaussianSplatRenderer &renderer) {
-	return renderer.storage && renderer.storage->valid && bgfx::isValid(renderer.storage->project) && bgfx::isValid(renderer.storage->sort) &&
-		bgfx::isValid(renderer.storage->gather) && bgfx::isValid(renderer.storage->clear) && bgfx::isValid(renderer.storage->splat) &&
+	return renderer.storage && renderer.storage->valid && bgfx::isValid(renderer.storage->project) && bgfx::isValid(renderer.storage->radix_histogram) &&
+		bgfx::isValid(renderer.storage->radix_prefix) && bgfx::isValid(renderer.storage->radix_scatter) &&
+		bgfx::isValid(renderer.storage->sort_local) && bgfx::isValid(renderer.storage->gather) && bgfx::isValid(renderer.storage->clear) && bgfx::isValid(renderer.storage->splat) &&
 		IsValid(renderer.storage->dummy_sh);
 }
 bool IsValid(const GaussianSplatRenderData &render_data) { return render_data.storage && render_data.storage->valid; }
@@ -471,7 +494,7 @@ GaussianSplatSubmitResult SubmitGaussianSplats(bgfx::ViewId &next_view, const iR
 			return SubmitError(initial_view, "Invalid Gaussian instance " + std::to_string(instance.id) + ": " + validation_error);
 		total += instance.model.storage->count;
 		if (total > settings.max_splats || total > GaussianSplatMaxCount)
-			return SubmitError(initial_view, "Gaussian submission exceeds max_splats/1048576");
+			return SubmitError(initial_view, "Gaussian submission exceeds max_splats/" + std::to_string(GaussianSplatMaxCount));
 		work.push_back(item);
 	}
 	std::sort(work.begin(), work.end(), [](const InstanceWork &a, const InstanceWork &b) { return a.instance->id < b.instance->id; });
@@ -505,18 +528,36 @@ GaussianSplatSubmitResult SubmitGaussianSplats(bgfx::ViewId &next_view, const iR
 		auto scratch = CreateScratch(padded);
 		if (!scratch)
 			return SubmitError(initial_view, "Cannot allocate Gaussian persistent scratch resources");
+		render_data.storage->cache_valid = false;
 		render_data.storage->scratch = std::move(scratch);
 	}
 	auto scratch = render_data.storage->scratch;
-	try {
-		render_data.storage->submitted_models.clear();
-		render_data.storage->submitted_models.reserve(work.size());
-		for (const auto &item : work)
-			render_data.storage->submitted_models.push_back(item.instance->model);
-	} catch (const std::bad_alloc &) {
-		return SubmitError(initial_view, "Cannot retain Gaussian models for submission");
+	auto &storage = *render_data.storage;
+	bool cache_hit = storage.cache_valid && storage.submitted_renderer.storage == renderer.storage &&
+		storage.cached_view == view_state.view && storage.cached_projection == view_state.proj &&
+		storage.cached_width == width && storage.cached_height == height && storage.cached_sh_degree == settings.max_sh_degree &&
+		storage.cached_radius == settings.max_pixel_radius && storage.cached_compact == settings.compact_views &&
+		storage.cached_homogeneous_depth == bgfx::getCaps()->homogeneousDepth &&
+		storage.submitted_instances.size() == work.size();
+	for (size_t i = 0; cache_hit && i < work.size(); ++i) {
+		const auto &previous = storage.submitted_instances[i];
+		const auto &current = *work[i].instance;
+		cache_hit = previous.model.storage == current.model.storage && previous.id == current.id &&
+			previous.world == current.world && previous.opacity == current.opacity;
 	}
-	render_data.storage->submitted_renderer = renderer;
+	if (!cache_hit) {
+		// Invalidate before changing retained inputs or issuing any GPU command.
+		storage.cache_valid = false;
+		try {
+			storage.submitted_instances.clear();
+			storage.submitted_instances.reserve(work.size());
+			for (const auto &item : work)
+				storage.submitted_instances.push_back(*item.instance);
+		} catch (const std::bad_alloc &) {
+			return SubmitError(initial_view, "Cannot retain Gaussian instances for submission");
+		}
+		storage.submitted_renderer = renderer;
+	}
 
 	bgfx::ViewId work_view = initial_view;
 	const bgfx::ViewId compact_view = initial_view;
@@ -534,50 +575,81 @@ GaussianSplatSubmitResult SubmitGaussianSplats(bgfx::ViewId &next_view, const iR
 		return SubmitError(next_view, std::string("Gaussian compute dispatch failed: ") + name);
 	};
 
-	Values clear_values{MakeUniformSetValue("u_counts", Vec4(float(padded), 0.f, 0.f, 0.f))};
-	Buffers clear_buffers{MakeComputeBufferBinding(scratch->keys[0], 0, bgfx::Access::Write)};
-	if (!dispatch(renderer.storage->clear, (padded + 63) / 64, 1, clear_values, {}, clear_buffers, "gsplat-clear"))
-		return dispatch_failure("clear");
+	if (!cache_hit) {
+		Values clear_values{MakeUniformSetValue("u_counts", Vec4(float(padded), 0.f, 0.f, 0.f))};
+		Buffers clear_buffers{MakeComputeBufferBinding(scratch->keys[0], 0, bgfx::Access::Write)};
+		if (!dispatch(renderer.storage->clear, (padded + 63) / 64, 1, clear_values, {}, clear_buffers, "gsplat-clear"))
+			return dispatch_failure("clear");
 
-	for (const auto &item : work) {
-		const auto &model = *item.instance->model.storage;
-		const uint32_t degree = std::min(model.sh_degree, settings.max_sh_degree), non_dc = (degree + 1) * (degree + 1) - 1;
-		const uint32_t stored_non_dc = (model.sh_degree + 1) * (model.sh_degree + 1) - 1;
-		Values values;
-		values.reserve(24);
-		values.push_back(MakeUniformSetValue("u_counts", Vec4(float(model.count), float(item.offset), float(padded), float(stored_non_dc))));
-		AddCameraValues(values, view_state, eye, width, height, bgfx::getCaps()->homogeneousDepth);
-		for (uint32_t row = 0; row < 3; ++row)
-			values.push_back(MakeUniformSetValue(("u_world" + std::to_string(row)).c_str(), GetRow(item.instance->world, row)));
-		for (uint32_t row = 0; row < 3; ++row)
-			values.push_back(MakeUniformSetValue(("u_sh" + std::to_string(row)).c_str(), item.transform.sh_rows[row]));
-		values.push_back(MakeUniformSetValue("u_params", Vec4(float(degree), float(non_dc), model.antialiased ? 1.f : 0.f, settings.max_pixel_radius)));
-		values.push_back(MakeUniformSetValue("u_instance", Vec4(item.instance->opacity, 0.f, 0.f, 0.f)));
-		const ComputeBuffer &sh = degree ? model.higher_sh : renderer.storage->dummy_sh;
-		Buffers buffers{MakeComputeBufferBinding(model.base, 0, bgfx::Access::Read), MakeComputeBufferBinding(scratch->projected, 1, bgfx::Access::Write),
-			MakeComputeBufferBinding(scratch->keys[0], 2, bgfx::Access::Write), MakeComputeBufferBinding(sh, 3, bgfx::Access::Read)};
-		if (!dispatch(renderer.storage->project, (model.count + 63) / 64, 1, values, {}, buffers, "gsplat-project"))
-			return dispatch_failure("project");
-	}
-
-	uint32_t current = 0;
-	for (uint32_t k = 2; k <= padded; k <<= 1) {
-		for (uint32_t stride = k >> 1; stride; stride >>= 1) {
-			Values values{MakeUniformSetValue("u_sort", Vec4(float(stride), float(k), float(padded), 0.f))};
-			Buffers buffers{MakeComputeBufferBinding(scratch->keys[current], 0, bgfx::Access::Read),
-				MakeComputeBufferBinding(scratch->keys[current ^ 1], 1, bgfx::Access::Write)};
-			if (!dispatch(renderer.storage->sort, (padded + 63) / 64, 1, values, {}, buffers, "gsplat-sort"))
-				return dispatch_failure("sort");
-			current ^= 1;
+		for (const auto &item : work) {
+			const auto &model = *item.instance->model.storage;
+			const uint32_t degree = std::min(model.sh_degree, settings.max_sh_degree), non_dc = (degree + 1) * (degree + 1) - 1;
+			const uint32_t stored_non_dc = (model.sh_degree + 1) * (model.sh_degree + 1) - 1;
+			Values values;
+			values.reserve(24);
+			values.push_back(MakeUniformSetValue("u_counts", Vec4(float(model.count), float(item.offset), float(padded), float(stored_non_dc))));
+			AddCameraValues(values, view_state, eye, width, height, bgfx::getCaps()->homogeneousDepth);
+			for (uint32_t row = 0; row < 3; ++row)
+				values.push_back(MakeUniformSetValue(("u_world" + std::to_string(row)).c_str(), GetRow(item.instance->world, row)));
+			for (uint32_t row = 0; row < 3; ++row)
+				values.push_back(MakeUniformSetValue(("u_sh" + std::to_string(row)).c_str(), item.transform.sh_rows[row]));
+			values.push_back(MakeUniformSetValue("u_params", Vec4(float(degree), float(non_dc), model.antialiased ? 1.f : 0.f, settings.max_pixel_radius)));
+			values.push_back(MakeUniformSetValue("u_instance", Vec4(item.instance->opacity, 0.f, 0.f, 0.f)));
+			const ComputeBuffer &sh = degree ? model.higher_sh : renderer.storage->dummy_sh;
+			Buffers buffers{MakeComputeBufferBinding(model.base, 0, bgfx::Access::Read), MakeComputeBufferBinding(scratch->projected, 1, bgfx::Access::Write),
+				MakeComputeBufferBinding(scratch->keys[0], 2, bgfx::Access::Write), MakeComputeBufferBinding(sh, 3, bgfx::Access::Read)};
+			if (!dispatch(renderer.storage->project, (model.count + 63) / 64, 1, values, {}, buffers, "gsplat-project"))
+				return dispatch_failure("project");
 		}
+
+		uint32_t current = 0;
+		if (padded > 256) {
+			// Clear/project produce ascending global IDs. Stable LSD scatter preserves
+			// that tie order while sorting all 32 depth bits, including invalid sentinels.
+			const uint32_t blocks = padded / 256;
+			for (uint32_t shift = 0; shift < 32; shift += 4) {
+				Values values{MakeUniformSetValue("u_radix", Vec4(float(shift), float(padded), float(blocks), 0.f))};
+				Buffers histogram_buffers{MakeComputeBufferBinding(scratch->keys[current], 0, bgfx::Access::Read),
+					MakeComputeBufferBinding(scratch->histogram, 1, bgfx::Access::Write)};
+				if (!dispatch(renderer.storage->radix_histogram, blocks, 1, values, {}, histogram_buffers, "gsplat-radix-histogram"))
+					return dispatch_failure("radix-histogram");
+				Buffers prefix_buffers{MakeComputeBufferBinding(scratch->histogram, 0, bgfx::Access::Read),
+					MakeComputeBufferBinding(scratch->prefixes, 1, bgfx::Access::Write)};
+				if (!dispatch(renderer.storage->radix_prefix, 16, 1, values, {}, prefix_buffers, "gsplat-radix-prefix"))
+					return dispatch_failure("radix-prefix");
+				Buffers scatter_buffers{MakeComputeBufferBinding(scratch->keys[current], 0, bgfx::Access::Read),
+					MakeComputeBufferBinding(scratch->prefixes, 1, bgfx::Access::Read),
+					MakeComputeBufferBinding(scratch->keys[current ^ 1], 2, bgfx::Access::Write)};
+				if (!dispatch(renderer.storage->radix_scatter, blocks, 1, values, {}, scatter_buffers, "gsplat-radix-scatter"))
+					return dispatch_failure("radix-scatter");
+				current ^= 1;
+			}
+		} else if (padded > 1) {
+			Values values{MakeUniformSetValue("u_sort", Vec4(0.f, 0.f, float(padded), 1.f))};
+			Buffers buffers{MakeComputeBufferBinding(scratch->keys[0], 0, bgfx::Access::Read),
+				MakeComputeBufferBinding(scratch->keys[1], 1, bgfx::Access::Write)};
+			if (!dispatch(renderer.storage->sort_local, 1, 1, values, {}, buffers, "gsplat-sort-local"))
+				return dispatch_failure("sort-local");
+			current = 1;
+		}
+
+		Values gather_values{MakeUniformSetValue("u_counts", Vec4(float(count), float(padded), float(scratch->atlas_width), float(scratch->atlas_height)))};
+		Buffers gather_buffers{MakeComputeBufferBinding(scratch->projected, 0, bgfx::Access::Read), MakeComputeBufferBinding(scratch->keys[current], 1, bgfx::Access::Read)};
+		std::vector<ImageBinding> gather_images{MakeImageBinding(scratch->center, 2, bgfx::Access::Write), MakeImageBinding(scratch->basis, 3, bgfx::Access::Write),
+			MakeImageBinding(scratch->color, 4, bgfx::Access::Write)};
+		if (!dispatch(renderer.storage->gather, scratch->atlas_width / 8, scratch->atlas_height / 8, gather_values, gather_images, gather_buffers, "gsplat-gather"))
+			return dispatch_failure("gather");
+		storage.cached_view = view_state.view;
+		storage.cached_projection = view_state.proj;
+		storage.cached_width = width;
+		storage.cached_height = height;
+		storage.cached_sh_degree = settings.max_sh_degree;
+		storage.cached_radius = settings.max_pixel_radius;
+		storage.cached_compact = settings.compact_views;
+		storage.cached_homogeneous_depth = bgfx::getCaps()->homogeneousDepth;
+		storage.cache_valid = true;
 	}
 
-	Values gather_values{MakeUniformSetValue("u_counts", Vec4(float(count), float(padded), float(scratch->atlas_width), float(scratch->atlas_height)))};
-	Buffers gather_buffers{MakeComputeBufferBinding(scratch->projected, 0, bgfx::Access::Read), MakeComputeBufferBinding(scratch->keys[current], 1, bgfx::Access::Read)};
-	std::vector<ImageBinding> gather_images{MakeImageBinding(scratch->center, 2, bgfx::Access::Write), MakeImageBinding(scratch->basis, 3, bgfx::Access::Write),
-		MakeImageBinding(scratch->color, 4, bgfx::Access::Write)};
-	if (!dispatch(renderer.storage->gather, scratch->atlas_width / 8, scratch->atlas_height / 8, gather_values, gather_images, gather_buffers, "gsplat-gather"))
-		return dispatch_failure("gather");
 	if (!settings.compact_views)
 		next_view = work_view;
 	else
@@ -635,7 +707,7 @@ void DestroyGaussianSplatRenderData(GaussianSplatRenderData &render_data) {
 	if (render_data.storage) {
 		render_data.storage->valid = false;
 		render_data.storage->scratch.reset();
-		render_data.storage->submitted_models.clear();
+		render_data.storage->submitted_instances.clear();
 		render_data.storage->submitted_renderer = {};
 	}
 }
@@ -651,7 +723,7 @@ void ReleaseGaussianSplatResources() {
 		if (auto storage = weak.lock()) {
 			storage->valid = false;
 			storage->scratch.reset();
-			storage->submitted_models.clear();
+			storage->submitted_instances.clear();
 			storage->submitted_renderer = {};
 		}
 	model_registry.clear();

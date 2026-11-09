@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import tempfile
 import time
@@ -171,10 +172,51 @@ class GaussianAssetTests(unittest.TestCase):
         self.invoke()
         self.assertFalse(self.hgs.exists())
 
+    def test_omitted_cap_preserves_full_source_and_profile_inheritance(self):
+        self.ply.unlink()
+        self.ply = self.source / 'full.splat'
+        self.meta = self.ply.with_suffix('.splat.meta')
+        self.hgs = self.compiled / 'full.hgs'
+        count = 250001
+        self.ply.write_bytes(native.splat_bytes(1) * count)
+        meta = {'profiles': {'default': {'type': 'gaussian-splat'},
+                             'preview': {'max-count': 3}, 'reference': {'storage': 'float32'}}}
+
+        def save():
+            self.meta.write_text(json.dumps(meta), encoding='utf-8')
+
+        def counts():
+            with self.hgs.open('rb') as stream:
+                header = stream.read(128)
+            self.assertEqual(header[:4], b'HGS2')
+            return struct.unpack_from('<II', header, 32)
+
+        save()
+        self.invoke()
+        self.assertEqual(counts(), (count, count))
+        stamp = self.hgs.stat().st_mtime_ns
+        self.assertNotIn('Spawning compile process', self.invoke())
+        self.assertEqual(stamp, self.hgs.stat().st_mtime_ns)
+        self.invoke('-profile', 'preview')
+        self.assertEqual(counts(), (3, count))
+        self.invoke('-profile', 'reference')
+        self.assertEqual(counts(), (count, count))
+
+        # A missing field still inherits an explicit cap from default.
+        meta['profiles']['default']['max-count'] = 5
+        save()
+        self.invoke('-profile', 'reference')
+        self.assertEqual(counts(), (5, count))
+        # Removing that cap must rebuild and restore every point.
+        del meta['profiles']['default']['max-count']
+        save()
+        self.invoke()
+        self.assertEqual(counts(), (count, count))
+
     def test_invalid_metadata_fails_and_recovers(self):
         invalid = ['{', 'null', '[]', '{"profiles": []}', '{"profiles":{"default":[]}}',
                    '{"profiles":{"default":{"type":"gaussian-splat","max-count":1e999}}}']
-        for field, value in [('max-count', 0), ('max-count', 1048577), ('max-count', True),
+        for field, value in [('max-count', 0), ('max-count', 2097153), ('max-count', True),
                              ('max-count', 2.5), ('max-count', 18446744073709551616),
                              ('sh-degree', -1), ('sh-degree', 4), ('sh-degree', '3'),
                              ('normalize', 1), ('type', 42), ('max_count', 3)]:

@@ -7,11 +7,14 @@ namespace hg {
 
 struct ComputeBufferStorage {
 	bgfx::DynamicVertexBufferHandle handle = BGFX_INVALID_HANDLE;
+	bgfx::VertexBufferHandle immutable_handle = BGFX_INVALID_HANDLE;
 	uint32_t count{0};
 	bool writable{false};
 	~ComputeBufferStorage() {
-		if (IsRenderUp() && bgfx::isValid(handle))
-			bgfx::destroy(handle);
+		if (IsRenderUp()) {
+			if (bgfx::isValid(handle)) bgfx::destroy(handle);
+			if (bgfx::isValid(immutable_handle)) bgfx::destroy(immutable_handle);
+		}
 	}
 };
 static std::vector<std::weak_ptr<ComputeBufferStorage>> compute_buffers;
@@ -46,8 +49,8 @@ ComputeFrameStats GetComputeFrameStats() {
 }
 
 static ComputeBuffer MakeBuffer(uint32_t count, ComputeBufferType type, const void *data) {
-	if (!GetComputeCaps().supported || count == 0 || count > (256 * 1024 * 1024 / 16) || (type != CBT_Float4 && type != CBT_UInt4)) {
-		warn("Invalid compute buffer count/type or compute unavailable (maximum 256 MiB)");
+	if (!GetComputeCaps().supported || count == 0 || count > ComputeBufferMaxBytes / 16 || (type != CBT_Float4 && type != CBT_UInt4)) {
+		warn("Invalid compute buffer count/type or compute unavailable (maximum 512 MiB)");
 		return {};
 	}
 	bgfx::VertexLayout layout;
@@ -58,9 +61,13 @@ static ComputeBuffer MakeBuffer(uint32_t count, ComputeBufferType type, const vo
 	auto storage = std::make_shared<ComputeBufferStorage>();
 	storage->count = count;
 	storage->writable = data == nullptr;
-	storage->handle = data ? bgfx::createDynamicVertexBuffer(bgfx::copy(data, count * 16), layout, flags) :
-		bgfx::createDynamicVertexBuffer(count, layout, flags);
-	if (!bgfx::isValid(storage->handle)) return {};
+	// Uploaded inputs never change. A dynamic read-only buffer becomes CPU-writable
+	// D3D11 memory, making large inputs/SH bandwidth-bound over PCIe every frame.
+	if (data)
+		storage->immutable_handle = bgfx::createVertexBuffer(bgfx::copy(data, count * 16), layout, flags);
+	else
+		storage->handle = bgfx::createDynamicVertexBuffer(count, layout, flags);
+	if (!bgfx::isValid(storage->handle) && !bgfx::isValid(storage->immutable_handle)) return {};
 	compute_buffers.erase(std::remove_if(compute_buffers.begin(), compute_buffers.end(),
 		[](const std::weak_ptr<ComputeBufferStorage> &p) { return p.expired(); }), compute_buffers.end());
 	compute_buffers.push_back(storage);
@@ -70,8 +77,8 @@ static ComputeBuffer MakeBuffer(uint32_t count, ComputeBufferType type, const vo
 ComputeBuffer CreateComputeBuffer(uint32_t count, ComputeBufferType type) { return MakeBuffer(count, type, nullptr); }
 
 ComputeBuffer CreateComputeBufferFromData(const Data &data, ComputeBufferType type, uint32_t offset) {
-	if (offset >= data.GetSize() || (data.GetSize() - offset) % 16 || data.GetSize() - offset > 256 * 1024 * 1024) {
-		warn("Compute input must contain complete 16-byte records after its offset, maximum 256 MiB");
+	if (offset >= data.GetSize() || (data.GetSize() - offset) % 16 || data.GetSize() - offset > ComputeBufferMaxBytes) {
+		warn("Compute input must contain complete 16-byte records after its offset, maximum 512 MiB");
 		return {};
 	}
 	return MakeBuffer(uint32_t((data.GetSize() - offset) / 16), type, data.GetData() + offset);
@@ -90,13 +97,17 @@ ComputeBuffer LoadComputeBufferFromAssets(const char *path, ComputeBufferType ty
 	return CreateComputeBufferFromData(data, type, offset);
 }
 
-bool IsValid(const ComputeBuffer &buffer) { return buffer.storage && bgfx::isValid(buffer.storage->handle); }
+bool IsValid(const ComputeBuffer &buffer) { return buffer.storage && (bgfx::isValid(buffer.storage->handle) || bgfx::isValid(buffer.storage->immutable_handle)); }
 uint32_t GetComputeBufferCount(const ComputeBuffer &buffer) { return IsValid(buffer) ? buffer.storage->count : 0; }
 
 void DestroyComputeBuffer(ComputeBuffer &buffer) {
 	if (IsValid(buffer)) {
-		if (IsRenderUp()) bgfx::destroy(buffer.storage->handle);
+		if (IsRenderUp()) {
+			if (bgfx::isValid(buffer.storage->handle)) bgfx::destroy(buffer.storage->handle);
+			if (bgfx::isValid(buffer.storage->immutable_handle)) bgfx::destroy(buffer.storage->immutable_handle);
+		}
 		buffer.storage->handle = BGFX_INVALID_HANDLE;
+		buffer.storage->immutable_handle = BGFX_INVALID_HANDLE;
 	}
 }
 
@@ -144,7 +155,12 @@ static bool DispatchComputeImpl(bgfx::ViewId view_id, bgfx::ProgramHandle progra
 		}
 	if (!debug_name.empty()) bgfx::setViewName(view_id, debug_name.c_str());
 	SetUniforms(values, textures);
-	for (const auto &b : buffers) bgfx::setBuffer(uint8_t(b.stage), b.buffer.storage->handle, b.access);
+	for (const auto &b : buffers) {
+		if (bgfx::isValid(b.buffer.storage->immutable_handle))
+			bgfx::setBuffer(uint8_t(b.stage), b.buffer.storage->immutable_handle, b.access);
+		else
+			bgfx::setBuffer(uint8_t(b.stage), b.buffer.storage->handle, b.access);
+	}
 	for (const auto &i : images) bgfx::setImage(uint8_t(i.stage), i.texture.handle, i.mip, i.access);
 	bgfx::dispatch(view_id, program, x, y, z);
 	return true;
@@ -167,7 +183,7 @@ bool DispatchCompute(bgfx::ViewId &view_id, bgfx::ProgramHandle program, uint32_
 
 Model CreateComputeQuadModel(uint32_t count) {
 	Model model;
-	if (!IsRenderUp() || !count || count > 1024 * 1024) return model;
+	if (!IsRenderUp() || !count || count > ComputeQuadMaxCount) return model;
 	bgfx::VertexLayout layout;
 	layout.begin().add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float).end();
 	for (uint32_t base = 0; base < count; base += 16384) {

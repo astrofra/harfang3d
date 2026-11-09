@@ -205,7 +205,7 @@ bool DecodeSPZQuaternion(const uint8_t *packed, bool smallest_three, float *rota
 
 bool ValidateCanonical(const GaussianSplatData &data, std::string &error) {
 	if (!data.count || data.count > GaussianSplatMaxCount)
-		return SetError(&error, "Gaussian count must be in 1..1048576");
+		return SetError(&error, "Gaussian count must be in 1.." + std::to_string(GaussianSplatMaxCount));
 	if (data.source_count < data.count)
 		return SetError(&error, "Gaussian source count is smaller than retained count");
 	if (data.sh_degree > 3)
@@ -322,6 +322,30 @@ bool HGS2RawBlockSize(GaussianSplatStorage storage, uint32_t count, uint32_t non
 bool HGS2CanonicalSize(uint32_t count, uint32_t non_dc, uint64_t &size) {
 	uint64_t base, sh;
 	return CheckedMul(count, 64, base) && CheckedMul(uint64_t(count) * non_dc, 16, sh) && CheckedAdd(base, sh, size);
+}
+
+bool ValidateImportOptions(const GaussianSplatImportOptions &options, std::string &error) {
+	if (options.max_count > GaussianSplatMaxCount || options.sh_degree > 3)
+		return SetError(&error, "Import max-count must be 0 (all source splats) or in 1.." + std::to_string(GaussianSplatMaxCount) +
+			" and SH degree in 0..3");
+	return true;
+}
+
+bool PrepareImport(GaussianSplatData &data, uint32_t source_count, uint32_t degree, const GaussianSplatImportOptions &options, std::string &error) {
+	if (!options.max_count && source_count > GaussianSplatMaxCount)
+		return SetError(&error, "Source Gaussian count " + std::to_string(source_count) + " exceeds the supported " +
+			std::to_string(GaussianSplatMaxCount) + "-splat limit; explicitly set max_count (CLI: --max-count) to reduce the input");
+	data.count = options.max_count ? std::min(source_count, options.max_count) : source_count;
+	data.source_count = source_count;
+	data.sh_degree = degree;
+	const uint32_t non_dc = CoefficientCount(degree) - 1;
+	uint64_t native_size;
+	if (!HGS2CanonicalSize(data.count, non_dc, native_size))
+		return SetError(&error, "Retained Gaussian expanded CPU payload length overflow");
+	if (native_size > GaussianSplatMaxNativeBytes || native_size > std::numeric_limits<size_t>::max())
+		return SetError(&error, "Retained Gaussian expanded CPU payload requires " + std::to_string(native_size) +
+			" bytes, exceeding the 512 MiB budget; reduce max_count/sh_degree (CLI: --max-count/--sh-degree)");
+	return true;
 }
 
 uint32_t HGS2HeaderCRC(const uint8_t *header) {
@@ -889,8 +913,9 @@ GaussianSplatDataResult ImportGaussianSplatPLY(const Data &input, const Gaussian
 		return ErrorResult("Empty or truncated Gaussian PLY");
 	if (input.GetSize() > GaussianSplatMaxPLYBytes)
 		return ErrorResult("Gaussian PLY exceeds the 1 GiB input budget");
-	if (!options.max_count || options.max_count > GaussianSplatMaxCount || options.sh_degree > 3)
-		return ErrorResult("Import max-count must be in 1..1048576 and SH degree in 0..3");
+	std::string error;
+	if (!ValidateImportOptions(options, error))
+		return ErrorResult(error);
 
 	size_t cursor = 0, payload_offset = 0;
 	uint32_t source_count = 0;
@@ -993,9 +1018,8 @@ GaussianSplatDataResult ImportGaussianSplatPLY(const Data &input, const Gaussian
 		return ErrorResult("PLY payload length does not exactly match vertex count and property stride");
 
 	GaussianSplatData data;
-	data.count = std::min(source_count, options.max_count);
-	data.source_count = source_count;
-	data.sh_degree = degree;
+	if (!PrepareImport(data, source_count, degree, options, error))
+		return ErrorResult(error);
 	data.antialiased = antialiased;
 	try {
 		data.base.resize(size_t(data.count) * 16);
@@ -1080,14 +1104,14 @@ GaussianSplatDataResult ImportGaussianSplatBinary(const Data &input, const Gauss
 		return ErrorResult("Gaussian .splat input exceeds the 1 GiB input budget");
 	if (input.GetSize() % SplatRecordSize)
 		return ErrorResult("Gaussian .splat input length must be an exact multiple of 32 bytes");
-	if (!options.max_count || options.max_count > GaussianSplatMaxCount || options.sh_degree > 3)
-		return ErrorResult("Import max-count must be in 1..1048576 and SH degree in 0..3");
+	std::string error;
+	if (!ValidateImportOptions(options, error))
+		return ErrorResult(error);
 
 	const uint32_t source_count = uint32_t(input.GetSize() / SplatRecordSize);
 	GaussianSplatData data;
-	data.count = std::min(source_count, options.max_count);
-	data.source_count = source_count;
-	data.sh_degree = 0;
+	if (!PrepareImport(data, source_count, 0, options, error))
+		return ErrorResult(error);
 	try {
 		data.base.resize(size_t(data.count) * 16);
 	} catch (const std::bad_alloc &) {
@@ -1156,14 +1180,14 @@ GaussianSplatDataResult ImportGaussianSplatBinaryFromFile(const char *path, cons
 GaussianSplatDataResult ImportGaussianSplatSPZ(const Data &input, const GaussianSplatImportOptions &options) {
 	if (input.GetSize() > GaussianSplatMaxSPZBytes)
 		return ErrorResult("Compressed SPZ input exceeds the 1 GiB input budget");
-	if (!options.max_count || options.max_count > GaussianSplatMaxCount || options.sh_degree > 3)
-		return ErrorResult("Import max-count must be in 1..1048576 and SH degree in 0..3");
+	std::string error;
+	if (!ValidateImportOptions(options, error))
+		return ErrorResult(error);
 
 	if (input.GetData() && input.GetSize() >= 8 && std::memcmp(input.GetData(), "NGSP", 4) == 0)
 		return ErrorResult("Unsupported plaintext SPZ container (including v4/ZSTD); only gzip SPZ versions 2 and 3 are supported");
 
 	std::vector<uint8_t> payload;
-	std::string error;
 	if (!InflateSPZGzip(input, payload, error))
 		return ErrorResult(error);
 	if (payload.size() < 16)
@@ -1204,17 +1228,10 @@ GaussianSplatDataResult ImportGaussianSplatSPZ(const Data &input, const Gaussian
 		return ErrorResult("SPZ packed payload length does not exactly match its header or exceeds 512 MiB");
 
 	GaussianSplatData data;
-	data.count = std::min(source_count, options.max_count);
-	data.source_count = source_count;
-	data.sh_degree = std::min(source_degree, options.sh_degree);
+	if (!PrepareImport(data, source_count, std::min(source_degree, options.sh_degree), options, error))
+		return ErrorResult(error);
 	data.antialiased = (flags & 1) != 0;
 	const uint32_t non_dc = CoefficientCount(data.sh_degree) - 1;
-	uint64_t base_bytes, sh_bytes, sh_offset, native_size;
-	if (!CheckedMul(data.count, 64, base_bytes) || !CheckedMul(uint64_t(data.count) * non_dc, 16, sh_bytes) ||
-		!CheckedAdd(HGSHeaderSize, base_bytes, sh_offset) || !CheckedAdd(sh_offset, sh_bytes, native_size))
-		return ErrorResult("Retained SPZ native payload length overflow");
-	if (native_size > GaussianSplatMaxNativeBytes)
-		return ErrorResult("Retained SPZ native payload exceeds the 512 MiB HGS budget");
 	try {
 		data.base.resize(size_t(data.count) * 16);
 		data.higher_sh.resize(size_t(data.count) * non_dc * 4);

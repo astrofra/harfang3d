@@ -114,7 +114,6 @@ toolchain directory as `texturec` and `shaderc`. For a resource named
   "profiles": {
     "default": {
       "type": "gaussian-splat",
-      "max-count": 250000,
       "sh-degree": 3,
       "normalize": false
     },
@@ -138,10 +137,21 @@ loads this compiled asset through the native Gaussian model API.
 
 Parameter | Default | Meaning
 ----------|---------|--------
-`max-count` | 250000 | Maximum retained splats, integer 1–1048576. Naive decimation can reduce opacity coverage.
+`max-count` | All source splats | Optional explicit reduction cap, integer 1–2097152. Omit it to retain every source splat. Explicit zero is invalid. Naive decimation can reduce opacity coverage.
 `sh-degree` | 3 | Maximum stored spherical-harmonics degree, integer 0–3. Missing source bands are not invented.
 `storage` | `quantized` | `quantized` for adaptive quantization and block compression; `float32` for lossless canonical attributes with block compression.
 `normalize` | false | Boolean. Center the full source position bounds and uniformly scale their largest extent to two units; otherwise preserve source coordinates.
+
+Selected profiles inherit each missing field from `default`. An explicit cap in
+`default` therefore also applies to `reference` or another profile unless that
+profile supplies its own cap. With no effective `max-count`, `assetc` does not
+pass `--max-count` to `gsplatc`, whose default also retains every splat.
+
+The native implementation accepts up to 2,097,152 retained splats and 512 MiB of
+expanded canonical data per model. Files exceeding these limits fail with an
+error; they are never reduced silently. Request a smaller `max-count` or SH
+degree explicitly if needed. Compression reduces disk size, not the expanded
+CPU/GPU memory required to load the model.
 
 Metadata changes participate in incremental compilation. Invalid Gaussian
 settings, missing `gsplatc`, unsupported source schemas and converter failures

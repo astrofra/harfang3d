@@ -37,7 +37,8 @@ std::string InputExtension(const std::string &path) {
 void Usage() {
 	std::cout << "Usage: gsplatc INPUT.ply|INPUT.splat|INPUT.spz OUTPUT.hgs [--max-count N] [--sh-degree 0..3] [--normalize] [--storage quantized|float32]\n"
 		"Supported inputs: strict binary_little_endian PLY, headerless 32-byte .splat, and gzip SPZ versions 2/3 (SH degree 0..3).\n"
-		"Default storage: quantized HGS2 with compressed blocks. Default max-count: 250000. Reduction uses deterministic midpoint uniform selection.\n";
+		"Default storage: quantized HGS2 with compressed blocks. Omitted --max-count retains all source splats; explicit reduction requires 1.."
+		<< hg::GaussianSplatMaxCount << ". Reduction uses deterministic midpoint uniform selection.\n";
 }
 
 } // namespace
@@ -66,7 +67,7 @@ int main(int argc, char **argv) {
 			}
 			if (arg == "--max-count") {
 				if (max_seen || !value || value > hg::GaussianSplatMaxCount) {
-					std::cerr << "--max-count must be unique and in 1..1048576\n";
+					std::cerr << "--max-count must be unique and in 1.." << hg::GaussianSplatMaxCount << " (omit it to retain all source splats)\n";
 					return 2;
 				}
 				max_seen = true;

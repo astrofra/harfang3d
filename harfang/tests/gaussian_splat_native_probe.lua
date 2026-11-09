@@ -274,7 +274,7 @@ local function probe()
     local result_b
     result_b, view = submit_ok(start, order_b, identity_view,
         {make_instance(green, 2), make_instance(red, 1)}, renderer, render_data, make_settings())
-    assert(view - start == 2 and result_b.count == 2, 'Second compact submission view count')
+    assert(view - start == 2 and result_b.count == 2 and result_b.dispatches == 0, 'Reordered identical instances must reuse cached compute')
     view = capture(order_b, view)
     clear_target(separate, view, black, 1)
     start = view + 1
@@ -295,6 +295,79 @@ local function probe()
     expect_same(order_a, separate, 'compact versus separate view schedule')
     save(order_a, 'order_compact.png')
     save(separate, 'order_separate.png')
+
+    -- Compare every cached/invalidation result to independent, freshly computed pixels.
+    local cached_data = hg.CreateGaussianSplatRenderData()
+    render_data_handles[#render_data_handles + 1] = cached_data
+    local cache_renderer = hg.CreateGaussianSplatRendererFromFile(shaders)
+    renderers[#renderers + 1] = cache_renderer
+    local radix_red = load_model('radix_red')
+    local cache_instances = {make_instance(red, 1)}
+    local cache_state, cache_settings = identity_view, make_settings()
+    local selected_renderer = renderer
+    local cached_target, fresh_target = make_target('cache'), make_target('fresh')
+    local function check_cache(label, hit, depth)
+        local fresh_data = hg.CreateGaussianSplatRenderData()
+        render_data_handles[#render_data_handles + 1] = fresh_data
+        clear_target(cached_target, 0, black, depth or 1)
+        local result, next = submit_ok(1, cached_target, cache_state, cache_instances,
+            selected_renderer, cached_data, cache_settings)
+        assert((result.dispatches == 0) == hit, 'cache invalidation: ' .. label)
+        next = capture(cached_target, next)
+        clear_target(fresh_target, next, black, depth or 1)
+        local fresh, last = submit_ok(next + 1, fresh_target, cache_state, cache_instances,
+            selected_renderer, fresh_data, cache_settings)
+        assert(fresh.dispatches > 0, 'Fresh render data unexpectedly reused compute')
+        capture(fresh_target, last)
+        wait_for_captures()
+        expect_same(cached_target, fresh_target, 'cache pixels: ' .. label)
+        hg.DestroyGaussianSplatRenderData(fresh_data)
+        return result
+    end
+    check_cache('first', false)
+    check_cache('static-new-target', true)
+    check_cache('changed-depth-buffer', true, 0)
+    cache_settings.depth_test = false
+    check_cache('changed-depth-test', true, 0)
+    cache_settings.depth_test = true
+    cache_state = make_view_state(hg.TranslationMat4(hg.Vec3(0.1, 0, 0)))
+    check_cache('camera', false)
+    cache_state = hg.ComputePerspectiveViewState(hg.Mat4.Identity, hg.Deg(45), 0.05, 100, hg.Vec2(1, 1))
+    check_cache('projection', false)
+    rect = hg.IntRect(0, 0, 48, 48)
+    check_cache('viewport-size', false)
+    rect = hg.IntRect(8, 8, 56, 56)
+    check_cache('viewport-offset', true)
+    rect = hg.IntRect(0, 0, 64, 64)
+    check_cache('viewport-restore', false)
+    cache_instances = {make_instance(red, 1, hg.TranslationMat4(hg.Vec3(0.2, 0, 0)))}
+    check_cache('world', false)
+    cache_instances[1].opacity = 0.25
+    check_cache('opacity', false)
+    cache_instances = {make_instance(sh1, 1)}
+    check_cache('model', false)
+    cache_instances[1].id = 7
+    check_cache('instance-id', false)
+    cache_settings.max_sh_degree = 0
+    check_cache('sh', false)
+    cache_settings.max_pixel_radius = 1
+    check_cache('radius', false)
+    selected_renderer = cache_renderer
+    check_cache('renderer', false)
+    cache_settings = make_settings()
+    cache_state = identity_view
+    cache_instances = {make_instance(radix_red, 1)}
+    local radix_result = check_cache('scratch-growth-radix', false)
+    assert(radix_result.count == 257 and radix_result.dispatches == 27, 'Native radix schedule must use 24 sort dispatches')
+    check_cache('static-radix', true)
+    cache_instances = {make_instance(red, 1)}
+    check_cache('scratch-reuse-smaller', false)
+    check_cache('static-smaller', true)
+    local invalid_settings = make_settings()
+    invalid_settings.max_splats = 0
+    submit_fail(1, preflight_target, cache_state, cache_instances, selected_renderer, cached_data, invalid_settings, 'cached-invalid-settings')
+    check_cache('after-preflight-rejection', true)
+    print('PASS native projection/sort/gather cache invalidation and independent fresh-pixel comparisons')
 
     -- Equal depths use explicit instance IDs, not input order. Red is translated from z=3 to z=2.
     local tie_a, tie_b = make_target('tie_a'), make_target('tie_b')

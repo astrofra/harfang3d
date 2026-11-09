@@ -217,6 +217,73 @@ def spz_bytes(version=3, degree=3, count=7):
     return gzip.compress(spz_payload(version, degree, count), mtime=0)
 
 
+def repeated_spz_bytes(count, degree=0):
+    """A valid, cheaply generated large fixture; no per-point Python objects."""
+    non_dc = (degree + 1) ** 2 - 1
+    payload = (struct.pack('<III4B', 0x5053474e, 3, count, degree, 12, 0, 0)
+               + bytes(9 * count) + bytes([255]) * count
+               + bytes([128]) * (3 * count) + bytes([144]) * (3 * count)
+               + struct.pack('<I', 3 << 30) * count + bytes([128]) * (3 * non_dc * count))
+    return gzip.compress(payload, mtime=0)
+
+
+def test_full_count_default(h):
+    root = h.output / 'full_count'
+    root.mkdir(exist_ok=True)
+    count = 250001  # Cross the old implicit reduction threshold.
+    one_ply = ply_bytes([make_record(0, degree=0)], degree=0)
+    header_end = one_ply.index(b'end_header\n') + len(b'end_header\n')
+    fixtures = {
+        'splat': splat_bytes(1) * count,
+        'ply': one_ply[:header_end].replace(b'element vertex 1\n',
+                                          f'element vertex {count}\n'.encode())
+               + one_ply[header_end:] * count,
+        'spz': repeated_spz_bytes(count),
+    }
+    for extension, payload in fixtures.items():
+        source, destination = root / ('full.' + extension), root / (extension + '.hgs')
+        source.write_bytes(payload)
+        h.convert('full_default_' + extension, source, destination, '--storage', 'quantized')
+        with destination.open('rb') as stream:
+            header = stream.read(128)
+        require(header[:4] == b'HGS2' and struct.unpack_from('<II', header, 32) == (count, count),
+                extension + ': omitted max-count silently reduced the source')
+        h.convert('full_explicit_cap_' + extension, source, destination, '--max-count', '3')
+        data = read_hgs(destination)
+        require((data['splat_count'], data['source_count']) == (3, count),
+                extension + ': explicit reduction lost source count')
+
+    # Retain more than the old native hard limit as well as the old default cap.
+    source, destination = root / 'million.splat', root / 'million.hgs'
+    source.write_bytes(splat_bytes(1) * 1048577)
+    h.convert('full_above_old_native_limit', source, destination, '--storage', 'quantized')
+    with destination.open('rb') as stream:
+        header = stream.read(128)
+    require(struct.unpack_from('<II', header, 32) == (1048577, 1048577), 'Old native count limit remains')
+
+    # Unsupported full counts must fail, never be clamped to the hard limit.
+    source, destination = root / 'over-limit.splat', root / 'over-limit.hgs'
+    source.write_bytes(splat_bytes(1) * (2097152 + 1))
+    destination.write_bytes(SENTINEL)
+    h.convert('full_count_limit', source, destination, expected='nonzero')
+    require(destination.read_bytes() == SENTINEL, 'Failed full import overwrote its destination')
+    h.convert('full_count_limit_explicit_reduction', source, destination, '--max-count', '3')
+    require(read_hgs(destination)['source_count'] == 2097153, 'Explicit reduction of a larger source failed')
+    for cap in ('0', '2097153'):
+        destination.write_bytes(SENTINEL)
+        h.convert('full_invalid_cap_' + cap, source, destination, '--max-count', cap, expected='nonzero')
+        require(destination.read_bytes() == SENTINEL, 'Invalid explicit cap overwrote its destination')
+
+    # A legal count may still exceed the expanded SH3 byte budget. Fail before
+    # allocating the full canonical arrays, even when quantized output is small.
+    source = root / 'over-budget.spz'
+    source.write_bytes(repeated_spz_bytes(2097152, degree=3))
+    destination.write_bytes(SENTINEL)
+    log = h.convert('full_expanded_byte_budget', source, destination, '--storage', 'quantized', expected='nonzero')
+    require('512 MiB' in log, 'Expanded byte-budget rejection was not diagnosed')
+    require(destination.read_bytes() == SENTINEL, 'Byte-budget failure overwrote its destination')
+
+
 def test_spz_values(h):
     root = h.output / 'cpu'
     root.mkdir(exist_ok=True)
@@ -657,6 +724,9 @@ def run_gpu_probe(h, storage):
                        color_record((100, 0, 3), (1, 1, 1)),
                        color_record((0, 0, 0.01), (1, 1, 1))], 0),
     }
+    # Same visible red splat, but 256 culled records force native radix dispatch/padding.
+    fixtures["radix_red"] = ([color_record((0, 0, -3), (0, 0, 0)) for _ in range(256)] +
+                             [color_record((0, 0, 3), (1, 0, 0))], 0)
     fixtures["sh1"][0][0]["f_rest_2"] = 0.2 / C1  # red, coefficient k=3 (+/- x)
     fixtures["sh3"][0][1]["f_rest_2"] = 0.2 / C1
     fixtures["sh3"][0][1]["f_rest_26"] = 0.2 / (2 * 0.3731763325901154)  # green k=12, channel stride 15
@@ -697,6 +767,7 @@ def main():
         parser.error("--lua, --module and --shaders must be supplied together")
     h = Harness(args)
     tests = [
+        ("full-source defaults, explicit reduction and hard budgets", test_full_count_default),
         ("HGS2 quantized blocks, error bounds and determinism", test_quantized_hgs),
         ("SPZ v2/v3 attributes, SH, reduction and gzip options", test_spz_values),
         ("SPZ strict container and payload rejection", test_spz_rejections),

@@ -5,6 +5,9 @@
 
 namespace hg {
 
+static constexpr uint32_t ComputeBufferMaxBytes = 512 * 1024 * 1024;
+static constexpr uint32_t ComputeQuadMaxCount = 2 * 1024 * 1024;
+
 struct ComputeCaps {
 	bool supported{false}, rgba32f_vertex_sampling{false}, rgba32f_image_write{false}, image_write_reporting_complete{true};
 	uint32_t max_bindings{0}, max_views{0}, max_texture_size{0};
@@ -26,6 +29,7 @@ struct ComputeBufferStorage;
 // Copies share ownership; explicit destruction invalidates every copy/binding.
 struct ComputeBuffer { std::shared_ptr<ComputeBufferStorage> storage; };
 ComputeBuffer CreateComputeBuffer(uint32_t count, ComputeBufferType type = CBT_Float4);
+// Uploaded inputs use immutable GPU storage and accept read bindings only.
 ComputeBuffer CreateComputeBufferFromData(const Data &data, ComputeBufferType type = CBT_Float4, uint32_t offset = 0);
 ComputeBuffer LoadComputeBufferFromFile(const char *path, ComputeBufferType type = CBT_Float4, uint32_t offset = 0);
 ComputeBuffer LoadComputeBufferFromAssets(const char *path, ComputeBufferType type = CBT_Float4, uint32_t offset = 0);

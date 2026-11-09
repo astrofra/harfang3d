@@ -31,19 +31,33 @@ def main():
         shutil.copyfile(p, source / p.name)
     (source / 'core/gaussian_splatting').mkdir(parents=True, exist_ok=True)
     (source / 'core/shader').mkdir(parents=True, exist_ok=True)
-    for name in ['sort.sc', 'gather.sc']:
+    for name in ['sort.sc', 'sort_local.sc', 'radix_histogram.sc', 'radix_prefix.sc', 'radix_scatter.sc', 'gather.sc']:
         shutil.copyfile(repo / 'core-package/core/gaussian_splatting' / name, source / 'core/gaussian_splatting' / name)
     for name in ['bgfx_shader.sh', 'bgfx_compute.sh']:
         shutil.copyfile(repo / 'core-package/core/shader' / name, source / name)
         shutil.copyfile(repo / 'core-package/core/shader' / name, source / 'core/shader' / name)
-    depths = [float((i*73)%4096) if i<113648 and i%7 else -1.0 for i in range(131072)]
-    (source / 'input.bin').write_bytes(b''.join(struct.pack('<4f', depth, i, 0, 0) for i,depth in enumerate(depths)))
-    order = sorted(range(len(depths)), key=lambda i: (-depths[i], i))
-    (source / 'expected.bin').write_bytes(struct.pack('<131072I', *order))
-    # Independent projected payload: gather must fetch the original source ID.
-    (source / 'projected.bin').write_bytes(b''.join(
-        struct.pack('<12f', (i & 255)/255, ((i >> 8) & 255)/255, ((i >> 16) & 255)/255, 1,
-                    0, 0, 0, 0, 0, 0, 0, 0) for i in range(len(depths))))
+    cases = [(n, 'mixed') for n in (1, 2, 128, 256, 512, 1024, 131072, 2097152)]
+    cases += [(1024, 'ties'), (1024, 'invisible')]
+    manifest = []
+    for n, pattern in cases:
+        name = f'{n}_{pattern}'
+        actual = max(1, n * 113648 // 131072)
+        # Adjacent float32 mantissas exercise all key bits, plus ties, culling and padding.
+        depths = [struct.unpack('<f', struct.pack('<I', 0x3f000000 | ((i * 2654435761) & 0x7fffff)))[0]
+                  if i % 11 else 1.0 for i in range(n)]
+        if pattern == 'ties':
+            depths = [1.0] * n
+        depths = [d if i < actual and (i % 7 or n < 8) and pattern != 'invisible' else -1.0
+                  for i, d in enumerate(depths)]
+        (source / f'{name}_input.bin').write_bytes(b''.join(struct.pack('<4f', d, i, 0, 0) for i, d in enumerate(depths)))
+        order = sorted(range(n), key=lambda i: (-depths[i], i))
+        (source / f'{name}_expected.bin').write_bytes(b''.join(
+            struct.pack('<II', i, int(slot < actual and depths[i] > 0)) for slot, i in enumerate(order)))
+        (source / f'{name}_projected.bin').write_bytes(b''.join(
+            struct.pack('<12f', (i & 255)/255, ((i >> 8) & 255)/255, ((i >> 16) & 255)/255, 1,
+                        0, 0, 0, 0, 0, 0, 0, 0) for i in range(n)))
+        manifest.append(f'{name} {n} {actual}')
+    (source / 'cases.txt').write_text('\n'.join(manifest) + '\n')
     assetc = executable(build / 'tools/assetc', 'assetc', 'Release')
     shaderc = executable(build / 'extern/bgfx', 'shaderc', 'Release')
     lua = executable(build / 'extern/lua', 'lua', 'Release')
@@ -54,7 +68,7 @@ def main():
                 ('sort', [lua,repo / 'harfang/tests/gaussian_sort_probe.lua',compiled,module,args.renderer])]
     for label,command in commands:
         with (root / (label+'.log')).open('w') as log:
-            result = subprocess.run([str(x) for x in command], stdout=log, stderr=subprocess.STDOUT, timeout=60)
+            result = subprocess.run([str(x) for x in command], stdout=log, stderr=subprocess.STDOUT, timeout=240)
         if result.returncode:
             raise RuntimeError(f'{label} failed: {root / (label+".log")}')
     assert 'PASS GPU sort' in (root / 'sort.log').read_text()

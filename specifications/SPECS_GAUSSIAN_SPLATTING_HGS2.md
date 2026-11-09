@@ -11,7 +11,6 @@ Status: implemented format contract. HGS2 replaces HGS1; no compatibility reader
   "profiles": {
     "default": {
       "type": "gaussian-splat",
-      "max-count": 250000,
       "sh-degree": 3,
       "normalize": true,
       "storage": "quantized"
@@ -22,6 +21,8 @@ Status: implemented format contract. HGS2 replaces HGS1; no compatibility reader
 ```
 
 `storage` accepts `quantized` (default) or `float32`. The CLI equivalent is `--storage quantized|float32`. Both choices use the same HGS2 header, block table, integrity checks and zlib compression. `float32` is a lossless reference representation of the imported canonical data, not an HGS1 compatibility option. Profile storage changes participate in assetc incremental compilation.
+
+Omitting `max-count` preserves all source splats. Reduction is enabled only by an explicit positive cap, through metadata or `gsplatc --max-count N`. Profile inheritance still applies: a missing field inherits any cap explicitly set in `default`. The C++ import options use zero internally to mean all splats; explicit zero in CLI or metadata is rejected. Exceeding native count or expanded-byte limits is an error, never an implicit reduction.
 
 The native loader decompresses one block at a time and reconstructs the existing float arrays before upload. Lua and GPU shader APIs do not change. Disk size and file I/O decrease; canonical CPU/GPU allocations remain unchanged. This implementation does not provide streaming or direct rendering from compressed attributes.
 
@@ -127,10 +128,14 @@ The first `N * 16` floats are canonical base records: position/opacity, linear s
 
 The reader rejects unknown magic/version/storage/flags, invalid counts, noncanonical table layout, nonzero reserved fields, inconsistent bounds, nonfinite/inverted quantizer ranges, nonpositive scales and invalid quaternions/SH codes. Header, table and raw block CRCs are checked. Each compressed block must reach stream end, consume its exact compressed length and produce its exact expected raw length.
 
-File bytes and expanded canonical float data are each capped at 512 MiB; count remains 1-1,048,576. Header/table structure is validated before large canonical allocations. Blocks decompress into bounded temporary buffers. Source import validation and source byte budgets remain unchanged. Writer validation and serialization complete before the destination file is opened.
+File bytes and expanded canonical float data are each capped at 512 MiB; the supported retained count is 1-2,097,152. Count and expanded-byte budgets are checked before large canonical allocations, including during source import. SH3 uses 304 canonical bytes per splat, so its byte budget can be reached before the count limit. Blocks decompress into bounded temporary buffers. Source validation and source byte budgets remain unchanged. Writer validation and serialization complete before the destination file is opened.
+
+The count limit is an implementation budget, not a new HGS2 wire format. It permits a power-of-two sort capacity of 2,097,152 (32,768 groups of 64 threads), exact float slot IDs and a 512 x 4096 attribute atlas. The compute buffer limit is 512 MiB per buffer, allowing Saari's full SH3 coefficient array; actual allocations still depend on device capacity.
 
 ## Verification
 
 `harfang/tests/gaussian_splat_hgs2.py` is an independent Python/zlib format inspector used only by developer tests. The native regression harness covers both storage modes, block boundaries, degenerate ranges, error bounds, deterministic encoding, malformed headers/tables/payloads and legacy rejection. The GPU probe exercises both storage modes with the existing multi-model, depth, SH and lifetime checks. Assetc tests cover storage metadata, profile overrides, validation and incremental rebuilds.
+
+Full-count validation (2026-11-09, Windows/DX11): 12 native test groups and 13 assetc tests passed, including inputs above the former implicit 250,000 cap, a retained count above 1,048,576, explicit reduction, profile inheritance, cap removal and hard-budget rejection. The local Saari SPZ converted to 1,307,339 / 1,307,339 retained/source splats with SH3, normalization and quantized storage; its HGS2 file is 44,374,874 bytes (42.32 MiB). The unchanged tutorial completed 60 frames with both models, SH1/SH3 switching, two resizes, image-content checks and cleanup. A second assetc invocation reported zero processed files. This full-count run does not establish macOS GPU qualification at the new capacity.
 
 Real-asset measurements and screenshots are recorded in [native progress](GSPLAT_NATIVE_PROGRESS.md). Runtime tutorials and production conversion require no Python.
