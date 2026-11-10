@@ -57,6 +57,8 @@ static MouseState ReadMouse() {
 
 	state.wheel = int(wheel);
 	state.hwheel = int(hwheel);
+	state.wheel_delta = float(wheel);
+	state.hwheel_delta = float(hwheel);
 
 	wheel = 0;
 	hwheel = 0;

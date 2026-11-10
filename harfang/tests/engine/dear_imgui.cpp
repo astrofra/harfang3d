@@ -24,11 +24,14 @@ void test_dear_imgui_mouse_scale() {
 			const ImVec2 target(float(mouse.x) * scale.x, float(height) - float(mouse.y) * scale.y);
 			for (int frame = 0; frame != 4; ++frame) {
 				mouse.button[MB_0] = frame == 2;
+				mouse.wheel_delta = 0.125f;
+				mouse.hwheel_delta = -0.25f;
 				if (scale.x == 1 && scale.y == 1)
 					ImGuiBeginFrame(ctx, 1280, height, time_from_ms(16), mouse, keyboard);
 				else
 					ImGuiBeginFrame(ctx, 1280, height, time_from_ms(16), mouse, keyboard, scale);
 				TEST_CHECK(io.MousePos.x == target.x && io.MousePos.y == target.y);
+				TEST_CHECK(io.MouseWheel == 0.125f && io.MouseWheelH == -0.25f);
 				ImGui::SetNextWindowPos(ImVec2(target.x - 40, target.y - 40));
 				ImGui::SetNextWindowSize(ImVec2(160, 100));
 				ImGui::Begin("Mouse scale", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);

@@ -13,6 +13,10 @@ The vertical field of view `fov` is in radians and defaults to pi/3. The mouse o
 
 Call `mouse:Update()` before updating the controller. The application handles window focus and keyboard shortcuts. `ComputeWorld()` returns the camera world transform, ready for `ComputePerspectiveViewState`; it does not return the inverse view matrix.
 
+The mouse overload reads `WheelDelta()` so fractional scroll moves the camera
+on every update. The explicit-input overload already accepts a floating-point
+`wheel` value. Legacy integer-only mouse readers remain supported.
+
 ```lua
 local camera = hg.TrackballController(hg.Vec3(0, 0, 0), 3.4)
 local fov = math.pi / 3

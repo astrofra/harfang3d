@@ -268,7 +268,8 @@ void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_cl
 	io.MouseDown[1] = mouse.button[MB_1];
 	io.MouseDown[2] = mouse.button[MB_2];
 
-	io.MouseWheel = float(mouse.wheel);
+	io.MouseWheel = mouse.WheelDelta();
+	io.MouseWheelH = mouse.HWheelDelta();
 
 	// send keyboard state
 	for (auto i = 0; i < K_Last; ++i)

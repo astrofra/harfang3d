@@ -55,6 +55,15 @@ default_camera:Update(mouse, 200, 200, math.pi / 3)
 default_camera:Update(mouse, 200, 200, math.pi / 3, false)
 near(hg.GetT(default_camera:ComputeWorld()).z, -3.4)
 
+-- New float scroll accessors are additive; the legacy methods remain integers.
+assert(mouse:Wheel() == 0 and mouse:HWheel() == 0)
+assert(mouse:WheelDelta() == 0 and mouse:HWheelDelta() == 0)
+local state = hg.ReadMouse("trackball-no-input")
+state.wheel_delta, state.hwheel_delta = 0.125, -0.375
+near(state:WheelDelta(), 0.125)
+near(state:HWheelDelta(), -0.375)
+assert(math.type(state:Wheel()) == "integer" and math.type(state:HWheel()) == "integer")
+
 for _ = 1, 10000 do
 	camera:Update(true, false, 140, 130, 3, -2, 0, 200, 200)
 end
@@ -66,4 +75,4 @@ near(hg.Len2(forward), 1)
 near(hg.Dot(right, up), 0)
 near(hg.Dot(right, forward), 0)
 near(hg.Dot(up, forward), 0)
-print("PASS native trackball bindings: constructors, copies, both Update overloads, rotation, dolly, pan, reset and stability")
+print("PASS native trackball bindings: constructors, copies, both Update overloads, rotation, fractional scroll API, legacy integers, dolly, pan, reset and stability")

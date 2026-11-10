@@ -245,6 +245,9 @@ static int _MouseState_HWheel(hg::MouseState *s) { return s->hwheel; }
 	gen.bind_method(mouse_state, 'Button', 'bool', ['hg::MouseButton btn'], {'route': route_lambda('_MouseState_Button')})
 	gen.bind_method(mouse_state, 'Wheel', 'int', [], {'route': route_lambda('_MouseState_Wheel')})
 	gen.bind_method(mouse_state, 'HWheel', 'int', [], {'route': route_lambda('_MouseState_HWheel')})
+	gen.bind_members(mouse_state, ['float wheel_delta', 'float hwheel_delta'])
+	gen.bind_method(mouse_state, 'WheelDelta', 'float', [])
+	gen.bind_method(mouse_state, 'HWheelDelta', 'float', [])
 	gen.end_class(mouse_state)
 
 	gen.bind_function('hg::ReadMouse', 'hg::MouseState', ['?const char *name'])
@@ -264,6 +267,8 @@ static int _MouseState_HWheel(hg::MouseState *s) { return s->hwheel; }
 
 	gen.bind_method(mouse, 'Wheel', 'int', [])
 	gen.bind_method(mouse, 'HWheel', 'int', [])
+	gen.bind_method(mouse, 'WheelDelta', 'float', [])
+	gen.bind_method(mouse, 'HWheelDelta', 'float', [])
 
 	gen.bind_method(mouse, 'Update', 'void', [])
 

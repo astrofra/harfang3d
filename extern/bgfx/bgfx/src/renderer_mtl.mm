@@ -4063,9 +4063,9 @@ namespace bgfx { namespace mtl
 											desc.loadAction = MTLLoadActionLoad;
 										}
 
-										if (NULL != m_capture
-										&&  !isValid(fbh)
-										&&  m_hasStoreActionStoreAndMultisampleResolve)
+										// Compute dispatches and framebuffer switches end the render encoder.
+										// Preserve MSAA samples for later views that load the same color target.
+										if (m_hasStoreActionStoreAndMultisampleResolve)
 										{
 											desc.storeAction = desc.texture.sampleCount > 1 ? MTLStoreActionStoreAndMultisampleResolve : MTLStoreActionStore;
 
@@ -4112,9 +4112,9 @@ namespace bgfx { namespace mtl
 									{
 										desc.loadAction = MTLLoadActionLoad;
 
-										if (NULL != m_capture
-										&&  !isValid(fbh)
-										&&  m_hasStoreActionStoreAndMultisampleResolve)
+										// Compute dispatches and framebuffer switches end the render encoder.
+										// Preserve MSAA samples for later views that load the same color target.
+										if (m_hasStoreActionStoreAndMultisampleResolve)
 										{
 											desc.storeAction = desc.texture.sampleCount > 1 ? MTLStoreActionStoreAndMultisampleResolve : MTLStoreActionStore;
 

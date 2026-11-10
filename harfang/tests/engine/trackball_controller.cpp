@@ -77,6 +77,38 @@ void test_trackball_controller() {
 		TEST_CHECK(AlmostEqual(copy.target, target, epsilon));
 	}
 	{
+		// High-resolution wheel ticks must move on every frame, not only above 1.
+		AddMouseReader("trackball-fractional", ReadTrackballMouse);
+		Mouse mouse("trackball-fractional");
+		TrackballController camera(Vec3::Zero, 0.85f);
+		camera.max_distance = 2.f;
+		trackball_mouse_state = {};
+		trackball_mouse_state.wheel_delta = 0.125f;
+		trackball_mouse_state.hwheel_delta = -0.25f;
+		for (int tick = 1; tick <= 16; ++tick) {
+			const float previous = camera.distance;
+			mouse.Update();
+			TEST_CHECK(mouse.Wheel() == 0 && mouse.HWheel() == 0);
+			TEST_CHECK(mouse.WheelDelta() == 0.125f && mouse.HWheelDelta() == -0.25f);
+			camera.Update(mouse, 200, 200);
+			TEST_CHECK(camera.distance < previous);
+			TEST_CHECK(Equal(camera.distance, 0.85f * std::exp(-0.12f * 0.125f * tick)));
+		}
+		trackball_mouse_state.wheel_delta = -1000.f;
+		mouse.Update();
+		camera.Update(mouse, 200, 200);
+		TEST_CHECK(camera.distance == 2.f);
+		trackball_mouse_state = {};
+		trackball_mouse_state.wheel = 1;
+		trackball_mouse_state.hwheel = -2;
+		mouse.Update();
+		TEST_CHECK(mouse.Wheel() == 1 && mouse.WheelDelta() == 1.f);
+		TEST_CHECK(mouse.HWheel() == -2 && mouse.HWheelDelta() == -2.f);
+		camera.Update(mouse, 200, 200);
+		TEST_CHECK(Equal(camera.distance, 2.f * std::exp(-0.12f)));
+		RemoveMouseReader("trackball-fractional");
+	}
+	{
 		// Synthetic mouse input exercises first-press and focus reacquisition without window/input initialization.
 		AddMouseReader("trackball-test", ReadTrackballMouse);
 		Mouse mouse("trackball-test");

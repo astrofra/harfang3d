@@ -57,7 +57,7 @@ void TrackballController::Update(bool orbit, bool pan, float x, float y, float d
 void TrackballController::Update(const Mouse &mouse, float width, float height, float fov, bool drag_valid) {
 	const bool drag = drag_valid && !mouse.Pressed(MB_0) && !mouse.Pressed(MB_1) && !mouse.Pressed(MB_2);
 	Update(drag && mouse.Down(MB_0), drag && (mouse.Down(MB_1) || mouse.Down(MB_2)), float(mouse.X()), float(mouse.Y()),
-		float(mouse.DtX()), float(mouse.DtY()), float(mouse.Wheel()), width, height, fov);
+		float(mouse.DtX()), float(mouse.DtY()), mouse.WheelDelta(), width, height, fov);
 }
 
 Mat4 TrackballController::ComputeWorld() const {

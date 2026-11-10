@@ -21,6 +21,11 @@ struct MouseState {
 	int x, y;
 	std::bitset<MB_Count> button;
 	int wheel, hwheel;
+	// Per-read high-resolution scroll. Integer fields above retain their legacy API.
+	float wheel_delta{0.f}, hwheel_delta{0.f};
+	// Custom/legacy readers that only fill integer fields continue to work.
+	float WheelDelta() const { return wheel_delta != 0.f ? wheel_delta : float(wheel); }
+	float HWheelDelta() const { return hwheel_delta != 0.f ? hwheel_delta : float(hwheel); }
 };
 
 using MouseReader = MouseState (*)();
@@ -45,6 +50,8 @@ struct Mouse {
 
 	int Wheel() const { return state.wheel; }
 	int HWheel() const { return state.hwheel; }
+	float WheelDelta() const { return state.WheelDelta(); }
+	float HWheelDelta() const { return state.HWheelDelta(); }
 
 	void Update();
 
