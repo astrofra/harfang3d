@@ -8,6 +8,13 @@
 #include "foundation/log.h"
 #include "foundation/thread.h"
 
+#ifdef HG_TEST_GLFW
+#include "platform/glfw/window_system.h"
+#include "platform/input_system.h"
+#include "engine/trackball_controller.h"
+#include <cmath>
+#endif
+
 using namespace hg;
 
 static void test_NewWindow() {
@@ -74,10 +81,65 @@ static void test_GetWindowFrameBufferSize() {
 	DestroyWindow(win);
 }
 
+#ifdef HG_TEST_GLFW
+static void test_FractionalScroll() {
+	InputInit();
+	Window *win = NewWindow(320, 200);
+#ifdef __linux__
+	if (!win) { // Match the existing window tests on CI without an X11 display.
+		InputShutdown();
+		return;
+	}
+#endif
+	TEST_ASSERT(win != nullptr);
+	auto glfw_win = GetGLFWWindow(win);
+	glfwFocusWindow(glfw_win);
+	for (int i = 0; i < 20 && GetWindowInFocus() != win; ++i) {
+		UpdateWindow(win);
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	TEST_ASSERT(GetWindowInFocus() == win);
+	// Invoke the real registered GLFW callback, then read through the real Mouse.
+	auto scroll = glfwSetScrollCallback(glfw_win, nullptr);
+	TEST_ASSERT(scroll != nullptr);
+	glfwSetScrollCallback(glfw_win, scroll);
+	Mouse mouse;
+	TrackballController camera(Vec3::Zero, 0.85f);
+	mouse.Update();
+	for (int tick = 1; tick <= 16; ++tick) {
+		scroll(glfw_win, -0.25, 0.125);
+		mouse.Update();
+		TEST_CHECK(mouse.Wheel() == 0 && mouse.HWheel() == 0);
+		TEST_CHECK(mouse.WheelDelta() == 0.125f && mouse.HWheelDelta() == -0.25f);
+		const float previous = camera.distance;
+		camera.Update(mouse, 320, 200);
+		TEST_CHECK(camera.distance < previous);
+		TEST_CHECK(Equal(camera.distance, 0.85f * std::exp(-0.12f * 0.125f * tick)));
+	}
+	// Sum callbacks once per read; retain signs and legacy integer semantics.
+	scroll(glfw_win, 0.5, -0.125);
+	scroll(glfw_win, 0.25, -0.25);
+	mouse.Update();
+	TEST_CHECK(mouse.Wheel() == 0 && mouse.WheelDelta() == -0.375f);
+	TEST_CHECK(mouse.HWheel() == 0 && mouse.HWheelDelta() == 0.75f);
+	scroll(glfw_win, -2.25, 1.75);
+	mouse.Update();
+	TEST_CHECK(mouse.Wheel() == 1 && mouse.WheelDelta() == 1.75f);
+	TEST_CHECK(mouse.HWheel() == -2 && mouse.HWheelDelta() == -2.25f);
+	mouse.Update();
+	TEST_CHECK(mouse.WheelDelta() == 0.f && mouse.HWheelDelta() == 0.f);
+	DestroyWindow(win);
+	InputShutdown();
+}
+#endif
+
 void test_window() {
 	WindowSystemInit();
 	test_NewWindow(); 
 	test_SetWindowPos();
 	test_GetWindowFrameBufferSize();
+#ifdef HG_TEST_GLFW
+	test_FractionalScroll();
+#endif
 	WindowSystemShutdown();
 }

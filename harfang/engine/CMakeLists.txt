@@ -1,4 +1,7 @@
 set(HDRS
+	compute.h
+	gaussian_splat_data.h
+	gaussian_splat.h
 	animation.h
 	assets.h
 	assets_rw_interface.h
@@ -16,6 +19,7 @@ set(HDRS
 	font.h
 	forward_pipeline.h
 	fps_controller.h
+	trackball_controller.h
 	vertex.h
 	geometry.h
 	geometry_builder.h
@@ -57,6 +61,9 @@ set(HDRS
 	ogg_audio_stream.h)
 
 set(SRCS
+	compute.cpp
+	gaussian_splat_data.cpp
+	gaussian_splat.cpp
 	anim_load_binary.cpp
 	anim_load_json.cpp
 	animation.cpp
@@ -75,6 +82,7 @@ set(SRCS
 	font.cpp
 	forward_pipeline.cpp
 	fps_controller.cpp
+	trackball_controller.cpp
 	geometry.cpp
 	geometry_builder.cpp
 	iso_surface.cpp

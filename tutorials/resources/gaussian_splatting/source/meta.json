@@ -1,0 +1,42 @@
+{
+  "id": "plant",
+  "title": "Houseplant",
+  "category": "object",
+  "source_method": "capture",
+  "tags": [
+    "plant",
+    "houseplant",
+    "foliage",
+    "organic",
+    "indoor",
+    "glossy"
+  ],
+  "thumbnail": "thumb.png",
+  "file": "plant.splat",
+  "splats": 113648,
+  "bytes": 3636736,
+  "sha256": "ce9d490b18f16d6730d832227bf541431b8b1a5d167c5a3fe89af4f324c0d8fd",
+  "format": "splat",
+  "spherical_harmonics": false,
+  "license": "CC-BY-4.0",
+  "license_open": true,
+  "author": "Marcel Padilla",
+  "added": "2026-07-23",
+  "geometry": {
+    "extent": [
+      0.5172,
+      1.0,
+      0.6098
+    ],
+    "up_axis": "-y",
+    "units": "COLMAP reconstruction scale of the parent capture, not metric"
+  },
+  "quality": {
+    "psnr": null,
+    "ssim": null
+  },
+  "caveats": [
+    "Spherical harmonics were dropped (SH degree 0), so there is no view-dependent shading.",
+    "Scale is the COLMAP reconstruction scale and is not metric."
+  ]
+}

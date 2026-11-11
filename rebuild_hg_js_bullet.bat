@@ -17,6 +17,7 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 if not defined BUILD_DIR set "BUILD_DIR=%WORK_DIR%\build\js-cmake-bullet"
 if not defined INSTALL_DIR set "INSTALL_DIR=%WORK_DIR%\install\js_bullet"
 if not defined FABGEN_DIR set "FABGEN_DIR=%WORK_DIR%\FABGen"
+if not defined PLATFORM set "PLATFORM=x64"
 if not defined BUILD_JOBS set "BUILD_JOBS=4"
 
 rem Prefer explicit dependency paths, then workspace deps, then the local bootstrap cache.
@@ -60,7 +61,7 @@ echo Zig         : "%HG_QUICKJS_ZIG%"
 echo.
 
 echo [1/3] Configuration CMake HarfangJs (Bullet, %CONFIG%)...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "Visual Studio 17 2022" -A x64 ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^

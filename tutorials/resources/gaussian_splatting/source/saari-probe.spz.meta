@@ -1,0 +1,17 @@
+{
+  "profiles": {
+    "default": {
+      "type": "gaussian-splat",
+      "sh-degree": 3,
+      "normalize": true,
+      "storage": "quantized"
+    },
+    "preview": {
+      "max-count": 250000,
+      "sh-degree": 1
+    },
+    "reference": {
+      "storage": "float32"
+    }
+  }
+}

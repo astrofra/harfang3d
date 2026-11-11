@@ -1,3 +1,125 @@
+# [3.3.1] - 2026-11-11
+
+This release adds native JavaScript bindings, a native Gaussian splatting pipeline, scene animation crossfades, portable texture compression, and LZMA archives. It also improves macOS rendering and input, refreshes the core asset package, and provides a single Windows rebuild entry point.
+
+### JavaScript
+
+* Added the native QuickJS language layer, generated HARFANG bindings, the `HarfangJs` CMake target and `hgjs` executable, enabled with `HG_BUILD_HG_JS`.
+* Added module loading, exception reporting, promise processing, the `harfang-host` frame helper, and interoperability with the engine's existing Lua scene scripting. Embedded scene scripts remain Lua-based.
+* Added 32 JavaScript tutorials covering rendering, scenes, materials, ImGui, physics, input, filesystems, and audio, with API parity and tutorial validation tools.
+* Added `rebuild_hg_js_bullet.bat`. Windows builds use official QuickJS 2026-06-04 and Zig 0.14.1 for the embedded C runtime, with MSVC for HARFANG and its bindings.
+* Documented native/Web compatibility priorities and WebGL delivery experiments. The separate Web work and feasibility studies do not imply native API parity in browsers.
+
+### Gaussian splatting and compute
+
+* Added native Gaussian model loading, GPU resource management, covariance projection, spherical harmonics through SH3, depth sorting, drawing, and reusable per-view render data.
+* Added `gsplatc` and AssetC metadata profiles for `.splat`, supported binary little-endian PLY, and SPZ v2/v3 sources. Compiled HGS2 supports compact quantized storage and a float32 reference profile.
+* Preserve every source splat by default; reduction requires an explicit `max-count`. Imports validate the entire source and reject unsupported formats or resource budgets instead of silently dropping data.
+* Added GPU sorting optimizations, immutable uploaded inputs, camera-dependent caching, compute capability reporting, buffer/image bindings, dispatch helpers, and asynchronous frame statistics.
+* Added a native `TrackballController` with orbit, pan, dolly, reset, and fractional wheel input.
+* Consolidated the Lua Gaussian tutorial around the bundled Houseplant and Saari datasets, with model switching, per-model cameras, SH controls, an RGB orientation gizmo, packaging targets, and automated rendering checks.
+* Fixed full-count rendering and model selection on Retina displays, pending-frame resource shutdown, and Metal MSAA color preservation when compute dispatches interrupt rendering.
+* Windows validation during release preparation exercised the Saari model with all 1,307,339 splats, camera gestures, resize, focus recovery, slide revisits, MSAA composition, and clean shutdown. This does not qualify every graphics backend or hardware configuration.
+
+### Animation
+
+* Added the scene-owned `SceneAnimPlayer` for transform-animation crossfades with configurable duration and easing, updated blending semantics, scripting bindings, and regression coverage.
+* Added clip metadata queries and transform-animation import between scenes, with hierarchy-based node mapping and optional completion of missing position, rotation, and scale channels.
+* Documented two-track transitions and fixed animation loop-flag handling on macOS.
+
+### Rendering, platform, and input
+
+* Added drawable framebuffer-size queries and corrected render initialization and resize handling for Retina displays.
+* Added native macOS gamepad support through GameController and preserved fractional mouse-wheel deltas in GLFW input and ImGui integration.
+* Fixed macOS shadow-map behavior and ensured the global timer thread is joined at process exit.
+
+### Asset tools and packaging
+
+* Added the portable `texc` image-to-DDS compiler with BC1, BC3, BC4, BC5, BC7, RGBA8, and BGRA8 outputs. Fixed rectangular mip chains, uncompressed DDS layout, resize limits, and write-error reporting, with AssetC integration checks.
+* Added LZMA compression and reading to legacy archives. Packing now defaults to LZMA; `--method zlib` preserves compatibility with older runtimes and launchers. Raw and existing Zlib archives remain supported.
+* Vendored Assimp and consolidated the maintained core assets in `core-package`, including Gaussian shaders and synchronization checks for tutorial resources.
+* Removed the in-tree Mini Studio prototype and reorganized archived specifications.
+* Updated Windows rebuild helpers and added `rebuild_essentials.bat [Config]`, which runs AssetC, FFmpeg, Lua/Bullet, Python/Bullet, JavaScript/Bullet, static documentation, converters, and the XM player in order, stopping on the first failure.
+* Regenerated static documentation for 3.3.1 and made its build depend on `harfang/version.txt`, so version changes invalidate the generated pages.
+
+### Video fixes
+
+* Fixed a race in the FFmpeg plugin where immediate stream closure could be overwritten by decoder-thread startup and block shutdown.
+* Do not expose a video frame before decoding has produced one. Added a lifecycle regression check covering 100 immediate play/close cycles.
+* Windows release validation decoded, sought, and closed all 21 videos in the interactive-book integration, and exercised the deployed console/no-console launchers and FBX/glTF tools.
+
+### API additions since 3.3.0
+
+The inventory below covers public engine additions and newly exposed scripting APIs, compared with the `v3.3.0` tag. Unless specified otherwise, engine entries are available in C++ and the generated Python, Lua, Squirrel, and native JavaScript bindings, subject to build options. Native-only codecs and language-specific additions are identified separately.
+
+#### Scene animation playback and import
+
+* `Scene.CreateAnimPlayer(clips)`, `Scene.CreateInstanceAnimPlayer(node)`, and `Scene.DestroyAnimPlayer(player)` manage scene-owned `SceneAnimPlayer` handles. Copies refer to the same player; playback updates through the scene's animation update.
+* `SceneAnimPlayer` exposes `IsValid()`, `SetCrossFadeDuration(duration)`, `GetCrossFadeDuration()`, `SetCrossFadeEasing(easing)`, `GetCrossFadeEasing()`, `Play(name, loop_mode = ALM_Once, restart = false)`, `IsTransitioning()`, and `Stop()`. Durations use `time_ns`; supported easing values are `E_Linear` and `E_SmoothStep`. Players accept transform clips and reject conflicting channel ownership, discrete tracks, and nested animation tracks.
+* `GetSceneAnimInfo(scene, ref)` returns `SceneAnimInfo` with `valid`, `name`, `t_start`, `t_end`, and `frame_duration`.
+* `BuildSceneAnimNodeMap(source, destination)` matches nodes by their full hierarchy paths. `SceneAnimNodeMap` exposes `success`, `message`, `source_nodes`, and `destination_nodes`; ambiguous paths and missing destination nodes are reported as failures.
+* `ImportSceneAnim(source, source_anim, destination, node_map, name, preserve_missing_trs = true)` copies a transform clip into another scene. By default, missing transform channels are completed from the source pose. `SceneAnimImportResult` exposes `success`, `message`, the imported `anim`, `copied_channels`, and `completed_channels`. Invalid mappings, unsupported tracks, and duplicate destination animation names are rejected before publishing the imported data.
+* Exposed the existing C++ load flag `LSSF_DoNotLoadResources` in scripting's `LoadSaveSceneFlags`, for loading scene structure and animation data without loading its rendering resources.
+
+#### Compute shaders and GPU resources
+
+* `GetComputeCaps()` returns `ComputeCaps`: `supported`, `rgba32f_vertex_sampling`, `rgba32f_image_write`, `image_write_reporting_complete`, `max_bindings`, `max_views`, `max_texture_size`, and `renderer`. The reporting-completeness flag distinguishes backend reporting limitations from a confirmed lack of image-write support.
+* `GetComputeFrameStats()` returns `ComputeFrameStats`: `gpu_timing_available`, `gpu_timestamp`, `gpu_ms`, `draw_calls`, and `compute_calls`. Timing describes the latest completed backend measurement and may lag the current frame.
+* Added `ComputeBuffer` and `ComputeBufferType` (`CBT_Float4`, `CBT_UInt4`), with `CreateComputeBuffer(count, type = CBT_Float4)`, `CreateComputeBufferFromData(data, type = CBT_Float4, offset = 0)`, `LoadComputeBufferFromFile(path, type = CBT_Float4, offset = 0)`, and `LoadComputeBufferFromAssets(path, type = CBT_Float4, offset = 0)`. Uploaded data uses immutable GPU storage and accepts read bindings only.
+* Added `IsValid(buffer)`, `GetComputeBufferCount(buffer)`, and `DestroyComputeBuffer(buffer)`. Buffer copies share ownership; explicit destruction invalidates their aliases and bindings.
+* Exposed the existing C++ functions `LoadComputeProgramFromFile(path, silent = false)` and `LoadComputeProgramFromAssets(path, silent = false)` to scripting.
+* Added scripting access constants `AC_Read`, `AC_Write`, and `AC_ReadWrite` in the `Access` enum, and the texture flag `TF_ComputeWrite`.
+* Added `MakeComputeBufferBinding(buffer, stage, access)` and `MakeImageBinding(texture, stage, access, mip = 0)`, returning `ComputeBufferBinding` and `ImageBinding`. Their scripting collection types are `ComputeBufferBindingList` and `ImageBindingList`; these and `GaussianSplatInstanceList` follow the existing list constructor, sequence-access, `clear()`, `reserve(count)`, and `push_back(value)` conventions.
+* `DispatchCompute(view_id, program, x, y = 1, z = 1)` submits a compute dispatch. The full overload additionally accepts uniform `values`, sampled `textures`, storage `images`, compute `buffers`, and an optional `debug_name`. Successful dispatch advances `view_id`; validation failure returns `false` without submission or view advancement.
+* `CreateComputeQuadModel(count)` creates batched quads addressable by compute-generated data. `ComputePremultipliedRenderState()` creates a premultiplied-alpha render state with color writes and no depth test/write or face culling.
+* C++ additionally declares `ComputeBufferMaxBytes` and `ComputeQuadMaxCount`. `ReleaseComputeResources()` supports renderer shutdown, while `DispatchComputeSameView(...)` is the internal scheduling variant that leaves view advancement to its caller.
+
+#### Gaussian splatting runtime
+
+* Added shared resource handles `GaussianSplatModel`, `GaussianSplatRenderer`, and `GaussianSplatRenderData`, with corresponding `IsValid(...)` overloads and `DestroyGaussianSplatModel(...)`, `DestroyGaussianSplatRenderer(...)`, and `DestroyGaussianSplatRenderData(...)`. Explicit destruction invalidates aliases; C++ renderer teardown uses `ReleaseGaussianSplatResources()`.
+* `LoadGaussianSplatModelFromFile(path, options)`, `LoadGaussianSplatModelFromAssets(path, options)`, and `LoadGaussianSplatModelFromData(data, options)` load compiled HGS2 data. The optional `GaussianSplatLoadOptions` exposes `max_file_bytes`. `GaussianSplatLoadResult` exposes `ok`, `message`, and `model`.
+* `CreateGaussianSplatRendererFromFile(shader_root)`, `CreateGaussianSplatRendererFromAssets(shader_root)`, and `CreateGaussianSplatRenderData()` create the renderer and reusable submission data.
+* `GaussianSplatInstance(model, world = Mat4.Identity, id = 0, opacity = 1)` and `MakeGaussianSplatInstance(...)` describe an instance through `model`, `world`, `id`, and `opacity`. `GaussianSplatInstanceList` is the scripting collection type.
+* Added model queries `GetGaussianSplatCount(model)`, `GetGaussianSplatSourceCount(model)`, `GetGaussianSplatSHDegree(model)`, `GetGaussianSplatBoundsMin(model)`, `GetGaussianSplatBoundsMax(model)`, and `IsGaussianSplatAntialiased(model)`.
+* `SubmitGaussianSplats(next_view, rect, view_state, instances, renderer, render_data, settings, target)` submits compute and drawing work, with optional settings and target framebuffer. It never clears the target or calls `Frame()`. Reusing render data can avoid repeated projection/sorting; independently ordered cameras or passes need separate render data.
+* `GaussianSplatRenderSettings` exposes `max_sh_degree`, `view_limit`, `max_splats`, `depth_test`, `compact_views`, and `max_pixel_radius`. The radius cap is an explicit appearance/overdraw approximation. Supported transforms are rigid camera views and instance transforms with positive uniform scale; projection must be perspective, including off-axis perspective.
+* `GaussianSplatSubmitResult` exposes `ok`, `message`, `draw_view`, `count`, `dispatches`, `gpu_bytes`, and the effective `max_pixel_radius`. Cached submissions report zero compute dispatches while still drawing. Validation/allocation failures leave `next_view` unchanged and submit no work.
+
+#### Gaussian import and HGS2 codec (C++ only)
+
+These CPU APIs are declared in `engine/gaussian_splat_data.h`; they do not create GPU objects and are not exposed by the scripting bindings.
+
+* `GaussianSplatData` contains `base`, `higher_sh`, `count`, `source_count`, `sh_degree`, `bounds_min`, `bounds_max`, `antialiased`, and `normalized`. `GaussianSplatDataResult` contains `ok`, `message`, and `data`.
+* `GaussianSplatImportOptions` exposes `max_count`, `sh_degree`, and `normalize`. A zero `max_count` retains every source splat; a positive value explicitly requests reduction.
+* Added `ImportGaussianSplatPLY(input, options)` / `ImportGaussianSplatPLYFromFile(path, options)`, `ImportGaussianSplatSPZ(input, options)` / `ImportGaussianSplatSPZFromFile(path, options)`, and `ImportGaussianSplatBinary(input, options)` / `ImportGaussianSplatBinaryFromFile(path, options)` for supported binary PLY, SPZ v2/v3, and headerless `.splat` data.
+* `ReadGaussianSplatData(input)`, `ReadGaussianSplatDataFromFile(path)`, and `ReadGaussianSplatDataFromAssets(name)` decode HGS2 data.
+* `WriteGaussianSplatData(data, output, error, options, stats)` and `WriteGaussianSplatDataToFile(data, path, error, options, stats)` encode HGS2. The error, options, and statistics arguments are optional. `GaussianSplatWriteOptions.storage` selects `GaussianSplatStorage::Quantized` (default) or `GaussianSplatStorage::Float32`.
+* `GaussianSplatWriteStats` reports `uncompressed_bytes`, `stored_bytes`, `max_position_error`, `max_scale_relative_error`, `max_opacity_error`, `max_dc_error`, `max_sh_error`, and `max_quaternion_error`.
+* Added budget/default constants `GaussianSplatMaxCount`, `GaussianSplatDefaultImportCount`, `GaussianSplatMaxNativeBytes`, `GaussianSplatMaxPLYBytes`, `GaussianSplatMaxBinaryBytes`, and `GaussianSplatMaxSPZBytes`.
+
+#### Camera controls, input, and HiDPI
+
+* `TrackballController` has default, `(target, distance, orientation = Quaternion.Identity)`, and copy constructors. Its editable fields are `target`, `orientation`, `distance`, `min_distance`, `max_distance`, and `dolly_speed`.
+* `TrackballController.Reset()` restores its construction pose; `ComputeWorld()` returns the camera world transform. `Update(orbit, pan, x, y, dx, dy, wheel, width, height, fov)` accepts pointer input directly. `Update(mouse, width, height, fov, drag_valid)` uses left-button orbit, right/middle-button pan, and fractional-wheel dolly. Optional `fov` defaults to pi/3 radians; `drag_valid` defaults to `true` and can suppress drag when focus is reacquired.
+* `MouseState` adds floating-point `wheel_delta` and `hwheel_delta`, plus `WheelDelta()` and `HWheelDelta()` accessors. `Mouse` adds the same two accessors. Legacy integer `Wheel()` / `HWheel()` remain available; high-resolution accessors fall back to integer values for legacy readers.
+* `GetWindowFrameBufferSize(window, width, height)` returns drawable pixel dimensions, while `GetWindowClientSize` continues to return client coordinates, which are points on macOS. `RenderInit` and `RenderResetToWindow` now use drawable pixels.
+* Added `ImGuiBeginFrame(..., mouse_scale)` overloads, with or without an explicit `DearImguiContext`, to scale client-coordinate mouse input to display dimensions. Existing overloads retain 1:1 input scaling.
+
+#### Additional scripting and native JavaScript APIs
+
+* Exposed existing quaternion-vector operations as `Rotate(quaternion, Vec3)` and `Rotate(quaternion, Vec4)` in the generated bindings.
+* Added `RequestScreenShot(framebuffer_handle, path)` to Lua and native JavaScript, wrapping BGFX's screenshot request.
+* The native JavaScript `harfang` ES module exposes the shared engine API. `SceneLuaVM.Pack(value)` and `SceneLuaVM.Unpack(luaObject)` bridge primitives and bound HARFANG objects to/from embedded Lua; Lua integers return as JavaScript `BigInt`. JavaScript `Script.SetParam(name, value)` accepts boolean, integer, float, and string values.
+* JavaScript adds partial vector constructors with one or more components, `Color(gray)`, `Mat44(Mat44)`, and `Mat44(Mat4)`, plus value-comparison methods for `Vec2`, `iVec2`, `Vec4`, and `Mat44`. Default vectors are zeroed, default `Color` is opaque black, and default `Mat4` / `Mat44` are identity matrices. Mutable math constants are copied into JavaScript values.
+* The `harfang-host` module adds `nextFrame(window?)`, resolving to `{closed, dtNs}` with a nanosecond `BigInt` delta. The launcher accepts ordinary top-level code, exported `main()`, or an exported `completion` promise, and supplies `print()`, `console.log()`, and `console.error()`.
+* For C++ embedding, the optional QuickJS language layer adds the move-only `QuickJSValue` owner and `QuickJSVM`, with `ModuleReader` / `ModuleResolver` callback types, `GetContext()`, `GetRuntime()`, `SetModuleReader(...)`, `SetBindingCleanup(...)`, `Evaluate(...)`, `PumpJobs(...)`, `Check(...)`, `CheckPromise(...)`, `CheckUnhandledRejections()`, and `TakeException()`. Values must be released before their VM and cannot cross VM boundaries directly.
+
+### Compatibility notes
+
+* Gaussian assets must be rebuilt with the matching AssetC toolchain: older HGS0/HGS1 files are rejected by the HGS2 loader. SPZ v4, extension flags, and SH4 remain unsupported.
+* LZMA archives require both an updated runtime and launcher. The `--legacy` archive-header option does not select an older compression codec.
+* Native Gaussian packaging and rendering have documented validation scopes; consult `tutorials/GAUSSIAN_SPLATTING.md` and the platform validation records before assuming support on another backend.
+
 # [3.3.0] - 2026-09-06
 
 This release expands HARFANG with a selectable experimental Tau physics backend, first-class Squirrel support, application launchers, media plugins, rendering controls, and a much larger in-tree documentation and tutorial set. Bullet 3 remains the default scene-physics backend.

@@ -52,6 +52,8 @@ extern void test_gamecontroller();
 #endif
 
 // engine tests
+extern void test_trackball_controller();
+extern void test_dear_imgui_mouse_scale();
 extern void test_assets();
 extern void test_animation();
 extern void test_audio();
@@ -121,6 +123,8 @@ TEST_LIST = {
 	{"platform.window", test_window},
 
 	// engine
+	{"engine.trackball_controller", test_trackball_controller},
+	{"engine.dear_imgui_mouse_scale", test_dear_imgui_mouse_scale},
 	{"engine.assets", test_assets},
 	{"engine.animation", test_animation},
 	{"engine.audio", test_audio},

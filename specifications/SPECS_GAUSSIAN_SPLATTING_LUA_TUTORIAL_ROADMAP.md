@@ -1,12 +1,16 @@
 # Real-Time Gaussian Splatting in Lua — Tutorial Roadmap
 
+> Implementation update (2026-11-09): Houseplant and Saari now use single-file Lua applications backed by the native API and assetc/gsplatc. The Python tutorial tools, HGS0 path and separate Lua renderer modules mentioned below are historical and have been removed. See [current native progress](GSPLAT_NATIVE_PROGRESS.md) and the [Houseplant guide](../tutorials/GAUSSIAN_SPLATTING.md).
+
 Date: 2026-10-27. Audited HARFANG revision: `7f00a71632d16320585531f8f9fa1aa3e2c729d6`.
 
-Status: implementation roadmap, supported by a static source audit and asset verification. No renderer implementation, shader compilation, GPU benchmark, or runtime compatibility result is claimed here.
+Status: the source audit below describes the pre-implementation revision. The macOS/Metal implementation now exists; current validation, decisions and measurements are recorded in [GSPLAT_PROGRESS.md](GSPLAT_PROGRESS.md). Windows qualification remains deferred.
+
+Implementation updates and measured results are tracked in [GSPLAT_PROGRESS.md](GSPLAT_PROGRESS.md). The user subsequently confirmed macOS-first implementation, with Windows qualification in a second phase.
 
 ## 1. Deliverable and architecture decision
 
-Deliver `tutorials/gaussian_splatting.lua`: a small, documented Gaussian splat viewer with a mouse/keyboard FPS camera, a bundled Creative Commons sample, and an essential GPU compute path. Lua owns initialization, camera controls, pass scheduling, settings, and shutdown. C++ supplies missing rendering primitives and bulk data operations through FabGen. Shaders perform the per-splat work. Other language tutorials come after the Lua version passes acceptance.
+Deliver `tutorials/gaussian_splatting.lua`: a small, documented Gaussian splat viewer with a mouse-controlled quaternion trackball camera and an RGB XYZ orientation gizmo drawn with `DrawLines`, a bundled Creative Commons sample, and an essential GPU compute path. Lua owns initialization, camera controls, pass scheduling, settings, and shutdown. C++ supplies missing rendering primitives and bulk data operations through FabGen. Shaders perform the per-splat work. Other language tutorials come after the Lua version passes acceptance.
 
 **Use a hybrid renderer for v1:** compute shaders project/cull splats, sort them by depth, and prepare sorted attributes; conventional vertex/fragment shaders draw Gaussian ellipses as ordered quads. This explicitly means compute-assisted Gaussian splatting, not rasterization entirely in compute. It satisfies the requested use of compute while keeping the first tutorial tractable. Section 10 describes a separate, optional fully compute rasterizer.
 
@@ -25,7 +29,7 @@ The first version displays one static object with view-independent color, anisot
 | Compute buffers | Vendored [`bgfx.h`](../extern/bgfx/bgfx/include/bgfx/bgfx.h) has compute bindings for vertex/index buffer handles; [`defines.h`](../extern/bgfx/bgfx/include/bgfx/defines.h) has compute buffer flags | Implement a bounded HARFANG buffer abstraction. Do not assume a public storage-buffer API or graphics-stage buffer access already exists. |
 | Shader language helpers | [`bgfx_compute.sh`](../tutorials/resources/core/shader/bgfx_compute.sh): `BUFFER_RO`, `BUFFER_RW`, thread declarations and atomics | Use pinned shader helpers; verify types and workgroup operations through the actual compiler. |
 | FabGen generation | [`binding/CMakeLists.txt`](../binding/CMakeLists.txt) generates `binding/bind_Lua.cpp` using `HG_FABGEN_PATH` | Change the binding specification, regenerate, and rebuild `hg_lua`. Never hand-edit generated bindings. |
-| FPS input | [`fps_controller.cpp`](../harfang/engine/fps_controller.cpp), `FpsController` bindings | Existing keyboard/mouse overload supports WASD/arrows and left-button look. The boolean overload allows tutorial-specific controls. |
+| Existing FPS input (unused by the final tutorial) | [`fps_controller.cpp`](../harfang/engine/fps_controller.cpp), `FpsController` bindings | Existing keyboard/mouse overload supports WASD/arrows and left-button look. The boolean overload allows tutorial-specific controls. |
 | Quad drawing | `DrawTriangles` in `render_pipeline.cpp` allocates transient buffers; `Indices` is `std::vector<uint16_t>` and implicit indices also narrow to 16 bits | Approximately 454,000 quad vertices exceed both the index domain and a practical transient budget. A persistent, correctly indexed batch path is an enabling gate. |
 | Premultiplied blending | `BlendMode`, `ComputeRenderState`, and Lua's opaque `RenderState` expose no `ONE / ONE_MINUS_SRC_ALPHA` mode | Add a supported premultiplied mode or a narrow state constructor; existing `BM_Alpha` is not equivalent. |
 
@@ -35,9 +39,11 @@ The existing [Compute Shader Feature-Parity specification](SPECS_COMPUTE_SHADER_
 
 **HARFANG's three backends in use are DirectX, Metal and OpenGL.** This is the project's backend scope; additional compiler branches in vendored tooling do not expand it.
 
+The user subsequently replaced the FPS camera with a trackball-only interaction model; do not retain an FPS toggle.
+
 **Required initial backends: macOS/Metal first, then Windows/DirectX through Direct3D 11 (D3D11).** Both are acceptance requirements for v1. A Metal-only build is an intermediate milestone, not the completed delivery.
 
-Run the small native feasibility probes on Metal first and D3D11 immediately afterwards, before freezing buffer layouts and shader interfaces. Continue the full viewer on Metal first, while compiling shaders for both backends throughout implementation. Keep backend-specific compiled assets in separate output directories so one build cannot overwrite the other's shader binaries. Require a Windows GPU runner for D3D11 runtime validation; shader cross-compilation alone does not qualify that backend.
+Run the small native feasibility probes on Metal first and continue the full viewer on macOS. Windows is unavailable for now: keep interfaces and shader data layouts suitable for D3D11, but defer its compiler/runtime qualification to the second phase. Keep backend-specific compiled assets in separate output directories so one build cannot overwrite the other's shader binaries. Require a Windows GPU runner before claiming D3D11 support; shader cross-compilation alone does not qualify that backend.
 
 OpenGL is the third HARFANG backend. Qualification of this tutorial's compute path on OpenGL is deferred until Metal and DirectX pass; this does not question HARFANG's existing OpenGL rendering support. Keep shader sources portable and record the OpenGL compute compiler/profile checks needed for that later milestone. Browser and mobile delivery are outside this roadmap.
 
@@ -45,6 +51,7 @@ For each tested device/backend, record renderer, GPU, OS/driver, HARFANG/bgfx re
 
 - `BGFX_CAPS_COMPUTE`, image read/write feature support, `limits.maxComputeBindings`, `maxTextureSize`, `maxViews`, and relevant allocation limits. The pinned public capability structure does not expose all workgroup limits: start with conservative 64/128-thread variants and validate compilation, shared memory and dispatch on each target.
 - Per-format image-write and vertex-sampling support: `BGFX_CAPS_FORMAT_TEXTURE_IMAGE_WRITE` and `BGFX_CAPS_FORMAT_TEXTURE_VERTEX` for the proposed `RGBA32F` attribute atlases. Check format validity for the complete texture flags too.
+- Implementation finding: pinned Metal omits the image-read/write format bits. Distinguish missing reporting from a proven unsupported format; the native probe explicitly tests RGBA32F on Metal. Do not globally mark all formats supported or silently bypass capability checks on other backends.
 - `BGFX_CAPS_INDEX32` if using one large indexed quad batch; otherwise use ordered persistent 16-bit chunks.
 - Compute-to-compute visibility with a producer/consumer sentinel, then compute-to-vertex-texture-fetch visibility with an observable rendered result. Ordered views schedule dependencies; access flags and workgroup barriers alone do not establish every required memory dependency.
 - Actual pinned backend handling of buffer/image transitions. Fix a demonstrated backend gap in C++ rather than inventing a script-level barrier API.
@@ -127,7 +134,7 @@ Source .splat + manifest
 
 Lua camera / projection / viewport
   -> compute: project + cull + depth keys
-  -> compute: stable radix sort (multiple dependent dispatches)
+  -> compute: GPU depth sort (measured bitonic prototype now; radix optimization later)
   -> compute: gather sorted attributes into atlases
   -> graphics: ordered persistent Gaussian quads
   -> optional overlay -> present
@@ -161,7 +168,7 @@ Center-depth sorting is a practical approximation: intersecting or very large sp
 
 ## 7. Lua tutorial and asset layout
 
-Proposed layout, following this repository's existing `resources` / `resources_compiled` convention:
+Original proposed layout (the delivered paths and commands are documented in [the tutorial guide](../tutorials/GAUSSIAN_SPLATTING.md)), following this repository's existing `resources` / `resources_compiled` convention:
 
 ```text
 tutorials/
@@ -191,8 +198,8 @@ The preparation/build command assembles reproducible staging, including the gene
 Lua responsibilities:
 
 - Start from a minimal window/input/render loop; initialize resources and report unsupported features before submitting any work.
-- Use `FpsController` or its boolean overload for WASD/arrows plus mouse look. Provide RMB-look or a documented capture toggle, Shift speed boost, vertical movement, reset-to-object, and Escape to exit. Make the controls explicit rather than relying on the existing overload's left-button convention.
-- Use HARFANG time units correctly, cap unusually large frame deltas, clamp pitch for an FPS camera, and suspend look/movement when unfocused. Restore cursor state on exit and focus loss.
+- Use a quaternion trackball: left drag rotates around the target, wheel dollies, right/middle drag pans, R restores the initial object framing, and Escape exits. Draw a compact world XYZ gizmo over the scene with RGB `DrawLines`. No FPS mode.
+- Normalize trackball quaternions, handle client/drawable scaling correctly, bound dolly distance, and suspend input when unfocused. Keep the cursor visible and ignore stale deltas at the start of a drag.
 - Frame the supplied bounds at startup. Handle resize/minimize without zero-size dispatches; use actual framebuffer dimensions for projection and render resources, especially on high-DPI displays.
 - Show CPU frame time, measured GPU time where available, preset, total/visible count when obtainable without a stall, resolution, renderer, sort time, and allocated GPU bytes. Asynchronous/debug counters are sufficient; no synchronous per-frame readback.
 - Reuse resource lists/uniform containers; avoid per-splat Lua allocation and full garbage collection every frame. Destroy resources explicitly, then shut down rendering and window/input systems.
@@ -221,12 +228,12 @@ Execute in this order. Estimates should be made after the backend spike, because
 
 | Milestone | Work and deliverable | Exit gate |
 |---|---|---|
-| M0 — native feasibility | Source audit, capability report, tiny image and buffer compute probes through `assetc`; test Metal first, then D3D11 before freezing interfaces | C++ producer/consumer sentinel and compute-to-vertex-texture rendering pass on both Metal and D3D11. Record device/backend evidence separately. |
+| M0 — native feasibility | Source audit, capability report, tiny image and buffer compute probes through `assetc`; test Metal now, D3D11 in the Windows phase | Metal sentinel and compute-to-vertex-texture rendering unblock macOS implementation. Full two-backend qualification still requires the same evidence on Windows. |
 | M1 — Lua/FabGen bridge | Image parity plus bounded buffer API, capability query, ownership, bulk upload, premultiplied blend state and bindings; small Lua compute probe | Rebuilt `hg_lua` runs the probe, returns advanced view IDs, handles invalid resources, exposes the required blend state, and shuts down cleanly. |
 | M2 — reproducible content | Pin/download/hash the chosen sample, preserve licence, prepare SH0 blob and optional presets | Offline build reproduces manifest/count/hash; runtime loads compiled assets without network or Python. |
 | M3 — visible Gaussian slice | Synthetic ellipses, projection, atlas gather, persistent quad path; tiny CPU ordering oracle permitted for debugging | Known rotations, scales, opacity and overlapping colors match expected output; reference asset orientation is correct. |
-| M4 — GPU ordering | Stable radix pipeline, invalid entries, equal-depth ties, bounded buffers and pass scheduling | GPU result agrees with a CPU oracle for small/adversarial cases and 113,648 entries; camera motion triggers GPU sorting with no blocking CPU readback. |
-| M5 — complete Lua tutorial | FPS camera, resize/focus, presets, overlay, cleanup, credits and launch guide | Fresh local checkout plus documented build steps produces a navigable viewer; repeated open/close and resize pass. |
+| M4 — GPU ordering | GPU ordering, invalid entries, equal-depth ties, bounded buffers and pass scheduling; a measured bitonic prototype is implemented, with radix deferred | GPU result agrees with a CPU oracle for small/adversarial cases and 113,648 entries; camera motion triggers GPU sorting with no blocking CPU readback. |
+| M5 — complete Lua tutorial | Trackball camera, RGB DrawLines gizmo, resize/focus, presets, cleanup, credits and launch guide | Fresh local checkout plus documented build steps produces a navigable viewer; repeated open/close and resize pass. |
 | M6 — Metal and D3D11 qualification | Fixed camera benchmark, memory accounting, complete Lua viewer and correctness checks on macOS/Metal and Windows/D3D11; documentation | Both required backends pass rendering, GPU ordering, camera, resize and shutdown checks. Each has recorded performance on a named reference device and an explicit supported preset. Missing Windows runtime evidence leaves this milestone incomplete. |
 
 M2 can proceed alongside M0/M1. M3 needs M1/M2; M4 needs the native buffer/visibility gate; M5/M6 require the complete path. Keep other-language ports outside these exit gates.
@@ -256,3 +263,8 @@ This path introduces extra scans, duplication, sort keys, scratch memory and occ
 Codex owns the architecture decision, source/asset verification, final document and integration. The requested `duo-codex-copilot-ollama` protocol was executed as task `GSPLAT-ROADMAP-001` on an isolated worktree at the audited revision. DeepSeek ran through Copilot CLI `1.0.95` as `deepseek-v4.1-flash:cloud`; the runner finished successfully, reported only the permitted review-file writes, and recorded no contract violations. Its initial delivery status was “À vérifier”.
 
 After checking the report against source, Codex selectively integrated the missing premultiplied-blend API, the 16-bit transient-index limitation, runtime-symbol checks, and more explicit capability gates. Recommendations for permanent CPU sorting, unsupported performance estimates, and the claim that GPU sort validation is impossible without buffer readback were rejected. The buffer extension and capability query were already planned; their absence in today's API is an implementation dependency, not a contradiction in the roadmap. The raw review and local runner logs remain outside the repository; model output is not a substitute for runtime validation.
+
+
+## Full-count native performance implementation (2026-11-09)
+
+The native renderer now implements stable radix ordering (24 sort dispatches for large inputs), immutable source/SH GPU buffers and exact-input projection/sort/gather caching. See [implementation, measured Windows results and validation](SPECS_GAUSSIAN_SPLATTING_NATIVE_PERFORMANCE.md). This supersedes the bitonic-prototype status above for the native path; `sort.sc` remains the correctness reference. Metal shader compilation passes, but this change still requires new Metal runtime qualification.

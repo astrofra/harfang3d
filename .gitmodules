@@ -20,9 +20,6 @@
 	path = extern/meshoptimizer
 	url = https://github.com/zeux/meshoptimizer.git
 	branch = v0.17
-[submodule "tools/assimp_converter/assimp"]
-	path = tools/assimp_converter/assimp
-	url = https://github.com/assimp/assimp
 [submodule "extern/OpenXR"]
 	path = extern/OpenXR
 	url = https://github.com/KhronosGroup/OpenXR-SDK.git

@@ -17,8 +17,7 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 set "BUILD_DIR=%WORK_DIR%\build\docs-static"
 set "INSTALL_DIR=%WORK_DIR%\install\documentation"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
-set "GENERATOR=Visual Studio 17 2022"
-set "PLATFORM=x64"
+if not defined PLATFORM set "PLATFORM=x64"
 set "OPEN_DOCS=0"
 
 if /I "%~2"=="--open" set "OPEN_DOCS=1"
@@ -47,7 +46,7 @@ if not defined PYTHON_EXE (
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
 echo [1/2] Configuration CMake...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^

@@ -401,6 +401,12 @@ if(HG_BINDING_DEFINES_LIST)
 	set(HG_BINDING_DEFINES "--defines" ${HG_BINDING_DEFINES_LIST})
 endif()
 
+# Allow third-party projects with older policy declarations to configure with CMake 4.
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 4.0 AND
+	(NOT DEFINED CMAKE_POLICY_VERSION_MINIMUM OR CMAKE_POLICY_VERSION_MINIMUM VERSION_LESS 3.5))
+	set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+endif()
+
 add_subdirectory(extern)
 add_subdirectory(binding)
 
@@ -517,6 +523,10 @@ message(STATUS "")
 # -----------------------------------------------------------------------------
 # Package configuration
 # -----------------------------------------------------------------------------
+
+if(HG_BUILD_HG_LUA AND HG_BUILD_ASSETC)
+	include(harfang/cmake/GaussianSplatTutorial.cmake)
+endif()
 
 # [WARNING] Don't forget to add any new shared library target to this list!
 if(NOT HG_BUILD_HARFANG_STATIC)

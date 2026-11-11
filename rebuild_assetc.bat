@@ -17,7 +17,6 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 if not defined BUILD_DIR set "BUILD_DIR=%WORK_DIR%\build\assetc-cmake"
 if not defined INSTALL_DIR set "INSTALL_DIR=%WORK_DIR%\install"
 if not defined FABGEN_DIR set "FABGEN_DIR=%WORK_DIR%\FABGen"
-if not defined GENERATOR set "GENERATOR=Visual Studio 17 2022"
 if not defined PLATFORM set "PLATFORM=x64"
 if not defined BUILD_JOBS set "BUILD_JOBS=1"
 set "CMAKE_PLATFORM_ARG=-A %PLATFORM%"
@@ -60,7 +59,7 @@ echo Build jobs  : %BUILD_JOBS%
 echo.
 
 echo [1/3] Configuration CMake AssetC (%CONFIG%)...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" %CMAKE_PLATFORM_ARG% ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" %CMAKE_PLATFORM_ARG% ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^

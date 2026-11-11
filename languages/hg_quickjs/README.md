@@ -41,10 +41,12 @@ The compiler is `../install/js_bullet/assetc/assetc.exe`.
 Set `HG_QUICKJS_SOURCE_DIR` and `HG_QUICKJS_ZIG` to use explicit dependencies.
 Otherwise the batch looks in the workspace's `deps` directory and the existing
 `.codex_tmp/quickjs` bootstrap cache; Zig can also be found on `PATH`.
-`BUILD_DIR`, `INSTALL_DIR`, `FABGEN_DIR`, `PYTHON_EXE` and `BUILD_JOBS` can be
+`BUILD_DIR`, `INSTALL_DIR`, `FABGEN_DIR`, `PYTHON_EXE`, `BUILD_JOBS` and
+`PLATFORM` can be
 overridden; `HG_BATCH_NO_PAUSE=1` disables the final pause for automation.
 
-Windows x64 requires Visual Studio 2022 C++ tools, CMake, Python with FABGen's
+Windows x64 requires Visual Studio C++ tools, a CMake version supporting that
+Visual Studio release, Python with FABGen's
 dependencies, the adjacent FABGen checkout with its QuickJS backend, official
 QuickJS **2026-06-04**, and Zig **0.14.1**. QuickJS archive SHA-256:
 `b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a`.

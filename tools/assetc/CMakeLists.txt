@@ -2,7 +2,7 @@ add_executable(assetc assetc.cpp)
 
 add_subdirectory(texc)
 
-add_dependencies(assetc texc texturec shaderc luac cmft)
+add_dependencies(assetc texc texturec shaderc luac cmft gsplatc)
 set_target_properties(assetc PROPERTIES FOLDER "harfang/tools")
 target_link_libraries(assetc engine tiny-process-library)
 
@@ -38,7 +38,11 @@ endif()
 # assetc_host runs the executables (so HG_TARGET_PREFIX) and outputs assets for assetc_target (ASSETC_TARGET_PREFIX)
 set(TOOLCHAIN_PATH assetc/toolchains/host-${HG_TARGET_PREFIX}-target-${ASSETC_TARGET_PREFIX})
 
-install(TARGETS texc texturec shaderc luac cmft RUNTIME DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)
+install(TARGETS texc texturec shaderc luac cmft gsplatc RUNTIME DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)
+
+# Host tools such as gsplatc also link engine's shared dependencies. Their
+# install rpath is relative to the executable, not the assetc parent directory.
+install_cppsdk_dependencies(${TOOLCHAIN_PATH} assetc)
 
 if(WIN32)
 	install(PROGRAMS bin/win/texconv.exe DESTINATION ${TOOLCHAIN_PATH} COMPONENT assetc)

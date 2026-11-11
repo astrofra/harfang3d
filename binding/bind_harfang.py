@@ -245,6 +245,9 @@ static int _MouseState_HWheel(hg::MouseState *s) { return s->hwheel; }
 	gen.bind_method(mouse_state, 'Button', 'bool', ['hg::MouseButton btn'], {'route': route_lambda('_MouseState_Button')})
 	gen.bind_method(mouse_state, 'Wheel', 'int', [], {'route': route_lambda('_MouseState_Wheel')})
 	gen.bind_method(mouse_state, 'HWheel', 'int', [], {'route': route_lambda('_MouseState_HWheel')})
+	gen.bind_members(mouse_state, ['float wheel_delta', 'float hwheel_delta'])
+	gen.bind_method(mouse_state, 'WheelDelta', 'float', [])
+	gen.bind_method(mouse_state, 'HWheelDelta', 'float', [])
 	gen.end_class(mouse_state)
 
 	gen.bind_function('hg::ReadMouse', 'hg::MouseState', ['?const char *name'])
@@ -264,6 +267,8 @@ static int _MouseState_HWheel(hg::MouseState *s) { return s->hwheel; }
 
 	gen.bind_method(mouse, 'Wheel', 'int', [])
 	gen.bind_method(mouse, 'HWheel', 'int', [])
+	gen.bind_method(mouse, 'WheelDelta', 'float', [])
+	gen.bind_method(mouse, 'HWheelDelta', 'float', [])
 
 	gen.bind_method(mouse, 'Update', 'void', [])
 
@@ -2343,7 +2348,7 @@ def bind_render(gen):
 		('hg::Window *', ['const char *window_title', 'int width', 'int height', 'bgfx::RendererType::Enum type', '?uint32_t reset_flags', '?bgfx::TextureFormat::Enum format', '?uint32_t debug_flags'], {'constants_group': {'reset_flags': 'ResetFlags', 'debug_flags': 'DebugFlags'}})
 	])
 	gen.bind_function('hg::RenderShutdown', 'void', [])
-	if gen.get_language() == 'QuickJS':
+	if gen.get_language() in ['QuickJS', 'Lua']:
 		gen.bind_function('bgfx::requestScreenShot', 'void', ['bgfx::FrameBufferHandle handle', 'const char *path'], bound_name='RequestScreenShot')
 
 	gen.bind_function('hg::RenderResetToWindow', 'bool', ['hg::Window *win', 'int &width', 'int &height', '?uint32_t reset_flags'], {'arg_in_out': ['width', 'height']})
@@ -3001,6 +3006,27 @@ def bind_fps_controller(gen):
 	gen.bind_function('hg::FpsController', 'void', ['const hg::Keyboard &keyboard', 'const hg::Mouse &mouse', 'hg::Vec3 &pos', 'hg::Vec3 &rot', 'float speed', 'hg::time_ns dt'])
 
 
+def bind_trackball_controller(gen):
+	gen.add_include('engine/trackball_controller.h')
+
+	controller = gen.begin_class('hg::TrackballController')
+	gen.bind_constructor_overloads(controller, [
+		([], []),
+		(['const hg::Vec3 &target', 'float distance', '?const hg::Quaternion &orientation'], []),
+		(['const hg::TrackballController &controller'], [])
+	])
+	gen.bind_members(controller, ['hg::Vec3 target', 'hg::Quaternion orientation', 'float distance',
+		'float min_distance', 'float max_distance', 'float dolly_speed'])
+	gen.bind_method(controller, 'Reset', 'void', [])
+	gen.bind_method_overloads(controller, 'Update', [
+		('void', ['bool orbit', 'bool pan', 'float x', 'float y', 'float dx', 'float dy', 'float wheel',
+			'float width', 'float height', '?float fov'], []),
+		('void', ['const hg::Mouse &mouse', 'float width', 'float height', '?float fov', '?bool drag_valid'], [])
+	])
+	gen.bind_method(controller, 'ComputeWorld', 'hg::Mat4', [])
+	gen.end_class(controller)
+
+
 def bind_forward_pipeline(gen):
 	gen.add_include('engine/forward_pipeline.h')
 	
@@ -3123,6 +3149,104 @@ def bind_path_tools(gen):
 
 	gen.bind_function('hg::GetCurrentWorkingDirectory', 'std::string', [])
 	gen.bind_function('hg::GetUserFolder', 'std::string', [])
+
+
+def bind_compute(gen):
+	stats = gen.begin_class('hg::ComputeFrameStats')
+	gen.bind_members(stats, ['bool gpu_timing_available', 'int64_t gpu_timestamp', 'double gpu_ms', 'uint32_t draw_calls', 'uint32_t compute_calls'])
+	gen.end_class(stats)
+	gen.bind_function('hg::GetComputeFrameStats', 'hg::ComputeFrameStats', [])
+	gen.add_include('engine/compute.h')
+	gen.bind_named_enum('bgfx::Access::Enum', ['Read', 'Write', 'ReadWrite'], bound_name='Access', prefix='AC_')
+	gen.bind_named_enum('hg::ComputeBufferType', ['CBT_Float4', 'CBT_UInt4'])
+	gen.bind_constants('uint64_t', [('TF_ComputeWrite', 'BGFX_TEXTURE_COMPUTE_WRITE')])
+	caps = gen.begin_class('hg::ComputeCaps')
+	gen.bind_members(caps, ['bool supported', 'bool rgba32f_vertex_sampling', 'bool rgba32f_image_write',
+		'bool image_write_reporting_complete', 'uint32_t max_bindings', 'uint32_t max_views', 'uint32_t max_texture_size', 'std::string renderer'])
+	gen.end_class(caps)
+	gen.bind_function('hg::GetComputeCaps', 'hg::ComputeCaps', [])
+	buffer = gen.begin_class('hg::ComputeBuffer')
+	gen.end_class(buffer)
+	gen.bind_function('hg::CreateComputeBuffer', 'hg::ComputeBuffer', ['uint32_t count', '?hg::ComputeBufferType type'])
+	gen.bind_function('hg::CreateComputeBufferFromData', 'hg::ComputeBuffer', ['const hg::Data &data', '?hg::ComputeBufferType type', '?uint32_t offset'])
+	for suffix in ['File', 'Assets']:
+		gen.bind_function('hg::LoadComputeBufferFrom' + suffix, 'hg::ComputeBuffer', ['const char *path', '?hg::ComputeBufferType type', '?uint32_t offset'])
+		gen.bind_function('hg::LoadComputeProgramFrom' + suffix, 'bgfx::ProgramHandle', ['const char *path', '?bool silent'])
+	gen.bind_function('hg::IsValid', 'bool', ['const hg::ComputeBuffer &buffer'])
+	gen.bind_function('hg::GetComputeBufferCount', 'uint32_t', ['const hg::ComputeBuffer &buffer'])
+	gen.bind_function('hg::DestroyComputeBuffer', 'void', ['hg::ComputeBuffer &buffer'])
+	for name in ['ComputeBufferBinding', 'ImageBinding']:
+		conv = gen.begin_class('hg::' + name)
+		gen.end_class(conv)
+		bind_std_vector(gen, conv)
+	gen.bind_function('hg::MakeComputeBufferBinding', 'hg::ComputeBufferBinding', ['const hg::ComputeBuffer &buffer', 'uint32_t stage', 'bgfx::Access::Enum access'])
+	gen.bind_function('hg::MakeImageBinding', 'hg::ImageBinding', ['const hg::Texture &texture', 'uint32_t stage', 'bgfx::Access::Enum access', '?uint8_t mip'])
+	gen.bind_function_overloads('hg::DispatchCompute', expand_std_vector_proto(gen, [
+		('bool', ['bgfx::ViewId &view_id', 'bgfx::ProgramHandle program', 'uint32_t x', '?uint32_t y', '?uint32_t z'], {'arg_in_out': ['view_id']}),
+		('bool', ['bgfx::ViewId &view_id', 'bgfx::ProgramHandle program', 'uint32_t x', 'uint32_t y', 'uint32_t z',
+			'const std::vector<hg::UniformSetValue> &values', 'const std::vector<hg::UniformSetTexture> &textures',
+			'const std::vector<hg::ImageBinding> &images', 'const std::vector<hg::ComputeBufferBinding> &buffers', '?const std::string &debug_name'], {'arg_in_out': ['view_id']})
+	]))
+	gen.bind_function('hg::CreateComputeQuadModel', 'hg::Model', ['uint32_t count'])
+	gen.bind_function('hg::ComputePremultipliedRenderState', 'hg::RenderState', [])
+
+
+def bind_gaussian_splat(gen):
+	gen.add_include('engine/gaussian_splat.h')
+	for name in ['GaussianSplatModel', 'GaussianSplatRenderer', 'GaussianSplatRenderData']:
+		handle = gen.begin_class('hg::' + name)
+		gen.end_class(handle)
+
+	options = gen.begin_class('hg::GaussianSplatLoadOptions')
+	gen.bind_constructor(options, [])
+	gen.bind_members(options, ['uint32_t max_file_bytes'])
+	gen.end_class(options)
+
+	settings = gen.begin_class('hg::GaussianSplatRenderSettings')
+	gen.bind_constructor(settings, [])
+	gen.bind_members(settings, ['uint32_t max_sh_degree', 'uint32_t view_limit', 'uint32_t max_splats', 'bool depth_test', 'bool compact_views', 'float max_pixel_radius'])
+	gen.end_class(settings)
+
+	instance = gen.begin_class('hg::GaussianSplatInstance')
+	gen.insert_binding_code('''
+static hg::GaussianSplatInstance *__ConstructGaussianSplatInstance(const hg::GaussianSplatModel &model, const hg::Mat4 &world = hg::Mat4::Identity, uint32_t id = 0, float opacity = 1.f) {
+	return new hg::GaussianSplatInstance{model, world, id, opacity};
+}
+''')
+	gen.bind_constructor(instance, ['const hg::GaussianSplatModel &model', '?const hg::Mat4 &world', '?uint32_t id', '?float opacity'], {'route': route_lambda('__ConstructGaussianSplatInstance')})
+	gen.bind_members(instance, ['hg::GaussianSplatModel model'], ['copy_obj'])
+	gen.bind_members(instance, ['hg::Mat4 world', 'uint32_t id', 'float opacity'])
+	gen.end_class(instance)
+	bind_std_vector(gen, instance)
+	gen.bind_function('hg::MakeGaussianSplatInstance', 'hg::GaussianSplatInstance', ['const hg::GaussianSplatModel &model', '?const hg::Mat4 &world', '?uint32_t id', '?float opacity'])
+
+	load_result = gen.begin_class('hg::GaussianSplatLoadResult')
+	gen.bind_members(load_result, ['bool ok', 'std::string message'])
+	gen.bind_members(load_result, ['hg::GaussianSplatModel model'], ['copy_obj'])
+	gen.end_class(load_result)
+	submit_result = gen.begin_class('hg::GaussianSplatSubmitResult')
+	gen.bind_members(submit_result, ['bool ok', 'std::string message', 'bgfx::ViewId draw_view', 'uint32_t count', 'uint32_t dispatches', 'uint64_t gpu_bytes', 'float max_pixel_radius'])
+	gen.end_class(submit_result)
+
+	for suffix in ['File', 'Assets']:
+		gen.bind_function('hg::LoadGaussianSplatModelFrom' + suffix, 'hg::GaussianSplatLoadResult', ['const char *path', '?const hg::GaussianSplatLoadOptions &options'])
+		gen.bind_function('hg::CreateGaussianSplatRendererFrom' + suffix, 'hg::GaussianSplatRenderer', ['const char *shader_root'])
+	gen.bind_function('hg::LoadGaussianSplatModelFromData', 'hg::GaussianSplatLoadResult', ['const hg::Data &data', '?const hg::GaussianSplatLoadOptions &options'])
+	gen.bind_function('hg::CreateGaussianSplatRenderData', 'hg::GaussianSplatRenderData', [])
+	for name in ['GaussianSplatModel', 'GaussianSplatRenderer', 'GaussianSplatRenderData']:
+		gen.bind_function('hg::IsValid', 'bool', ['const hg::' + name + ' &value'])
+		gen.bind_function('hg::Destroy' + name, 'void', ['hg::' + name + ' &value'])
+	gen.bind_function('hg::GetGaussianSplatCount', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatSourceCount', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatSHDegree', 'uint32_t', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatBoundsMin', 'hg::Vec3', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::GetGaussianSplatBoundsMax', 'hg::Vec3', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function('hg::IsGaussianSplatAntialiased', 'bool', ['const hg::GaussianSplatModel &model'])
+	gen.bind_function_overloads('hg::SubmitGaussianSplats', expand_std_vector_proto(gen, [
+		('hg::GaussianSplatSubmitResult', ['bgfx::ViewId &next_view', 'const hg::Rect<int> &rect', 'const hg::ViewState &view_state',
+			'const std::vector<hg::GaussianSplatInstance> &instances', 'hg::GaussianSplatRenderer &renderer', 'hg::GaussianSplatRenderData &render_data',
+			'?const hg::GaussianSplatRenderSettings &settings', '?bgfx::FrameBufferHandle target'], {'arg_in_out': ['next_view']})
+	]))
 
 
 def bind_data(gen):
@@ -3498,6 +3622,10 @@ static const hg::Vec3 _CubicInterpolateImpl(const hg::Vec3& v0, const hg::Vec3& 
 
 	gen.bind_function('hg::Normalize', 'hg::Quaternion', ['const hg::Quaternion &q'])
 	gen.bind_function('hg::Inverse', 'hg::Quaternion', ['const hg::Quaternion &q'])
+	gen.bind_function_overloads('hg::Rotate', [
+		('hg::Vec3', ['const hg::Quaternion &q', 'const hg::Vec3 &v'], []),
+		('hg::Vec4', ['const hg::Quaternion &q', 'const hg::Vec4 &v'], [])
+	])
 
 	gen.bind_function('hg::Len2', 'float', ['const hg::Quaternion &q'])
 	gen.bind_function('hg::Len', 'float', ['const hg::Quaternion &q'])
@@ -4536,6 +4664,8 @@ static hg::Vec2 _ImGuiCalcTextSize(const char *text, bool hide_text_after_double
 	gen.bind_function('hg::ImGuiShutdown', 'void', [])
 	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard'])
 	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['hg::DearImguiContext &ctx', 'int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard'])
+	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard', 'const hg::tVec2<float> &mouse_scale'])
+	gen.bind_function('hg::ImGuiBeginFrame', 'void', ['hg::DearImguiContext &ctx', 'int width', 'int height', 'hg::time_ns dt_clock', 'const hg::MouseState &mouse', 'const hg::KeyboardState &keyboard', 'const hg::tVec2<float> &mouse_scale'])
 	gen.bind_function('hg::ImGuiEndFrame', 'void', ['const hg::DearImguiContext& ctx', '?bgfx::ViewId view_id'])
 	gen.bind_function('hg::ImGuiEndFrame', 'void', ['?bgfx::ViewId view_id'])
 	gen.bind_function('hg::ImGuiClearInputBuffer', 'void', [])
@@ -4846,6 +4976,8 @@ def bind(gen):
 	bind_color(gen)
 	bind_picture(gen)
 	bind_render(gen)
+	bind_compute(gen)
+	bind_gaussian_splat(gen)
 	bind_forward_pipeline(gen)
 	bind_font(gen)
 	bind_meta(gen)
@@ -4865,6 +4997,7 @@ def bind(gen):
 	bind_imgui(gen)
 	bind_platform(gen)
 	bind_fps_controller(gen)
+	bind_trackball_controller(gen)
 	bind_extras(gen)
 	bind_audio(gen)
 	bind_openvr(gen)

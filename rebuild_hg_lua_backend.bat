@@ -36,8 +36,7 @@ for %%I in ("%REPO_DIR%\..") do set "WORK_DIR=%%~fI"
 set "BUILD_DIR=%WORK_DIR%\build\%BUILD_DIR_NAME%"
 set "INSTALL_DIR=%WORK_DIR%\install\%INSTALL_DIR_NAME%"
 set "FABGEN_DIR=%WORK_DIR%\FABGen"
-set "GENERATOR=Visual Studio 17 2022"
-set "PLATFORM=x64"
+if not defined PLATFORM set "PLATFORM=x64"
 set "BUILD_TARGETS=hg_lua lua launcher launcher_noconsole assetc audio_xmp recastc legacy_archive"
 
 if /I "%BACKEND%"=="bullet" (
@@ -69,7 +68,7 @@ echo Install dir : "%INSTALL_DIR%\hg_lua"
 echo.
 
 echo [1/3] Configuration CMake HG Lua (%BACKEND%, %CONFIG%)...
-cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -G "%GENERATOR%" -A "%PLATFORM%" ^
+cmake -S "%REPO_DIR%" -B "%BUILD_DIR%" -A "%PLATFORM%" ^
 	-DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%" ^
 	-DHG_FABGEN_PATH="%FABGEN_DIR%" ^
 	-DPython3_EXECUTABLE="%PYTHON_EXE%" ^

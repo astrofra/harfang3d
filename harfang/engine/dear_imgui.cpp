@@ -251,6 +251,11 @@ void ImGuiEndFrame(bgfx::ViewId view_id) {
 }
 
 void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard) {
+	ImGuiBeginFrame(ctx, width, height, dt_clock, mouse, keyboard, Vec2(1.f, 1.f));
+}
+
+void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard,
+	const Vec2 &mouse_scale) {
 	ImGui::SetCurrentContext(ctx.m_imgui);
 	auto &io = ImGui::GetIO();
 	io.DisplaySize = {float(width), float(height)};
@@ -258,12 +263,13 @@ void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_cl
 	io.DeltaTime = time_to_sec_f(dt_clock);
 
 	// send mouse state
-	io.MousePos = {float(mouse.x), float(height - mouse.y)};
+	io.MousePos = {float(mouse.x) * mouse_scale.x, float(height) - float(mouse.y) * mouse_scale.y};
 	io.MouseDown[0] = mouse.button[MB_0];
 	io.MouseDown[1] = mouse.button[MB_1];
 	io.MouseDown[2] = mouse.button[MB_2];
 
-	io.MouseWheel = float(mouse.wheel);
+	io.MouseWheel = mouse.WheelDelta();
+	io.MouseWheelH = mouse.HWheelDelta();
 
 	// send keyboard state
 	for (auto i = 0; i < K_Last; ++i)
@@ -286,8 +292,12 @@ void ImGuiBeginFrame(DearImguiContext &ctx, int width, int height, time_ns dt_cl
 void ImGuiClearInputBuffer() { input_buffer.clear(); }
 
 void ImGuiBeginFrame(int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard) {
+	ImGuiBeginFrame(width, height, dt_clock, mouse, keyboard, Vec2(1.f, 1.f));
+}
+
+void ImGuiBeginFrame(int width, int height, time_ns dt_clock, const MouseState &mouse, const KeyboardState &keyboard, const Vec2 &mouse_scale) {
 	if (CheckImGuiIsInitialized())
-		ImGuiBeginFrame(*g_context, width, height, dt_clock, mouse, keyboard);
+		ImGuiBeginFrame(*g_context, width, height, dt_clock, mouse, keyboard, mouse_scale);
 }
 
 static void *__alloc(size_t size, void *userdata) { return malloc(size); }

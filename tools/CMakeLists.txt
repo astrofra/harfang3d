@@ -3,6 +3,7 @@ if(HG_BUILD_LEGACY_ARCHIVE)
 endif()
 
 if(HG_BUILD_ASSETC)
+	add_subdirectory(gsplatc)
 	add_subdirectory(assetc)
 endif()
 

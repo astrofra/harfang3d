@@ -18,6 +18,13 @@ Current Harfang-specific delta:
 - `bgfx/src/renderer_mtl.mm`: preserve depth/stencil attachments across render
   passes even when the main swap chain uses MSAA. Discarding offscreen depth
   based on the swap chain's MSAA setting broke shadow maps on Apple GPUs.
+- `bgfx/src/renderer_mtl.mm`: store MSAA color samples as well as their resolved
+  image whenever the device supports the combined store/resolve action. Compute
+  dispatches or framebuffer switches can interrupt a render pass before later
+  views reload the same target. Resolve-only storage discarded those samples,
+  producing magenta/stale color during Gaussian camera motion and correct color
+  when the cached renderer skipped compute. This applies to swap-chain and
+  offscreen attachments, independently of capture being enabled.
 
 Maintenance rules:
 

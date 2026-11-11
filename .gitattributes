@@ -1,1 +1,5 @@
 extern/libxmp-lite/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+# Preserve the original whitespace in the vendored Assimp snapshot.
+tools/assimp_converter/assimp/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+# Draco uses seven equals signs for Markdown heading underlines.
+tools/assimp_converter/assimp/contrib/draco/README.md conflict-marker-size=32

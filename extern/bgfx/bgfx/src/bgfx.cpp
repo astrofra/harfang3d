@@ -2426,7 +2426,10 @@ namespace bgfx
 		NSAutoreleasePoolScope pool;
 #endif // BX_PLATFORM_OSX
 
-		if (!m_flipAfterRender)
+		// reset() can enable flip-after-render while the previous frame still
+		// awaits its flip. Submit that frame before starting another one;
+		// otherwise Metal consumes a frame slot without a matching completion.
+		if (!m_flipAfterRender || !m_flipped)
 		{
 			BGFX_PROFILER_SCOPE("bgfx/flip", 0xff2040ff);
 			flip();
