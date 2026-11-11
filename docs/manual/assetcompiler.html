@@ -9,7 +9,7 @@
 <body class="static-doc" data-root="../">
 <div class="doc-layout">
 <aside class="doc-sidebar">
-<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.3.0</span></a>
+<a class="doc-brand" href="../index.html">Harfang<span class="doc-version">3.3.1</span></a>
 <input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
 <div id="doc-search-results" class="doc-search-results"></div>
 <div class="doc-nav-title">Manual</div>
@@ -75,7 +75,7 @@
 <p>If you are unclear on the resources/assets distinction see <a href="assets.html">Resources &amp; Assets</a>.</p>
 <h2 id="drag-drop">Drag &amp; drop</h2>
 <p>The easiest way is to drag and drop the resources folder on the assetc executable:</p>
-<p><img alt="assetc drag &amp; drop" src="../images/docs/3.3.0/assetc.gif"></p>
+<p><img alt="assetc drag &amp; drop" src="../images/docs/3.3.1/assetc.gif"></p>
 <h2 id="command-line">Command-Line</h2>
 <p>Since HARFANG 3.2.5, <code>assetc</code> is now included in the packaged <em>Python</em>, <em>Lua</em>, and <em>Squirrel</em> distributions.</p>
 <h3 id="python">Python</h3>
@@ -215,7 +215,6 @@ toolchain directory as <code>texturec</code> and <code>shaderc</code>. For a res
 <span class="w">  </span><span class="nt">&quot;profiles&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">    </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
 <span class="w">      </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gaussian-splat&quot;</span><span class="p">,</span>
-<span class="w">      </span><span class="nt">&quot;max-count&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">250000</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;sh-degree&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
 <span class="w">      </span><span class="nt">&quot;normalize&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
 <span class="w">    </span><span class="p">},</span>
@@ -246,8 +245,8 @@ loads this compiled asset through the native Gaussian model API.</p>
 <tbody>
 <tr>
 <td><code>max-count</code></td>
-<td>250000</td>
-<td>Maximum retained splats, integer 1–1048576. Naive decimation can reduce opacity coverage.</td>
+<td>All source splats</td>
+<td>Optional explicit reduction cap, integer 1–2097152. Omit it to retain every source splat. Explicit zero is invalid. Naive decimation can reduce opacity coverage.</td>
 </tr>
 <tr>
 <td><code>sh-degree</code></td>
@@ -266,6 +265,15 @@ loads this compiled asset through the native Gaussian model API.</p>
 </tr>
 </tbody>
 </table>
+<p>Selected profiles inherit each missing field from <code>default</code>. An explicit cap in
+<code>default</code> therefore also applies to <code>reference</code> or another profile unless that
+profile supplies its own cap. With no effective <code>max-count</code>, <code>assetc</code> does not
+pass <code>--max-count</code> to <code>gsplatc</code>, whose default also retains every splat.</p>
+<p>The native implementation accepts up to 2,097,152 retained splats and 512 MiB of
+expanded canonical data per model. Files exceeding these limits fail with an
+error; they are never reduced silently. Request a smaller <code>max-count</code> or SH
+degree explicitly if needed. Compression reduces disk size, not the expanded
+CPU/GPU memory required to load the model.</p>
 <p>Metadata changes participate in incremental compilation. Invalid Gaussian
 settings, missing <code>gsplatc</code>, unsupported source schemas and converter failures
 fail the build. One-shot <code>assetc</code> returns a nonzero status when compilation
@@ -291,7 +299,7 @@ ranges avoid intentional color/SH clipping. <code>gsplatc --storage float32</cod
 The tool reports measured quantization errors and actual file size. Native
 loading reconstructs float buffers; GPU memory use is unchanged. HGS0/HGS1
 are not accepted: recompile existing Gaussian resources after updating.</p>
-<div class="doc-footer">Harfang 3.3.0 static documentation.</div>
+<div class="doc-footer">Harfang 3.3.1 static documentation.</div>
 </main>
 </div>
 <script src="../search.js"></script>

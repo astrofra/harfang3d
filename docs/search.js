@@ -669,7 +669,7 @@ window.HG_SEARCH_INDEX = [
     "title": "Mouse",
     "href": "api/cpython/classes.html#mouse",
     "kind": "class",
-    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices."
+    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices. `Wheel()` and `HWheel()` retain their legacy integer return values. Use `WheelDelta()` and `HW"
   },
   {
     "title": "MouseState",
@@ -2757,7 +2757,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ImGuiBeginFrame",
     "href": "api/cpython/functions.html#imguibeginframe",
     "kind": "function",
-    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. See ImGuiEndFrame."
+    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. The overload with a final `mouse_sca"
   },
   {
     "title": "ImGuiBeginGroup",
@@ -7209,7 +7209,7 @@ window.HG_SEARCH_INDEX = [
     "title": "Mouse",
     "href": "api/lua/classes.html#mouse",
     "kind": "class",
-    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices."
+    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices. `Wheel()` and `HWheel()` retain their legacy integer return values. Use `WheelDelta()` and `HW"
   },
   {
     "title": "MouseState",
@@ -9297,7 +9297,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ImGuiBeginFrame",
     "href": "api/lua/functions.html#imguibeginframe",
     "kind": "function",
-    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. See ImGuiEndFrame."
+    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. The overload with a final `mouse_sca"
   },
   {
     "title": "ImGuiBeginGroup",
@@ -13749,7 +13749,7 @@ window.HG_SEARCH_INDEX = [
     "title": "Mouse",
     "href": "api/squirrel/classes.html#mouse",
     "kind": "class",
-    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices."
+    "text": "Helper class holding the current and previous device state to enable delta state queries. Use GetMouseNames to query for available mouse devices. `Wheel()` and `HWheel()` retain their legacy integer return values. Use `WheelDelta()` and `HW"
   },
   {
     "title": "MouseState",
@@ -15837,7 +15837,7 @@ window.HG_SEARCH_INDEX = [
     "title": "ImGuiBeginFrame",
     "href": "api/squirrel/functions.html#imguibeginframe",
     "kind": "function",
-    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. See ImGuiEndFrame."
+    "text": "Begin an ImGui frame. This function must be called once per frame before any other ImGui call. When using multiple contexts, it must be called for each context you intend to use during the current frame. The overload with a final `mouse_sca"
   },
   {
     "title": "ImGuiBeginGroup",

@@ -420,7 +420,7 @@ bool VideoStream::Open(const char* uri) {
 
 	seek = -1;
 
-	new_frame = true;
+	new_frame = false;
 	buffer_id = 0;
 	output = av_frame_alloc();
 
@@ -440,6 +440,9 @@ bool VideoStream::Start() {
 		return false;
 	}
 
+	// Publish the running state before launching the worker so an immediate
+	// Close cannot have its stop request overwritten by the worker startup.
+	state = VideoStream::Run;
 	th = std::thread(&VideoStream::Loop, this);
 	return true;
 }
@@ -509,8 +512,6 @@ void VideoStream::Loop() {
 	current = std::chrono::system_clock::now();
 
 	int ret = 1;
-	state = VideoStream::Run;
-	new_frame = false;
 	while ((ret >= 0) && (state != VideoStream::Stopped)) {
 		std::this_thread::yield();
 		{
@@ -599,7 +600,7 @@ void VideoStream::Loop() {
 int VideoStream::CommitFrame(uint8_t **out) {
 	std::lock_guard<std::mutex> lock(buffer_mutex);
 	*out = NULL;
-	if (available.empty()) {
+	if (available.empty() || (!new_frame && buffer_id == 0)) {
 		return 0;
 	}
 
