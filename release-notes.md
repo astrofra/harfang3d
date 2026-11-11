@@ -1,3 +1,58 @@
+# [3.3.1] - 2026-11-11
+
+This release adds native JavaScript bindings, a native Gaussian splatting pipeline, scene animation crossfades, portable texture compression, and LZMA archives. It also improves macOS rendering and input, refreshes the core asset package, and provides a single Windows rebuild entry point.
+
+### JavaScript
+
+* Added the native QuickJS language layer, generated HARFANG bindings, the `HarfangJs` CMake target and `hgjs` executable, enabled with `HG_BUILD_HG_JS`.
+* Added module loading, exception reporting, promise processing, the `harfang-host` frame helper, and interoperability with the engine's existing Lua scene scripting. Embedded scene scripts remain Lua-based.
+* Added 32 JavaScript tutorials covering rendering, scenes, materials, ImGui, physics, input, filesystems, and audio, with API parity and tutorial validation tools.
+* Added `rebuild_hg_js_bullet.bat`. Windows builds use official QuickJS 2026-06-04 and Zig 0.14.1 for the embedded C runtime, with MSVC for HARFANG and its bindings.
+* Documented native/Web compatibility priorities and WebGL delivery experiments. The separate Web work and feasibility studies do not imply native API parity in browsers.
+
+### Gaussian splatting and compute
+
+* Added native Gaussian model loading, GPU resource management, covariance projection, spherical harmonics through SH3, depth sorting, drawing, and reusable per-view render data.
+* Added `gsplatc` and AssetC metadata profiles for `.splat`, supported binary little-endian PLY, and SPZ v2/v3 sources. Compiled HGS2 supports compact quantized storage and a float32 reference profile.
+* Preserve every source splat by default; reduction requires an explicit `max-count`. Imports validate the entire source and reject unsupported formats or resource budgets instead of silently dropping data.
+* Added GPU sorting optimizations, immutable uploaded inputs, camera-dependent caching, compute capability reporting, buffer/image bindings, dispatch helpers, and asynchronous frame statistics.
+* Added a native `TrackballController` with orbit, pan, dolly, reset, and fractional wheel input.
+* Consolidated the Lua Gaussian tutorial around the bundled Houseplant and Saari datasets, with model switching, per-model cameras, SH controls, an RGB orientation gizmo, packaging targets, and automated rendering checks.
+* Fixed full-count rendering and model selection on Retina displays, pending-frame resource shutdown, and Metal MSAA color preservation when compute dispatches interrupt rendering.
+* Windows validation during release preparation exercised the Saari model with all 1,307,339 splats, camera gestures, resize, focus recovery, slide revisits, MSAA composition, and clean shutdown. This does not qualify every graphics backend or hardware configuration.
+
+### Animation
+
+* Added the scene-owned `SceneAnimPlayer` for transform-animation crossfades with configurable duration and easing, updated blending semantics, scripting bindings, and regression coverage.
+* Documented two-track transitions and fixed animation loop-flag handling on macOS.
+
+### Rendering, platform, and input
+
+* Added drawable framebuffer-size queries and corrected render initialization and resize handling for Retina displays.
+* Added native macOS gamepad support through GameController and preserved fractional mouse-wheel deltas in GLFW input and ImGui integration.
+* Fixed macOS shadow-map behavior and ensured the global timer thread is joined at process exit.
+
+### Asset tools and packaging
+
+* Added the portable `texc` image-to-DDS compiler with BC1, BC3, BC4, BC5, BC7, RGBA8, and BGRA8 outputs. Fixed rectangular mip chains, uncompressed DDS layout, resize limits, and write-error reporting, with AssetC integration checks.
+* Added LZMA compression and reading to legacy archives. Packing now defaults to LZMA; `--method zlib` preserves compatibility with older runtimes and launchers. Raw and existing Zlib archives remain supported.
+* Vendored Assimp and consolidated the maintained core assets in `core-package`, including Gaussian shaders and synchronization checks for tutorial resources.
+* Removed the in-tree Mini Studio prototype and reorganized archived specifications.
+* Updated Windows rebuild helpers and added `rebuild_essentials.bat [Config]`, which runs AssetC, FFmpeg, Lua/Bullet, Python/Bullet, JavaScript/Bullet, static documentation, converters, and the XM player in order, stopping on the first failure.
+* Regenerated static documentation for 3.3.1 and made its build depend on `harfang/version.txt`, so version changes invalidate the generated pages.
+
+### Video fixes
+
+* Fixed a race in the FFmpeg plugin where immediate stream closure could be overwritten by decoder-thread startup and block shutdown.
+* Do not expose a video frame before decoding has produced one. Added a lifecycle regression check covering 100 immediate play/close cycles.
+* Windows release validation decoded, sought, and closed all 21 videos in the interactive-book integration, and exercised the deployed console/no-console launchers and FBX/glTF tools.
+
+### Compatibility notes
+
+* Gaussian assets must be rebuilt with the matching AssetC toolchain: older HGS0/HGS1 files are rejected by the HGS2 loader. SPZ v4, extension flags, and SH4 remain unsupported.
+* LZMA archives require both an updated runtime and launcher. The `--legacy` archive-header option does not select an older compression codec.
+* Native Gaussian packaging and rendering have documented validation scopes; consult `tutorials/GAUSSIAN_SPLATTING.md` and the platform validation records before assuming support on another backend.
+
 # [3.3.0] - 2026-09-06
 
 This release expands HARFANG with a selectable experimental Tau physics backend, first-class Squirrel support, application launchers, media plugins, rendering controls, and a much larger in-tree documentation and tutorial set. Bullet 3 remains the default scene-physics backend.

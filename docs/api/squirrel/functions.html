@@ -9,7 +9,7 @@
 <body class="static-doc" data-root="../../">
 <div class="doc-layout">
 <aside class="doc-sidebar">
-<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.0</span></a>
+<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.1</span></a>
 <input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
 <div id="doc-search-results" class="doc-search-results"></div>
 <div class="doc-nav-title">Manual</div>
@@ -1622,8 +1622,16 @@ to the GLFW readers. <code>default</code> prefers a connected native controller.
 <h2>ImGuiBeginFrame <span class="api-kind">Function</span></h2>
 <div class="api-proto"><code>null</code> ImGuiBeginFrame(<code>integer</code> width, <code>integer</code> height, <code>integer</code> dt_clock, <a href="classes.html#mousestate">MouseState</a> mouse, <a href="classes.html#keyboardstate">KeyboardState</a> keyboard)</div>
 <div class="api-proto"><code>null</code> ImGuiBeginFrame(<a href="classes.html#dearimguicontext">DearImguiContext</a> ctx, <code>integer</code> width, <code>integer</code> height, <code>integer</code> dt_clock, <a href="classes.html#mousestate">MouseState</a> mouse, <a href="classes.html#keyboardstate">KeyboardState</a> keyboard)</div>
+<div class="api-proto"><code>null</code> ImGuiBeginFrame(<code>integer</code> width, <code>integer</code> height, <code>integer</code> dt_clock, <a href="classes.html#mousestate">MouseState</a> mouse, <a href="classes.html#keyboardstate">KeyboardState</a> keyboard, <a href="classes.html#vec2">Vec2</a> mouse_scale)</div>
+<div class="api-proto"><code>null</code> ImGuiBeginFrame(<a href="classes.html#dearimguicontext">DearImguiContext</a> ctx, <code>integer</code> width, <code>integer</code> height, <code>integer</code> dt_clock, <a href="classes.html#mousestate">MouseState</a> mouse, <a href="classes.html#keyboardstate">KeyboardState</a> keyboard, <a href="classes.html#vec2">Vec2</a> mouse_scale)</div>
 <div class="api-doc"><p>Begin an ImGui frame. This function must be called once per frame before any other ImGui call.</p>
 <p>When using multiple contexts, it must be called for each context you intend to use during the current frame.</p>
+<p>The overload with a final <code>mouse_scale</code> vector converts client-coordinate mouse
+positions into the supplied display dimensions. When <code>width</code> and <code>height</code> are
+framebuffer pixels, pass <code>Vec2(framebuffer_width / client_width,
+framebuffer_height / client_height)</code>, using the current window sizes. This keeps
+mouse hit testing aligned on Retina/HiDPI displays and after resizing. The
+existing overloads retain a scale of <code>(1, 1)</code>.</p>
 <p>See <a href="#imguiendframe">ImGuiEndFrame</a>.</p></div>
 </section>
 <section class="api-entry" id="imguibegingroup">
@@ -5174,7 +5182,7 @@ positive Y points down, and triggers range from -1 (released) to +1 (fully press
 <div class="api-proto"><code>float</code> ZoomFactorToFov(<code>float</code> zoom_factor)</div>
 <div class="api-doc"><p>Convert from a zoom factor value in meters to a fov value in radian.</p></div>
 </section>
-<div class="doc-footer">Harfang 3.3.0 static documentation.</div>
+<div class="doc-footer">Harfang 3.3.1 static documentation.</div>
 </main>
 </div>
 <script src="../../search.js"></script>

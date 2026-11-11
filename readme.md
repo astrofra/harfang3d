@@ -270,7 +270,7 @@ install_cppsdk_dependencies(destination component)
 <a name="section_5"></a>
 # Version
 
-The current source-tree version is **3.3.0**. See the [release notes](release-notes.md#330---2026-09-06) for the changes since 3.2.7.
+The current source-tree version is **3.3.1**. See the [release notes](release-notes.md#331---2026-11-11) for the changes since 3.3.0.
 
 Harfang follows the Semantic Versioning Specification (SemVer) (http://semver.org).
 

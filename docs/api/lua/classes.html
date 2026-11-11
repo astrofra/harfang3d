@@ -9,7 +9,7 @@
 <body class="static-doc" data-root="../../">
 <div class="doc-layout">
 <aside class="doc-sidebar">
-<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.0</span></a>
+<a class="doc-brand" href="../../index.html">Harfang<span class="doc-version">3.3.1</span></a>
 <input id="doc-search" class="doc-search" type="search" placeholder="Search documentation">
 <div id="doc-search-results" class="doc-search-results"></div>
 <div class="doc-nav-title">Manual</div>
@@ -1309,7 +1309,18 @@ It can be used to test wether a volume is inside or outside the frustum it repre
 <section class="api-entry" id="mouse">
 <h2>Mouse <span class="api-kind">Class</span></h2>
 <div class="api-doc"><p>Helper class holding the current and previous device state to enable delta state queries.</p>
-<p>Use <a href="functions.html#getmousenames">GetMouseNames</a> to query for available mouse devices.</p></div>
+<p>Use <a href="functions.html#getmousenames">GetMouseNames</a> to query for available mouse devices.</p>
+<p><code>Wheel()</code> and <code>HWheel()</code> retain their legacy integer return values. Use
+<code>WheelDelta()</code> and <code>HWheelDelta()</code> for floating-point vertical/horizontal scroll,
+including slow high-resolution wheel and trackpad movements. Deltas represent
+the events collected since the previous read, not a cumulative wheel position.</p>
+<p><code>MouseState</code> keeps the integer <code>wheel</code>/<code>hwheel</code> fields and adds zero-initialized
+float <code>wheel_delta</code>/<code>hwheel_delta</code> fields with the same <code>WheelDelta()</code>/
+<code>HWheelDelta()</code> accessors. Legacy/custom readers that fill only integer fields
+remain supported: a zero float field falls back to the corresponding integer.
+The GLFW backend fills both representations before clearing its event totals.</p>
+<p>This preserves the existing source API. Native clients embedding <code>MouseState</code>
+must be rebuilt with the updated headers because its structure has grown.</p></div>
 
 
 <h3>Functions</h3>
@@ -1322,10 +1333,12 @@ It can be used to test wether a volume is inside or outside the frustum it repre
 <tr id="mouse_getoldstate"><td><code>GetOldState</code></td><td><div class="api-proto"><a href="#mousestate">MouseState</a> GetOldState()</div></td><td></td></tr>
 <tr id="mouse_getstate"><td><code>GetState</code></td><td><div class="api-proto"><a href="#mousestate">MouseState</a> GetState()</div></td><td></td></tr>
 <tr id="mouse_hwheel"><td><code>HWheel</code></td><td><div class="api-proto"><code>integer</code> HWheel()</div></td><td></td></tr>
+<tr id="mouse_hwheeldelta"><td><code>HWheelDelta</code></td><td><div class="api-proto"><code>number</code> HWheelDelta()</div></td><td></td></tr>
 <tr id="mouse_pressed"><td><code>Pressed</code></td><td><div class="api-proto"><code>boolean</code> Pressed(<code>integer</code> button)</div></td><td></td></tr>
 <tr id="mouse_released"><td><code>Released</code></td><td><div class="api-proto"><code>boolean</code> Released(<code>integer</code> button)</div></td><td></td></tr>
 <tr id="mouse_update"><td><code>Update</code></td><td><div class="api-proto"><code>nil</code> Update()</div></td><td></td></tr>
 <tr id="mouse_wheel"><td><code>Wheel</code></td><td><div class="api-proto"><code>integer</code> Wheel()</div></td><td></td></tr>
+<tr id="mouse_wheeldelta"><td><code>WheelDelta</code></td><td><div class="api-proto"><code>number</code> WheelDelta()</div></td><td></td></tr>
 <tr id="mouse_x"><td><code>X</code></td><td><div class="api-proto"><code>integer</code> X()</div></td><td></td></tr>
 <tr id="mouse_y"><td><code>Y</code></td><td><div class="api-proto"><code>integer</code> Y()</div></td><td></td></tr>
 </table>
@@ -1334,12 +1347,18 @@ It can be used to test wether a volume is inside or outside the frustum it repre
 <h2>MouseState <span class="api-kind">Class</span></h2>
 <div class="api-doc"></div>
 
-
+<h3>Variables</h3>
+<table class="api-table"><tr><th>Name</th><th>Type</th></tr>
+<tr><td><code>hwheel_delta</code></td><td><code>number</code></td></tr>
+<tr><td><code>wheel_delta</code></td><td><code>number</code></td></tr>
+</table>
 <h3>Functions</h3>
 <table class="api-table"><tr><th>Name</th><th>Prototype</th><th>Documentation</th></tr>
 <tr id="mousestate_button"><td><code>Button</code></td><td><div class="api-proto"><code>boolean</code> Button(<a href="constants.html#mousebutton">MouseButton</a> btn)</div></td><td></td></tr>
 <tr id="mousestate_hwheel"><td><code>HWheel</code></td><td><div class="api-proto"><code>integer</code> HWheel()</div></td><td></td></tr>
+<tr id="mousestate_hwheeldelta"><td><code>HWheelDelta</code></td><td><div class="api-proto"><code>number</code> HWheelDelta()</div></td><td></td></tr>
 <tr id="mousestate_wheel"><td><code>Wheel</code></td><td><div class="api-proto"><code>integer</code> Wheel()</div></td><td></td></tr>
+<tr id="mousestate_wheeldelta"><td><code>WheelDelta</code></td><td><div class="api-proto"><code>number</code> WheelDelta()</div></td><td></td></tr>
 <tr id="mousestate_x"><td><code>X</code></td><td><div class="api-proto"><code>integer</code> X()</div></td><td></td></tr>
 <tr id="mousestate_y"><td><code>Y</code></td><td><div class="api-proto"><code>integer</code> Y()</div></td><td></td></tr>
 </table>
@@ -2443,6 +2462,9 @@ to invalidate the player. Releasing a scripting wrapper does not stop playback.<
 </ul>
 <p>The vertical field of view <code>fov</code> is in radians and defaults to pi/3. The mouse overload's <code>drag_valid</code> defaults to true. Pointer positions/deltas and viewport dimensions must use the same units, with Y pointing down. Use client dimensions for client-coordinate mouse input, including on displays where framebuffer dimensions differ. Empty viewports ignore updates; panning requires a field of view between 0 and pi. Rotations preserve roll; an exactly antipodal drag leaves the orientation unchanged.</p>
 <p>Call <code>mouse:Update()</code> before updating the controller. The application handles window focus and keyboard shortcuts. <code>ComputeWorld()</code> returns the camera world transform, ready for <code>ComputePerspectiveViewState</code>; it does not return the inverse view matrix.</p>
+<p>The mouse overload reads <code>WheelDelta()</code> so fractional scroll moves the camera
+on every update. The explicit-input overload already accepts a floating-point
+<code>wheel</code> value. Legacy integer-only mouse readers remain supported.</p>
 <div class="codehilite"><pre><span></span><code><span class="kd">local</span> <span class="n">camera</span> <span class="o">=</span> <span class="n">hg</span><span class="p">.</span><span class="n">TrackballController</span><span class="p">(</span><span class="n">hg</span><span class="p">.</span><span class="n">Vec3</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="mf">3.4</span><span class="p">)</span>
 <span class="kd">local</span> <span class="n">fov</span> <span class="o">=</span> <span class="nb">math.pi</span> <span class="o">/</span> <span class="mi">3</span>
 
@@ -2955,7 +2977,7 @@ to invalidate the player. Releasing a scripting wrapper does not stop playback.<
 
 
 </section>
-<div class="doc-footer">Harfang 3.3.0 static documentation.</div>
+<div class="doc-footer">Harfang 3.3.1 static documentation.</div>
 </main>
 </div>
 <script src="../../search.js"></script>

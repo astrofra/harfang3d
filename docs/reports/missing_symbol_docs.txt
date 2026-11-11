@@ -441,7 +441,9 @@ MouseButton
 MouseState
 MouseState_Button
 MouseState_HWheel
+MouseState_HWheelDelta
 MouseState_Wheel
+MouseState_WheelDelta
 MouseState_X
 MouseState_Y
 Mouse_Constructor
@@ -451,10 +453,12 @@ Mouse_DtY
 Mouse_GetOldState
 Mouse_GetState
 Mouse_HWheel
+Mouse_HWheelDelta
 Mouse_Pressed
 Mouse_Released
 Mouse_Update
 Mouse_Wheel
+Mouse_WheelDelta
 Mouse_X
 Mouse_Y
 NodeComponentIdx
