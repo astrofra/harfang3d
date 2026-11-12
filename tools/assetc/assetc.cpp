@@ -153,7 +153,7 @@ static void SetToolchain(const std::string &path) {
 		PathJoin({path, "recastc.exe"}), PathJoin({path, "texconv.exe"}), PathJoin({path, "bulletc.exe"}), PathJoin({path, "texc.exe"}),
 		PathJoin({path, "gsplatc.exe"})};
 #else
-	toolchain = {PathJoin({path, "shaderc"}), PathJoin({path, "texturec"}), PathJoin({path, "luac"}), PathJoin({path, "cmft"}), PathJoin({path, "recast"}),
+	toolchain = {PathJoin({path, "shaderc"}), PathJoin({path, "texturec"}), PathJoin({path, "luac"}), PathJoin({path, "cmft"}), PathJoin({path, "recastc"}),
 		PathJoin({path, "texconv"}), PathJoin({path, "bulletc"}), PathJoin({path, "texc"}), PathJoin({path, "gsplatc"})};
 #endif
 }
@@ -1354,7 +1354,7 @@ void Texture(std::map<std::string, Hash> &hashes, std::string path) {
 					MkOutputTree(path + ".radiance");
 					CleanOutputs({path + ".radiance"});
 
-					const auto cmd = format("%1 --input \"%2\" --output0 \"%3\" --output0params dds,rgba16f,cubemap --useOpenCL true --filter radiance "
+					const auto cmd = format("\"%1\" --input \"%2\" --output0 \"%3\" --output0params dds,rgba16f,cubemap --useOpenCL true --filter radiance "
 											"--srcFaceSize %4 --edgeFixup %5 --glossScale 20 --glossBias 0")
 										 .arg(toolchain.cmft)
 										 .arg(src)
@@ -1384,7 +1384,7 @@ void Texture(std::map<std::string, Hash> &hashes, std::string path) {
 					CleanOutputs({path + ".irradiance"});
 
 					const auto cmd =
-						format("%1 --input \"%2\" --output0 \"%3\" --output0params dds,rgba16f,cubemap --useOpenCL false --filter irradiance --srcFaceSize %4")
+						format("\"%1\" --input \"%2\" --output0 \"%3\" --output0params dds,rgba16f,cubemap --useOpenCL false --filter irradiance --srcFaceSize %4")
 							.arg(toolchain.cmft)
 							.arg(src)
 							.arg(dst)
@@ -1518,7 +1518,7 @@ static void BuildComputeShader(std::map<std::string, Hash> &hashes, const std::s
 			MkOutputTree(cs_path);
 			CleanOutputs({cs_path});
 
-			const auto cs_cmd = format("%1 -f \"%2\" -o \"%3\" --platform %4 %5 %6 --type compute --define \"%7\"")
+			const auto cs_cmd = format("\"%1\" -f \"%2\" -o \"%3\" --platform %4 %5 %6 --type compute --define \"%7\"")
 									.arg(toolchain.shaderc)
 									.arg(FullInputPath(cs_path))
 									.arg(cs_out)
@@ -1589,7 +1589,7 @@ static void BuildShader(std::map<std::string, Hash> &hashes, const std::string &
 			MkOutputTree(vs_name);
 			CleanOutputs({vs_name});
 
-			const auto vs_cmd = format("%1 -f \"%2\" -o \"%3\" --varyingdef \"%4\" --type v --platform %5 %6 %7 --define \"%8\"")
+			const auto vs_cmd = format("\"%1\" -f \"%2\" -o \"%3\" --varyingdef \"%4\" --type v --platform %5 %6 %7 --define \"%8\"")
 									.arg(toolchain.shaderc)
 									.arg(FullInputPath(vs_path))
 									.arg(vs_out)
@@ -1630,7 +1630,7 @@ static void BuildShader(std::map<std::string, Hash> &hashes, const std::string &
 			MkOutputTree(fs_name);
 			CleanOutputs({fs_name});
 
-			const auto fs_cmd = format("%1 -f \"%2\" -o \"%3\" --varyingdef \"%4\" --type f --platform %5 %6 %7 --define \"%8\"")
+			const auto fs_cmd = format("\"%1\" -f \"%2\" -o \"%3\" --varyingdef \"%4\" --type f --platform %5 %6 %7 --define \"%8\"")
 									.arg(toolchain.shaderc)
 									.arg(FullInputPath(fs_path))
 									.arg(fs_out)
@@ -1776,7 +1776,7 @@ static void LuaScript(std::map<std::string, Hash> &hashes, const std::string &pa
 			MkOutputTree(path);
 			CleanOutputs({path});
 
-			const auto cmd = format("%1 -o \"%3\" -s \"%2\"").arg(toolchain.luac).arg(src).arg(dst);
+			const auto cmd = format("\"%1\" -o \"%3\" -s \"%2\"").arg(toolchain.luac).arg(src).arg(dst);
 			PushAsyncProcessTask(path, cmd, cwd);
 		} else {
 			debug("  [O] Lua script up to date");
@@ -1994,7 +1994,7 @@ static void PathFinding(std::map<std::string, Hash> &hashes, const std::string &
 			MkOutputTree(path);
 			CleanOutputs({path});
 
-			const auto cmd = format("%1 \"%2\" \"%3\" -root \"%4\"").arg(toolchain.recastc).arg(src).arg(dst).arg(input_dir);
+			const auto cmd = format("\"%1\" \"%2\" \"%3\" -root \"%4\"").arg(toolchain.recastc).arg(src).arg(dst).arg(input_dir);
 			PushAsyncProcessTask(path, cmd, GetCurrentWorkingDirectory());
 		} else {
 			debug("  [O] Pathfinding resource up to date");

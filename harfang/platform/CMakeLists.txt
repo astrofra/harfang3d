@@ -44,12 +44,13 @@ elseif(APPLE)
 		set_source_files_properties(osx/gamecontroller.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 	endif()
 	list(APPEND SRCS
-		osx/platform.cpp
+		osx/platform.mm
 		posix/crash_dump.cpp
 		posix/process.cpp
 		posix/shared_library.cpp
 		posix/thread.cpp
 	)
+	set_source_files_properties(osx/platform.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
 else()
 	list(APPEND SRCS
 		posix/call_stack.cpp
@@ -108,6 +109,9 @@ else()
 	target_link_libraries(platform foundation glfw)
 	if(APPLE AND HG_USE_GLFW)
 		target_link_libraries(platform "-framework GameController" "-framework Foundation")
+	endif()
+	if(APPLE)
+		target_link_libraries(platform "-framework Cocoa" "-framework UniformTypeIdentifiers")
 	endif()
 	if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN)
 		find_package(PkgConfig)

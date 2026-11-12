@@ -362,12 +362,17 @@ DearImguiContext *ImGuiInitContext(float font_size, bgfx::ProgramHandle imgui_pr
 	io.KeyMap[ImGuiKey_Enter] = K_Return;
 	io.KeyMap[ImGuiKey_KeypadEnter] = K_Enter;
 	io.KeyMap[ImGuiKey_Escape] = K_Escape;
-	io.KeyMap[ImGuiKey_A] = K_A;
-	io.KeyMap[ImGuiKey_C] = K_C;
-	io.KeyMap[ImGuiKey_V] = K_V;
-	io.KeyMap[ImGuiKey_X] = K_X;
-	io.KeyMap[ImGuiKey_Y] = K_Y;
-	io.KeyMap[ImGuiKey_Z] = K_Z;
+	for (int i = 0; i < 26; ++i) io.KeyMap[ImGuiKey_A + i] = K_A + i;
+	for (int i = 0; i < 10; ++i) io.KeyMap[ImGuiKey_0 + i] = K_0 + i;
+	for (int i = 0; i < 12; ++i) io.KeyMap[ImGuiKey_F1 + i] = K_F1 + i;
+	io.KeyMap[ImGuiKey_LeftCtrl] = K_LCtrl;
+	io.KeyMap[ImGuiKey_RightCtrl] = K_RCtrl;
+	io.KeyMap[ImGuiKey_LeftShift] = K_LShift;
+	io.KeyMap[ImGuiKey_RightShift] = K_RShift;
+	io.KeyMap[ImGuiKey_LeftAlt] = K_LAlt;
+	io.KeyMap[ImGuiKey_RightAlt] = K_RAlt;
+	io.KeyMap[ImGuiKey_LeftSuper] = K_LWin;
+	io.KeyMap[ImGuiKey_RightSuper] = K_RWin;
 
 #if USE_ENTRY
 	io.ConfigFlags |= 0 | ImGuiConfigFlags_NavEnableGamepad | ImGuiConfigFlags_NavEnableKeyboard;

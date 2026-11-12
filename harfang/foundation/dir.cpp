@@ -115,23 +115,26 @@ std::vector<DirEntry> ListDir(const char *path, int mask) {
 			if (!strcmp(ent->d_name, ".") || !strcmp(ent->d_name, ".."))
 				continue;
 
-			DirEntry entry;
-
+			struct stat info;
+			if (lstat(PathJoin({path, ent->d_name}).c_str(), &info) != 0) continue;
 			int type;
-
-			if (ent->d_type == DT_DIR) {
+			if (S_ISDIR(info.st_mode)) {
 				type = DE_Dir;
-			} else if (ent->d_type == DT_REG) {
+			} else if (S_ISREG(info.st_mode)) {
 				type = DE_File;
-			} else if (ent->d_type == DT_LNK) {
+			} else if (S_ISLNK(info.st_mode)) {
 				type = DE_Link;
 			} else {
 				type = 0;
 			}
 
-			// TODO: stat() missing infos
 			if (mask & type) {
-				DirEntry e = {type, ent->d_name, 0, 0};
+#if defined(__APPLE__)
+				const time_ns modified = time_from_sec(info.st_mtimespec.tv_sec) + info.st_mtimespec.tv_nsec;
+#else
+				const time_ns modified = time_from_sec(info.st_mtim.tv_sec) + info.st_mtim.tv_nsec;
+#endif
+				DirEntry e = {type, ent->d_name, modified, size_t(info.st_size)};
 				entries.push_back(e);
 			}
 		}
@@ -160,7 +163,8 @@ std::vector<DirEntry> ListDirRecursive(const char *path, int mask) {
 				for (std::vector<DirEntry>::const_iterator i = sub_entries.begin(); i != sub_entries.end(); ++i) {
 					elms[0] = ent->d_name;
 					elms[1] = i->name;
-					DirEntry e = {i->type, PathJoin(elms), 0, 0};
+					DirEntry e = *i;
+					e.name = PathJoin(elms);
 
 					entries.push_back(e);
 				}
