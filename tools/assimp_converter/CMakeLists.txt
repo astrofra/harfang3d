@@ -12,6 +12,11 @@ set(GIT_COMMIT_HASH c1120a4c)
 set(GIT_BRANCH "vendored")
 add_subdirectory(assimp EXCLUDE_FROM_ALL)
 set_target_properties(assimp PROPERTIES FOLDER "harfang/tools/3rdparty")
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+	# The vendored 2021 snapshot predates current Apple SDK/Clang diagnostics.
+	# Preserve warnings, but do not promote third-party warnings to errors.
+	target_compile_options(assimp PRIVATE -Wno-error)
+endif()
 
 if (TARGET zlibstatic)
 	# So it seems assimp is building zlib static library.

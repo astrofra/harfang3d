@@ -20,3 +20,11 @@ and discarding it. This fixes MSVC warning C4834 with warnings treated as errors
 The parent `CMakeLists.txt` pins the reported Git revision to `c1120a4c` and the
 branch label to `vendored`, so CMake does not report HARFANG's Git revision as
 Assimp's. Keep this metadata and this file in sync when updating the snapshot.
+
+On Apple Clang, the parent also appends `-Wno-error` to the `assimp` target.
+The snapshot enables `-Werror` internally, but newer Apple SDKs and compilers
+diagnose its deprecated CRT calls, callback-pointer comparisons, unused
+variables, and unmatched diagnostic pragmas. Warnings remain visible; this
+exception applies only to the vendored library, not the converter or other
+HARFANG targets. Engine and Studio builds share this policy through the same
+converter target.
