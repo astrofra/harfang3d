@@ -44,6 +44,10 @@
 
 #include "limits.h"
 #include <vector>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <unordered_map>
 
 using namespace tinygltf;
 
@@ -519,7 +523,7 @@ static void ExportMaterial(Model &model, Material &mat, hg::Material &m, const C
 
 //
 static hg::Vertex PreparePolygonVertex(const hg::Geometry &geo, size_t i_bind, size_t i_vtp) {
-	hg::Vertex vtx;
+	hg::Vertex vtx = {};
 
 	vtx.pos = geo.vtx[geo.binding[i_bind + i_vtp]];
 
@@ -541,33 +545,70 @@ static hg::Vertex PreparePolygonVertex(const hg::Geometry &geo, size_t i_bind, s
 	return vtx;
 }
 
-static void ExportGeometry(Model &model, Mesh &mesh, const int &nb_materials, const hg::Geometry &geo, const Config &config) {
+// Native identity prevents welding disconnected coincident surfaces. Only emitted
+// corner attributes participate: POSITION is already fixed by source_vertex.
+struct ExportVertexKey {
+	uint32_t source_vertex;
+	std::array<float, 7> attributes; // normal, UV0, UV1 (zero for absent streams)
 
-	// prepare triangulation
-	const uint8_t mat_count = GetMaterialCount(geo);
+	bool operator==(const ExportVertexKey &other) const {
+		return source_vertex == other.source_vertex && attributes == other.attributes;
+	}
+};
+
+struct ExportVertexHash {
+	size_t operator()(const ExportVertexKey &key) const {
+		size_t hash = std::hash<uint32_t>{}(key.source_vertex);
+		for (float value : key.attributes)
+			hash ^= std::hash<float>{}(value) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
+		return hash;
+	}
+};
+
+static bool ExportGeometry(Model &model, Mesh &mesh, const hg::Geometry &geo) {
+	if (!hg::Validate(geo))
+		return false;
+	int mat_count = 0;
+	for (const auto &pol : geo.pol) {
+		mat_count = std::max(mat_count, int(pol.material) + 1);
+		if (pol.vtx_count < 3) {
+			hg::error("Cannot export a polygon with fewer than three corners");
+			return false;
+		}
+	}
 
 	std::map<int, std::vector<uint32_t>> geo_mat_indices;
 	std::vector<hg::Vertex> geo_vtx;
+	std::unordered_map<ExportVertexKey, uint32_t, ExportVertexHash> vertex_lookup;
 
-	for (auto i_mat = 0; i_mat < mat_count; ++i_mat) {
-		geo_mat_indices.emplace(i_mat, std::vector<uint32_t>());
+	// Retain material/triangle order, but share matching records across primitives.
+	for (int i_mat = 0; i_mat < mat_count; ++i_mat) {
 		size_t i_bind = 0;
-
-		for (auto &pol : geo.pol) {
+		for (const auto &pol : geo.pol) {
 			if (pol.material == i_mat) {
-				for (auto i_vtp = 1; i_vtp < pol.vtx_count - 1; ++i_vtp) {
-					geo_mat_indices[i_mat].push_back(geo_vtx.size());
-					geo_vtx.push_back(PreparePolygonVertex(geo, i_bind, 0));
-					geo_mat_indices[i_mat].push_back(geo_vtx.size());
-					geo_vtx.push_back(PreparePolygonVertex(geo, i_bind, i_vtp + 1));
-					geo_mat_indices[i_mat].push_back(geo_vtx.size());
-					geo_vtx.push_back(PreparePolygonVertex(geo, i_bind, i_vtp));
+				for (int i_vtp = 1; i_vtp < pol.vtx_count - 1; ++i_vtp) {
+					for (int corner : {0, i_vtp + 1, i_vtp}) {
+						const auto vertex = PreparePolygonVertex(geo, i_bind, corner);
+						const ExportVertexKey key = {geo.binding[i_bind + corner],
+							{vertex.normal.x, vertex.normal.y, vertex.normal.z,
+							 vertex.uv0.x, vertex.uv0.y, vertex.uv1.x, vertex.uv1.y}};
+						if (!std::isfinite(vertex.pos.x) || !std::isfinite(vertex.pos.y) || !std::isfinite(vertex.pos.z) ||
+							!std::all_of(key.attributes.begin(), key.attributes.end(), [](float v) { return std::isfinite(v); })) {
+							hg::error("Cannot export non-finite vertex attributes");
+							return false;
+						}
+						const auto inserted = vertex_lookup.emplace(key, uint32_t(geo_vtx.size()));
+						if (inserted.second)
+							geo_vtx.push_back(vertex);
+						geo_mat_indices[i_mat].push_back(inserted.first->second);
+					}
 				}
 			}
-
 			i_bind += pol.vtx_count;
 		}
 	}
+	if (geo_vtx.empty())
+		return false;
 
 	int accessor_id_position = -1, accessor_id_normal = -1, accessor_id_tangent = -1, accessor_id_texcoord0 = -1, accessor_id_texcoord1 = -1;
 	// VERTEX BUFFER
@@ -621,7 +662,7 @@ static void ExportGeometry(Model &model, Mesh &mesh, const int &nb_materials, co
 		model.accessors.push_back(verticesAccessor);
 	}
 	// NORMAL BUFFER
-	{
+	if (!geo.normal.empty()) {
 		Buffer buffer;
 		BufferView bufferView;
 		Accessor normalAccessor;
@@ -810,11 +851,13 @@ static void ExportGeometry(Model &model, Mesh &mesh, const int &nb_materials, co
 		model.accessors.push_back(uv1Accessor);
 	}
 
-	for (int i_mat = 0; i_mat < nb_materials; ++i_mat) {
+	for (const auto &material_indices : geo_mat_indices) {
+		const auto i_mat = material_indices.first;
 		Primitive primitive;
+		primitive.material = i_mat; // native slot until ExportObject binds scene materials
 		primitive.mode = TINYGLTF_MODE_TRIANGLES;
 
-		// one primitive per material using the same buffer (not really optimised for now!!!)
+		// Nonempty material primitives share compact attribute accessors.
 
 		if (accessor_id_position != -1)
 			primitive.attributes["POSITION"] = accessor_id_position;
@@ -840,7 +883,6 @@ static void ExportGeometry(Model &model, Mesh &mesh, const int &nb_materials, co
 			bufferView.byteOffset = 0;
 			// bufferView.byteStride = 4; // not sur if needed yet
 
-			const auto pol_idx = ComputePolygonIndex(geo);
 			std::vector<uint32_t> indices;
 			uint32_t min = UINT_MAX;
 			uint32_t max = 0;
@@ -868,6 +910,7 @@ static void ExportGeometry(Model &model, Mesh &mesh, const int &nb_materials, co
 		}
 		mesh.primitives.push_back(primitive);
 	}
+	return true;
 }
 
 std::map<std::string, std::vector<Primitive>> geo_to_primitives;
@@ -890,7 +933,8 @@ static const size_t ExportObject(Model &model, const hg::Object &object, const C
 
 			// add primitive to mesh or multiple primitive (one per material)
 			if (geo.vtx.size()) {
-				ExportGeometry(model, mesh, object.GetMaterialCount(), geo, config);
+				if (!ExportGeometry(model, mesh, geo))
+					return EmptyMeshID;
 				geo_to_primitives[geo_name] = mesh.primitives;
 			} else
 				return EmptyMeshID; // no geo, no mesh
@@ -900,15 +944,21 @@ static const size_t ExportObject(Model &model, const hg::Object &object, const C
 	} else
 		return EmptyMeshID; // no geo, no mesh
 
-	// export materials
-	for (int i = 0; i < object.GetMaterialCount(); ++i) {
+	// Cached primitives retain native slots; bind only this object's copy.
+	for (const auto &primitive : mesh.primitives)
+		if (primitive.material >= object.GetMaterialCount()) {
+			hg::error("Geometry references a missing object material slot");
+			return EmptyMeshID;
+		}
+	for (auto &primitive : mesh.primitives) {
+		const auto i = primitive.material;
 		Material mat;
 		auto m = object.GetMaterial(i);
 		mat.name = object.GetMaterialName(i);
 
 		ExportMaterial(model, mat, m, config, resources);
 
-		mesh.primitives[i].material = model.materials.size();
+		primitive.material = model.materials.size();
 		model.materials.push_back(mat);
 	}
 

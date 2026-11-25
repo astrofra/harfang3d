@@ -27,6 +27,10 @@ endfunction()
 
 if(HG_BUILD_GLTF_EXPORTER)
 	gltf_build_tool(gltf_exporter)
+	# Explicit target: tests exercise the actual exporter without opening a window.
+	add_executable(gltf_exporter_tests EXCLUDE_FROM_ALL tests/gltf_exporter.cpp)
+	target_link_libraries(gltf_exporter_tests PRIVATE engine tiny_gltf)
+	target_include_directories(gltf_exporter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../extern/lua/src)
 endif()
 
 if(HG_BUILD_GLTF_IMPORTER)
