@@ -179,208 +179,112 @@ template <typename T> uint32_t serialize(std::vector<T> const &from, std::vector
 	return bytesToSerialize;
 }
 
-std::string GetTargetPathGltf(const std::string &hg_target) {
-	// get target
-	if (hg_target == "Position")
-		return "translation";
-	else if (hg_target == "Rotation")
-		return "rotation";
-	else if (hg_target == "Scale")
-		return "scale";
-	else if (hg_target == "Weights")
-		return "weights";
-	return "";
+// Serialize one validated float stream. Bounds are computed from the final values,
+// including quaternion W, rather than maintained separately during conversion.
+static int ExportAnimationAccessor(Model &model, const std::vector<float> &values, int type, size_t components) {
+	Buffer buffer;
+	serialize(values, buffer.data, 0);
+	BufferView view;
+	view.buffer = int(model.buffers.size());
+	view.byteLength = buffer.data.size();
+	model.buffers.push_back(std::move(buffer));
+
+	Accessor accessor;
+	accessor.bufferView = int(model.bufferViews.size());
+	accessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
+	accessor.type = type;
+	accessor.count = values.size() / components;
+	accessor.minValues.assign(components, std::numeric_limits<double>::max());
+	accessor.maxValues.assign(components, std::numeric_limits<double>::lowest());
+	for (size_t i = 0; i < values.size(); ++i) {
+		accessor.minValues[i % components] = std::min(accessor.minValues[i % components], double(values[i]));
+		accessor.maxValues[i % components] = std::max(accessor.maxValues[i % components], double(values[i]));
+	}
+	model.bufferViews.push_back(view);
+	const auto index = int(model.accessors.size());
+	model.accessors.push_back(std::move(accessor));
+	return index;
 }
 
-//
-static void ExportMotions(Model &model, hg::Scene &scene) {
-	for (const auto &scene_anime_ref : scene.GetSceneAnims()) {
-		tinygltf::Animation animation;
-		hg::SceneAnim *scene_anim = scene.GetSceneAnim(scene_anime_ref);
+template <typename Track> static const Track *FindAnimationTrack(const std::vector<Track> &tracks, const char *target) {
+	// The native node binder uses the last matching track for each target.
+	for (auto i = tracks.rbegin(); i != tracks.rend(); ++i)
+		if (i->target == target)
+			return &*i;
+	return nullptr;
+}
 
-		for (const auto &node_anim : scene_anim->node_anims) {
-			tinygltf::AnimationSampler sampler;
-			tinygltf::AnimationChannel channel;
-
-			auto *anim = scene.GetAnim(node_anim.anim);
-
-			//check if anim track can be exported TODO maybe add some other type
-			if (!anim->vec3_tracks.size() && !anim->quat_tracks.size())
-				continue;
-
-			Buffer InputBuffer, OutputBuffer;
-			BufferView InputBufferView, OutputBufferView;
-			Accessor InputAccessor, OutputAccessor;
-
-			InputAccessor.byteOffset = 0;
-			OutputAccessor.byteOffset = 0;
-
-			InputAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-			InputAccessor.type = TINYGLTF_TYPE_SCALAR;
-
-			if (anim->quat_tracks.size()) {
-				OutputAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-				OutputAccessor.type = TINYGLTF_TYPE_VEC4;
-
-				std::vector<float> input;
-				float input_min = UINT_MAX;
-				float input_max = 0;
-
-				std::vector<float> output;
-				hg::Vec4 output_min(std::numeric_limits<float>::max()), output_max(std::numeric_limits<float>::lowest());
-
-				for (const auto &key : anim->quat_tracks[0].keys) {
-					// t
-					auto t = hg::time_to_sec_f(key.t);
-					input.push_back(t);
-					input_min = t < input_min ? t : input_min;
-					input_max = t > input_max ? t : input_max;
-
-					// add quat
-					auto quat = key.v;
-					auto r = hg::ToEuler(quat);
-					quat = hg::QuaternionFromEuler(-r.x, -r.y, r.z);
-
-					output.push_back(quat.x);
-					output.push_back(quat.y);
-					output.push_back(quat.z);
-					output.push_back(quat.w);
-
-					output_min.x = quat.x < output_min.x ? quat.x : output_min.x;
-					output_min.y = quat.y < output_min.y ? quat.y : output_min.y;
-					output_min.z = quat.z < output_min.z ? quat.z : output_min.z;
-					output_min.w = quat.w < output_min.w ? quat.w : output_min.w;
-					output_max.x = quat.x > output_max.x ? quat.x : output_max.x;
-					output_max.y = quat.y > output_max.y ? quat.y : output_max.y;
-					output_max.z = quat.z > output_max.z ? quat.z : output_max.z;
-					output_max.w = quat.w > output_max.w ? quat.z : output_max.w;
-				}
-
-				// t
-				uint32_t indexSize = serialize(input, InputBuffer.data, 0);
-
-				InputAccessor.minValues.push_back(input_min);
-				InputAccessor.maxValues.push_back(input_max);
-				InputAccessor.count = input.size();
-				InputBufferView.byteLength = InputBuffer.data.size();
-
-				// save input buffer
-				InputBufferView.buffer = model.buffers.size();
-				model.buffers.push_back(InputBuffer);
-				InputAccessor.bufferView = model.bufferViews.size();
-				model.bufferViews.push_back(InputBufferView);
-				sampler.input = model.accessors.size();
-				model.accessors.push_back(InputAccessor);
-
-				// quat
-				serialize(output, OutputBuffer.data, 0);
-
-				OutputAccessor.minValues.push_back(output_min.x);
-				OutputAccessor.minValues.push_back(output_min.y);
-				OutputAccessor.minValues.push_back(output_min.z);
-				OutputAccessor.minValues.push_back(output_min.w);
-				OutputAccessor.maxValues.push_back(output_max.x);
-				OutputAccessor.maxValues.push_back(output_max.y);
-				OutputAccessor.maxValues.push_back(output_max.z);
-				OutputAccessor.maxValues.push_back(output_max.w);
-				OutputAccessor.count = output.size() / 4;
-				OutputBufferView.byteLength = OutputBuffer.data.size();
-
-				// save output buffer
-				OutputBufferView.buffer = model.buffers.size();
-				model.buffers.push_back(OutputBuffer);
-				OutputAccessor.bufferView = model.bufferViews.size();
-				model.bufferViews.push_back(OutputBufferView);
-
-				sampler.output = model.accessors.size();
-				model.accessors.push_back(OutputAccessor);
-
-				// get target
-				channel.target_path = GetTargetPathGltf(anim->quat_tracks[0].target);
-			} else if (anim->vec3_tracks.size()) {
-				OutputAccessor.componentType = TINYGLTF_COMPONENT_TYPE_FLOAT;
-				OutputAccessor.type = TINYGLTF_TYPE_VEC3;
-
-				std::vector<float> input;
-				float input_min = UINT_MAX;
-				float input_max = 0;
-
-				std::vector<float> output;
-				hg::Vec3 output_min(std::numeric_limits<float>::max()), output_max(std::numeric_limits<float>::lowest());
-
-				for (const auto &key : anim->vec3_tracks[0].keys) {
-					// t
-					auto t = hg::time_to_sec_f(key.t);
-					input.push_back(t);
-					input_min = t < input_min ? t : input_min;
-					input_max = t > input_max ? t : input_max;
-
-					// add vec
-					auto vec = key.v;
-					vec.z = -vec.z;
-					output.push_back(vec.x);
-					output.push_back(vec.y);
-					output.push_back(vec.z);
-
-					output_min.x = vec.x < output_min.x ? vec.x : output_min.x;
-					output_min.y = vec.y < output_min.y ? vec.y : output_min.y;
-					output_min.z = vec.z < output_min.z ? vec.z : output_min.z;
-					output_max.x = vec.x > output_max.x ? vec.x : output_max.x;
-					output_max.y = vec.y > output_max.y ? vec.y : output_max.y;
-					output_max.z = vec.z > output_max.z ? vec.z : output_max.z;
-				}
-
-				// t
-				uint32_t indexSize = serialize(input, InputBuffer.data, 0);
-
-				InputAccessor.minValues.push_back(input_min);
-				InputAccessor.maxValues.push_back(input_max);
-				InputAccessor.count = input.size();
-				InputBufferView.byteLength = InputBuffer.data.size();
-
-				// save input buffer
-				InputBufferView.buffer = model.buffers.size();
-				model.buffers.push_back(InputBuffer);
-				InputAccessor.bufferView = model.bufferViews.size();
-				model.bufferViews.push_back(InputBufferView);
-				sampler.input = model.accessors.size();
-				model.accessors.push_back(InputAccessor);
-
-				// quat
-				serialize(output, OutputBuffer.data, 0);
-
-				OutputAccessor.minValues.push_back(output_min.x);
-				OutputAccessor.minValues.push_back(output_min.y);
-				OutputAccessor.minValues.push_back(output_min.z);
-				OutputAccessor.maxValues.push_back(output_max.x);
-				OutputAccessor.maxValues.push_back(output_max.y);
-				OutputAccessor.maxValues.push_back(output_max.z);
-				OutputAccessor.count = output.size() / 3;
-				OutputBufferView.byteLength = OutputBuffer.data.size();
-
-				// save output buffer
-				OutputBufferView.buffer = model.buffers.size();
-				model.buffers.push_back(OutputBuffer);
-				OutputAccessor.bufferView = model.bufferViews.size();
-				model.bufferViews.push_back(OutputBufferView);
-
-				sampler.output = model.accessors.size();
-				model.accessors.push_back(OutputAccessor);
-
-				// get target
-				channel.target_path = GetTargetPathGltf(anim->vec3_tracks[0].target);
-			}
-
-			channel.target_node = NodeRef_to_IdNode[node_anim.node];
-			channel.sampler = animation.samplers.size();
-
-			animation.samplers.push_back(sampler);
-			animation.channels.push_back(channel);
-			animation.name = scene_anim->name;
+template <typename Track, typename Convert>
+static void ExportAnimationTrack(Model &model, Animation &animation, int node, const char *path, const Track *track, Convert convert) {
+	if (!track || track->keys.empty())
+		return;
+	for (const auto &channel : animation.channels)
+		if (channel.target_node == node && channel.target_path == path) {
+			hg::warn("Skipping duplicate animation channel");
+			return;
 		}
 
-		if(animation.channels.size())
-			model.animations.push_back(animation);
+	std::vector<float> input, output;
+	size_t components = 0;
+	for (const auto &key : track->keys) {
+		const auto time = hg::time_to_sec_f(key.t);
+		const auto values = convert(key.v);
+		if (!std::isfinite(time) || time < 0.f || (!input.empty() && time <= input.back()) ||
+			!std::all_of(values.begin(), values.end(), [](float v) { return std::isfinite(v); })) {
+			hg::warn(hg::format("Skipping invalid animation track '%1'").arg(track->target));
+			return; // Do not commit partial or empty accessors.
+		}
+		components = values.size();
+		input.push_back(time);
+		output.insert(output.end(), values.begin(), values.end());
+	}
+
+	AnimationSampler sampler;
+	// This patch preserves key samples; native Hermite curve baking is separate.
+	sampler.interpolation = "LINEAR";
+	sampler.input = ExportAnimationAccessor(model, input, TINYGLTF_TYPE_SCALAR, 1);
+	sampler.output = ExportAnimationAccessor(model, output, components == 4 ? TINYGLTF_TYPE_VEC4 : TINYGLTF_TYPE_VEC3, components);
+	AnimationChannel channel;
+	channel.target_node = node;
+	channel.target_path = path;
+	channel.sampler = int(animation.samplers.size());
+	animation.samplers.push_back(sampler);
+	animation.channels.push_back(channel);
+}
+
+static std::array<float, 4> ExportEulerRotation(const hg::Vec3 &rotation) {
+	const auto q = hg::QuaternionFromEuler(-rotation.x, -rotation.y, rotation.z);
+	return {q.x, q.y, q.z, q.w};
+}
+
+static void ExportMotions(Model &model, hg::Scene &scene) {
+	for (const auto &ref : scene.GetSceneAnims()) {
+		const auto *scene_anim = scene.GetSceneAnim(ref);
+		Animation animation;
+		animation.name = scene_anim->name;
+		for (const auto &node_anim : scene_anim->node_anims) {
+			const auto *anim = scene.GetAnim(node_anim.anim);
+			const auto node = NodeRef_to_IdNode.find(node_anim.node);
+			if (!anim || node == NodeRef_to_IdNode.end()) {
+				hg::warn("Skipping animation binding with an invalid animation or unexported node");
+				continue;
+			}
+
+			ExportAnimationTrack(model, animation, node->second, "translation", FindAnimationTrack(anim->vec3_tracks, "Position"),
+				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, -v.z}; });
+			ExportAnimationTrack(model, animation, node->second, "scale", FindAnimationTrack(anim->vec3_tracks, "Scale"),
+				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, v.z}; });
+
+			// Match the native evaluator's rotation mode; never serialize Euler VEC3
+			// values as a glTF rotation or emit two rotation channels for one node.
+			if (anim->flags & hg::AF_UseQuaternionForRotation)
+				ExportAnimationTrack(model, animation, node->second, "rotation", FindAnimationTrack(anim->quat_tracks, "Rotation"),
+					[](const hg::Quaternion &q) { return ExportEulerRotation(hg::ToEuler(q)); });
+			else
+				ExportAnimationTrack(model, animation, node->second, "rotation", FindAnimationTrack(anim->vec3_tracks, "Rotation"), ExportEulerRotation);
+		}
+		if (!animation.channels.empty())
+			model.animations.push_back(std::move(animation));
 	}
 }
 
@@ -565,7 +469,11 @@ struct ExportVertexHash {
 	}
 };
 
-static bool ExportGeometry(Model &model, Mesh &mesh, const hg::Geometry &geo) {
+static bool ExportGeometry(Model &model, Mesh &mesh, const hg::Geometry &geo, std::vector<uint32_t> *source_vertices = nullptr) {
+	if (!geo.skin.empty() && geo.skin.size() != geo.vtx.size()) {
+		hg::error("Cannot export geometry: skin weights must be indexed by native vertex");
+		return false;
+	}
 	if (!hg::Validate(geo))
 		return false;
 	int mat_count = 0;
@@ -598,8 +506,11 @@ static bool ExportGeometry(Model &model, Mesh &mesh, const hg::Geometry &geo) {
 							return false;
 						}
 						const auto inserted = vertex_lookup.emplace(key, uint32_t(geo_vtx.size()));
-						if (inserted.second)
+						if (inserted.second) {
 							geo_vtx.push_back(vertex);
+							if (source_vertices)
+								source_vertices->push_back(key.source_vertex);
+						}
 						geo_mat_indices[i_mat].push_back(inserted.first->second);
 					}
 				}
@@ -913,11 +824,164 @@ static bool ExportGeometry(Model &model, Mesh &mesh, const hg::Geometry &geo) {
 	return true;
 }
 
-std::map<std::string, std::vector<Primitive>> geo_to_primitives;
+struct ExportGeometryCache {
+	std::vector<Primitive> primitives;
+	std::vector<uint32_t> source_vertices;
+	std::vector<hg::Geometry::Skin> skin;
+	std::vector<hg::Mat4> bind_pose;
+};
+
+std::map<std::string, ExportGeometryCache> geo_to_primitives;
+std::map<size_t, std::string> mesh_geometry_paths;
+static bool geometry_export_failed = false;
+
+template <typename T>
+static int ExportSkinAccessor(Model &model, const std::vector<T> &values, int component_type, int type, size_t components, int target = 0) {
+	Buffer buffer;
+	serialize(values, buffer.data, 0);
+	BufferView view;
+	view.buffer = int(model.buffers.size());
+	view.byteLength = buffer.data.size();
+	view.target = target;
+	model.buffers.push_back(std::move(buffer));
+	Accessor accessor;
+	accessor.bufferView = int(model.bufferViews.size());
+	accessor.componentType = component_type;
+	accessor.type = type;
+	accessor.count = values.size() / components;
+	model.bufferViews.push_back(view);
+	const auto id = int(model.accessors.size());
+	model.accessors.push_back(accessor);
+	return id;
+}
+
+// Run after all nodes have been exported: joints can be siblings or later roots.
+// Geometry is shared, but the bone-node palette belongs to each object instance.
+static bool ExportObjectSkin(Model &model, Mesh &mesh, const ExportGeometryCache &geo,
+	const std::vector<hg::NodeRef> &bones, int &skin_id) {
+	if (bones.empty() || bones.size() != geo.bind_pose.size() || geo.source_vertices.empty()) {
+		hg::error("Cannot export skin: bone palette and bind-pose counts do not match");
+		return false;
+	}
+	Skin skin;
+	std::map<int, uint16_t> joint_lookup;
+	std::vector<uint16_t> slot_to_joint;
+	std::vector<hg::Mat4> bind_poses;
+	for (size_t slot = 0; slot < bones.size(); ++slot) {
+		const auto node = NodeRef_to_IdNode.find(bones[slot]);
+		if (node == NodeRef_to_IdNode.end()) {
+			hg::error("Cannot export skin: a joint node is missing or filtered out");
+			return false;
+		}
+		const auto &pose = geo.bind_pose[slot];
+		for (const auto &row : pose.m)
+			for (float value : row)
+				if (!std::isfinite(value)) {
+					hg::error("Cannot export skin: non-finite bind matrix");
+					return false;
+				}
+		const auto existing = joint_lookup.find(node->second);
+		if (existing != joint_lookup.end()) {
+			if (bind_poses[existing->second] != pose) {
+				hg::error("Cannot export skin: one joint node has conflicting bind matrices");
+				return false;
+			}
+			slot_to_joint.push_back(existing->second);
+		} else {
+			if (skin.joints.size() > std::numeric_limits<uint16_t>::max()) {
+				hg::error("Cannot export skin: too many joints for UNSIGNED_SHORT indices");
+				return false;
+			}
+			const auto joint = uint16_t(skin.joints.size());
+			joint_lookup.emplace(node->second, joint);
+			slot_to_joint.push_back(joint);
+			skin.joints.push_back(node->second);
+			bind_poses.push_back(pose);
+		}
+	}
+
+	std::vector<uint16_t> joints;
+	std::vector<float> weights;
+	size_t normalized_vertices = 0;
+	for (auto source : geo.source_vertices) {
+		if (source >= geo.skin.size()) {
+			hg::error("Cannot export skin: missing native vertex weights");
+			return false;
+		}
+		const auto &in = geo.skin[source];
+		std::map<uint16_t, unsigned> combined;
+		unsigned total = 0;
+		for (size_t i = 0; i < 4; ++i) {
+			if (in.index[i] >= slot_to_joint.size()) {
+				hg::error("Cannot export skin: joint slot is out of range");
+				return false;
+			}
+			if (in.weight[i])
+				combined[slot_to_joint[in.index[i]]] += in.weight[i];
+			total += in.weight[i];
+		}
+		if (!total) {
+			hg::error("Cannot export skin: vertex has zero total weight");
+			return false;
+		}
+		if (total != 255)
+			++normalized_vertices;
+		for (const auto &influence : combined) {
+			joints.push_back(influence.first);
+			weights.push_back(float(influence.second) / float(total));
+		}
+		for (size_t i = combined.size(); i < 4; ++i) {
+			joints.push_back(0);
+			weights.push_back(0.f);
+		}
+	}
+	if (normalized_vertices)
+		hg::log(hg::format("Normalized skin weights for %1 exported vertices").arg(normalized_vertices));
+
+	// C * inverse_bind * C, C = diag(1,1,-1,1). Expand the native affine
+	// 3x4 matrix to glTF's column-major 4x4 representation.
+	std::vector<float> matrices;
+	for (const auto &pose : bind_poses)
+		for (size_t col = 0; col < 4; ++col)
+			for (size_t row = 0; row < 4; ++row)
+				matrices.push_back(row == 3 ? (col == 3 ? 1.f : 0.f) :
+					pose.m[row][col] * (row == 2 ? -1.f : 1.f) * (col == 2 ? -1.f : 1.f));
+
+	const auto joint_accessor = ExportSkinAccessor(model, joints, TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT, TINYGLTF_TYPE_VEC4, 4, TINYGLTF_TARGET_ARRAY_BUFFER);
+	const auto weight_accessor = ExportSkinAccessor(model, weights, TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_VEC4, 4, TINYGLTF_TARGET_ARRAY_BUFFER);
+	for (auto &primitive : mesh.primitives) {
+		primitive.attributes["JOINTS_0"] = joint_accessor;
+		primitive.attributes["WEIGHTS_0"] = weight_accessor;
+	}
+	skin.inverseBindMatrices = ExportSkinAccessor(model, matrices, TINYGLTF_COMPONENT_TYPE_FLOAT, TINYGLTF_TYPE_MAT4, 16);
+	skin_id = int(model.skins.size());
+	model.skins.push_back(std::move(skin));
+	return true;
+}
+
+static bool ExportSkins(Model &model, const hg::Scene &scene) {
+	for (const auto &entry : NodeRef_to_IdNode) {
+		auto &node = model.nodes[entry.second];
+		if (node.mesh < 0)
+			continue;
+		const auto &geo = geo_to_primitives.at(mesh_geometry_paths.at(size_t(node.mesh)));
+		if (geo.skin.empty())
+			continue;
+		const auto object = scene.GetNode(entry.first).GetObject();
+		std::vector<hg::NodeRef> bones;
+		for (size_t i = 0; i < object.GetBoneCount(); ++i)
+			bones.push_back(object.GetBone(i));
+		if (!ExportObjectSkin(model, model.meshes[node.mesh], geo, bones, node.skin))
+			return false;
+	}
+	return true;
+}
+
 static const size_t EmptyMeshID = static_cast<size_t>(-1);
 
 static const size_t ExportObject(Model &model, const hg::Object &object, const Config &config, hg::PipelineResources &resources) {
 	Mesh mesh;
+	std::string geo_name;
 
 	// export geo
 	auto mdl_ref = object.GetModelRef();
@@ -925,7 +989,7 @@ static const size_t ExportObject(Model &model, const hg::Object &object, const C
 		auto mdl_name = resources.models.GetName_unsafe_(mdl_ref.ref.idx);
 
 		mesh.name = mdl_name;
-		std::string geo_name = hg::PathJoin({config.source_output_path, mdl_name});
+		geo_name = hg::PathJoin({config.source_output_path, mdl_name});
 
 		if (geo_to_primitives.find(geo_name) == geo_to_primitives.end()) {
 			// this geo was not exported
@@ -933,13 +997,19 @@ static const size_t ExportObject(Model &model, const hg::Object &object, const C
 
 			// add primitive to mesh or multiple primitive (one per material)
 			if (geo.vtx.size()) {
-				if (!ExportGeometry(model, mesh, geo))
+				ExportGeometryCache cached;
+				if (!ExportGeometry(model, mesh, geo, &cached.source_vertices)) {
+					geometry_export_failed = true;
 					return EmptyMeshID;
-				geo_to_primitives[geo_name] = mesh.primitives;
+				}
+				cached.primitives = mesh.primitives;
+				cached.skin = geo.skin;
+				cached.bind_pose = geo.bind_pose;
+				geo_to_primitives[geo_name] = std::move(cached);
 			} else
 				return EmptyMeshID; // no geo, no mesh
 		} else {
-			mesh.primitives = geo_to_primitives[geo_name];
+			mesh.primitives = geo_to_primitives[geo_name].primitives;
 		}
 	} else
 		return EmptyMeshID; // no geo, no mesh
@@ -963,6 +1033,7 @@ static const size_t ExportObject(Model &model, const hg::Object &object, const C
 	}
 
 	size_t id_mesh = model.meshes.size();
+	mesh_geometry_paths[id_mesh] = geo_name;
 	model.meshes.push_back(mesh);
 	return id_mesh;
 }
@@ -1084,6 +1155,11 @@ static const int ExportNode(Model &model, const hg::NodeRef nodeRef, const std::
 }
 
 static bool ExportGltfScene(const std::string &path, const Config &config) {
+	NodeRef_to_IdNode.clear();
+	geo_to_primitives.clear();
+	mesh_geometry_paths.clear();
+	textures_cache.clear();
+	geometry_export_failed = false;
 	const auto t_start = hg::time_now();
 
 	// init bgfx
@@ -1138,6 +1214,8 @@ static bool ExportGltfScene(const std::string &path, const Config &config) {
 			scn.nodes.push_back(id_node);
 	}
 
+	if (geometry_export_failed || !ExportSkins(model, scene))
+		return false;
 	ExportMotions(model, scene);
 
 	model.scenes.push_back(scn);

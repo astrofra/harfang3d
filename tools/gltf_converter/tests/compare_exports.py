@@ -40,7 +40,7 @@ def accessor(model, buffers, index):
     a = model['accessors'][index]
     assert 'sparse' not in a, 'Sparse accessors are outside this probe'
     v = model['bufferViews'][a['bufferView']]
-    components = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4}[a['type']]
+    components = {'SCALAR': 1, 'VEC2': 2, 'VEC3': 3, 'VEC4': 4, 'MAT4': 16}[a['type']]
     fmt = '<' + {5121: 'B', 5123: 'H', 5125: 'I', 5126: 'f'}[a['componentType']] * components
     size = struct.calcsize(fmt)
     start = v.get('byteOffset', 0) + a.get('byteOffset', 0)
