@@ -4,6 +4,8 @@ Date: 2026-11-25. Source revision: `71d5b4fe37defc208c951c5793e5f84fa3b32895`, b
 
 Follow-up: the first batch of [skinning and accessor fixes](GLTF_IMPORTER_SKIN_ACCESSOR_VALIDATION.md) addresses both demonstrated crashes, sparse data, skinning flags, bind-matrix conversion and scene-local node references. The findings and measurements below describe the original audited revision.
 
+The second batch covers [channel mapping, interpolation and animation roundtrips](GLTF_IMPORTER_ANIMATION_VALIDATION.md), including explicit native LINEAR/STEP playback and sampled cubic curves.
+
 ## Result
 
 The importer supports indexed triangle meshes, basic metallic/roughness materials, skeletal data, TRS animation keys, and multiple clips. **It is not a reliable general-purpose glTF importer yet.** Valid inputs can crash, silently lose geometry, change animation channels, or disable skinning on instances. Successful conversion and an `[ImportScene: OK]` message do not establish correctness.

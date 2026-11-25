@@ -198,6 +198,35 @@ template <> bool Evaluate(const AnimTrackT<InstanceAnimKey> &track, time_ns t, I
 
 //
 static const uint8_t AF_UseQuaternionForRotation = 0x01;
+// Explicit interpolation for transform tracks only. Unflagged native animations
+// retain Hermite Vec3 / normalized linear quaternion playback.
+static const uint8_t AF_TransformLinearInterpolation = 0x02;
+static const uint8_t AF_TransformStepInterpolation = 0x04;
+
+template <typename Track, typename T> bool EvaluateTransformTrack(const Track &track, time_ns t, T &v, uint8_t flags) {
+	if (flags & AF_TransformStepInterpolation)
+		return EvaluateStep<Track, T>(track, t, v);
+	if (flags & AF_TransformLinearInterpolation)
+		return EvaluateLinear<Track, T>(track, t, v);
+	return Evaluate(track, t, v);
+}
+
+inline bool EvaluateTransformTrack(const AnimTrackT<Quaternion> &track, time_ns t, Quaternion &v, uint8_t flags) {
+	if (flags & AF_TransformStepInterpolation)
+		return EvaluateStep<AnimTrackT<Quaternion>, Quaternion>(track, t, v);
+	if (!(flags & AF_TransformLinearInterpolation))
+		return Evaluate(track, t, v);
+	if (track.keys.empty())
+		return false;
+	int first, second;
+	if (GetIntervalKeys<AnimTrackT<Quaternion>, Quaternion>(track, t, first, second)) {
+		const float u = float(double(t - track.keys[first].t) / double(track.keys[second].t - track.keys[first].t));
+		v = Slerp(Normalize(track.keys[first].v), Normalize(track.keys[second].v), u);
+	} else {
+		v = track.keys[first].v;
+	}
+	return true;
+}
 
 // non-serialized flags
 static const uint8_t AF_Instantiated = 0x10;

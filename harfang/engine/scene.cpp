@@ -2190,21 +2190,21 @@ void Scene::EvaluateBoundAnim(const BoundToNodeAnim &bound_anim, time_ns t) {
 
 		if (auto trs = GetComponent_(transforms, GetNodeComponentRef_<NCI_Transform>(bound_anim.node))) {
 			if (bound_anim.vec3_track[NV3AT_TransformPosition] != -1)
-				Evaluate(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformPosition]], t, trs->TRS.pos);
+				EvaluateTransformTrack(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformPosition]], t, trs->TRS.pos, anim.flags);
 
 			if (anim.flags & AF_UseQuaternionForRotation) {
 				if (bound_anim.quat_track[NQAT_TransformRotation] != -1) {
 					Quaternion rot;
-					if (Evaluate(anim.quat_tracks[bound_anim.quat_track[NQAT_TransformRotation]], t, rot))
+					if (EvaluateTransformTrack(anim.quat_tracks[bound_anim.quat_track[NQAT_TransformRotation]], t, rot, anim.flags))
 						trs->TRS.rot = ToEuler(Normalize(rot)); // EvaluateLinear doesn't normalize quaternions, so we're doing it here
 				}
 			} else {
 				if (bound_anim.vec3_track[NV3AT_TransformRotation] != -1)
-					Evaluate(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformRotation]], t, trs->TRS.rot);
+					EvaluateTransformTrack(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformRotation]], t, trs->TRS.rot, anim.flags);
 			}
 
 			if (bound_anim.vec3_track[NV3AT_TransformScale] != -1)
-				Evaluate(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformScale]], t, trs->TRS.scl);
+				EvaluateTransformTrack(anim.vec3_tracks[bound_anim.vec3_track[NV3AT_TransformScale]], t, trs->TRS.scl, anim.flags);
 		}
 
 		if (auto lgt = GetComponent_(lights, GetNodeComponentRef_<NCI_Light>(bound_anim.node))) {

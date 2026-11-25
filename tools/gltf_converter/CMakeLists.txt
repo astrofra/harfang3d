@@ -35,4 +35,6 @@ endif()
 
 if(HG_BUILD_GLTF_IMPORTER)
 	gltf_build_tool(gltf_importer)
+	add_executable(gltf_importer_animation_tests EXCLUDE_FROM_ALL tests/sample_scene_animation.cpp)
+	target_link_libraries(gltf_importer_animation_tests PRIVATE engine)
 endif()

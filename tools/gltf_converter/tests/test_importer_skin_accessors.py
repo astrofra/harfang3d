@@ -112,8 +112,8 @@ class ImporterTests(unittest.TestCase):
         self.sparse(f, animation['samplers'][0]['output'], [1], struct.pack('<3f', 3, 4, 8))
         scenes, _ = self.run_fixture(f)
         keys = scenes['input']['anims'][0]['anim']['vec3'][0]['keys']
-        self.assertEqual(keys[1]['t'], 2000000000)
-        self.assertEqual(keys[1]['v'], [3, 4, -8])
+        key = next(k for k in keys if k['t'] == 2000000000)
+        self.assertEqual(key['v'], [3, 4, -8])
 
     def test_sparse_skin_attributes_and_bind_matrices(self):
         f = Fixture(); f.skin()
@@ -152,7 +152,7 @@ class ImporterTests(unittest.TestCase):
     def test_scene_node_maps_are_isolated(self):
         scenes, _ = self.run_fixture(self.audit_case('multiple_scenes'))
         self.assertEqual(scenes['input_A']['scene_anims'][0]['node_anims'], [{'anim': 0, 'node': 0}])
-        self.assertFalse(scenes['input_B']['scene_anims'][0]['node_anims'])
+        self.assertFalse(scenes['input_B'].get('scene_anims'))
 
     def test_skin_in_other_scene_is_not_bound(self):
         f = Fixture(); f.skin()

@@ -1,0 +1,524 @@
+{
+  "baseline_revision": "51bd9da",
+  "date": "2026-11-25",
+  "animation_tests": 11,
+  "animation_cli_cases": 26,
+  "positive_animation_cases": 16,
+  "malformed_animation_cases": 10,
+  "skin_accessor_tests": 17,
+  "native_pose_sample_times": 2031,
+  "json_binary_samples_identical": true,
+  "original_native_colossus_reference_identical": true,
+  "synthetic": {
+    "test_cubic_rotation_signs_and_glb": {
+      "max_component_or_quaternion_chord_error": 4.588798731234011e-06,
+      "samples": 142,
+      "native_keys": 1023
+    },
+    "test_cubic_vectors_tangent_duration_and_overshoottranslation": {
+      "max_component_or_quaternion_chord_error": 1.3619039757273299e-05,
+      "samples": 145,
+      "native_keys": 1100
+    },
+    "test_cubic_vectors_tangent_duration_and_overshootscale": {
+      "max_component_or_quaternion_chord_error": 1.3619039757273299e-05,
+      "samples": 145,
+      "native_keys": 1100
+    },
+    "test_linear_nonuniform_vec3translation": {
+      "max_component_or_quaternion_chord_error": 5.909171552076486e-07,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_linear_nonuniform_vec3scale": {
+      "max_component_or_quaternion_chord_error": 5.909171552076486e-07,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_long_constant_cubic_does_not_expand": {
+      "max_component_or_quaternion_chord_error": 4.440892098500626e-16,
+      "samples": 142,
+      "native_keys": 2
+    },
+    "test_nanosecond_intervals": {
+      "max_component_or_quaternion_chord_error": 1.5894571969710114e-07,
+      "samples": 7,
+      "native_keys": 3
+    },
+    "test_reordered_and_shared_samplersreordered_channels": {
+      "max_component_or_quaternion_chord_error": 2.9756201147534966e-07,
+      "samples": 142,
+      "native_keys": 4
+    },
+    "test_reordered_and_shared_samplersshared_sampler": {
+      "max_component_or_quaternion_chord_error": 1.7583837896850696e-07,
+      "samples": 142,
+      "native_keys": 4
+    },
+    "test_shared_sampler_multiple_nodes_and_unused_sampler": {
+      "max_component_or_quaternion_chord_error": 1.3741872523158903e-07,
+      "samples": 142,
+      "native_keys": 4
+    },
+    "test_single_key_and_multiclip": {
+      "max_component_or_quaternion_chord_error": 0.0,
+      "samples": 9,
+      "native_keys": 3
+    },
+    "test_spherical_rotation_and_antipodal_keys1": {
+      "max_component_or_quaternion_chord_error": 1.3741872523158903e-07,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_spherical_rotation_and_antipodal_keys-1": {
+      "max_component_or_quaternion_chord_error": 1.3741872523158903e-07,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_step_all_trstranslation": {
+      "max_component_or_quaternion_chord_error": 0.0,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_step_all_trsscale": {
+      "max_component_or_quaternion_chord_error": 0.0,
+      "samples": 145,
+      "native_keys": 3
+    },
+    "test_step_all_trsrotation": {
+      "max_component_or_quaternion_chord_error": 7.549790126404332e-08,
+      "samples": 145,
+      "native_keys": 3
+    }
+  },
+  "validator": {
+    "test_cubic_rotation_signs_and_glb": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "input.glb": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_cubic_vectors_tangent_duration_and_overshootscale": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_cubic_vectors_tangent_duration_and_overshoottranslation": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_linear_nonuniform_vec3scale": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_linear_nonuniform_vec3translation": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_long_constant_cubic_does_not_expand": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_nanosecond_intervals": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_reordered_and_shared_samplersreordered_channels": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_reordered_and_shared_samplersshared_sampler": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_shared_sampler_multiple_nodes_and_unused_sampler": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_single_key_and_multiclip": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_spherical_rotation_and_antipodal_keys-1": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_spherical_rotation_and_antipodal_keys1": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_step_all_trsrotation": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_step_all_trsscale": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    },
+    "test_step_all_trstranslation": {
+      "input.gltf": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "roundtrip.gltf": {
+        "errors": 0,
+        "warnings": 0
+      }
+    }
+  },
+  "colossus_before_deformation": [
+    {
+      "clip": "colossus_idle",
+      "samples": 9,
+      "max_normalized_cpu_error": 0.00012883412912070396,
+      "rms_normalized_cpu_error": 1.0008350811846139e-05,
+      "max_error_with_raw_byte_weights": 0.005970281728065269,
+      "max_joint_world_component_error": 9.48382375288298e-07
+    },
+    {
+      "clip": "colossus_walking",
+      "samples": 9,
+      "max_normalized_cpu_error": 0.0001739257727155639,
+      "rms_normalized_cpu_error": 2.1768069649904234e-05,
+      "max_error_with_raw_byte_weights": 0.006033231859144336,
+      "max_joint_world_component_error": 4.36773903141896e-05
+    },
+    {
+      "clip": "colossus_heavy_walking",
+      "samples": 9,
+      "max_normalized_cpu_error": 0.0002147058164032304,
+      "rms_normalized_cpu_error": 5.152344164308148e-05,
+      "max_error_with_raw_byte_weights": 0.006183110003277302,
+      "max_joint_world_component_error": 0.0001287724649388089
+    },
+    {
+      "clip": "colossus_crouched_walking",
+      "samples": 9,
+      "max_normalized_cpu_error": 0.00024830898531060544,
+      "rms_normalized_cpu_error": 1.4559263461739066e-05,
+      "max_error_with_raw_byte_weights": 0.005000755187466288,
+      "max_joint_world_component_error": 5.864682568468282e-07
+    }
+  ],
+  "real_assets": {
+    "colossus": {
+      "nodes": 51,
+      "unique_geometry_files": 1,
+      "vertices_over_mesh_nodes": 3821,
+      "triangles_over_mesh_nodes": 4672,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "colossus_idle",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 3.900000095,
+          "max_time_error_seconds": 9.802322287200127e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        },
+        {
+          "name": "colossus_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.570370674,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.2059818250118678e-07
+          }
+        },
+        {
+          "name": "colossus_heavy_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.037036895,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        },
+        {
+          "name": "colossus_crouched_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 4.029629707,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "skin": {
+        "bones": 40,
+        "joint_indices_equal": true,
+        "weight_sum_histogram": {
+          "254": 21,
+          "255": 3791,
+          "256": 9
+        },
+        "max_weight_error": 0.0019607843137254832,
+        "max_bind_matrix_component_error": 0.0
+      },
+      "deformation": [
+        {
+          "clip": "colossus_idle",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00012883412912070396,
+          "rms_normalized_cpu_error": 9.99279402688746e-06,
+          "max_error_with_raw_byte_weights": 0.00597004453239948,
+          "max_joint_world_component_error": 6.059542797531847e-07
+        },
+        {
+          "clip": "colossus_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00018280529285566346,
+          "rms_normalized_cpu_error": 9.680890954328523e-06,
+          "max_error_with_raw_byte_weights": 0.006033231415104257,
+          "max_joint_world_component_error": 4.3374942026996877e-07
+        },
+        {
+          "clip": "colossus_heavy_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00019358921101594162,
+          "rms_normalized_cpu_error": 1.0498338718031757e-05,
+          "max_error_with_raw_byte_weights": 0.006183110379227134,
+          "max_joint_world_component_error": 5.210195736515821e-07
+        },
+        {
+          "clip": "colossus_crouched_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00024830290897852076,
+          "rms_normalized_cpu_error": 1.4559703852941418e-05,
+          "max_error_with_raw_byte_weights": 0.0050007522117315375,
+          "max_joint_world_component_error": 5.901537752425051e-07
+        }
+      ],
+      "image_bytes": {
+        "input_images": 4,
+        "exact_hash_matches": 4,
+        "unmatched": []
+      },
+      "input_sha256": "227eb7bf006431f1578395c2291f731425459b4fba20685c9fd42898e96fed4d",
+      "native_keys": 67206,
+      "native_scene_bytes": 12836144
+    },
+    "colossus_glb": {
+      "nodes": 51,
+      "unique_geometry_files": 1,
+      "vertices_over_mesh_nodes": 3821,
+      "triangles_over_mesh_nodes": 4672,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "colossus_idle",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 3.900000095,
+          "max_time_error_seconds": 9.802322287200127e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        },
+        {
+          "name": "colossus_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.570370674,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.2059818250118678e-07
+          }
+        },
+        {
+          "name": "colossus_heavy_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.037036895,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        },
+        {
+          "name": "colossus_crouched_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 4.029629707,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.343172518709298e-07
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "skin": {
+        "bones": 40,
+        "joint_indices_equal": true,
+        "weight_sum_histogram": {
+          "254": 21,
+          "255": 3791,
+          "256": 9
+        },
+        "max_weight_error": 0.0019607843137254832,
+        "max_bind_matrix_component_error": 0.0
+      },
+      "image_bytes": {
+        "input_images": 4,
+        "exact_hash_matches": 4,
+        "unmatched": []
+      },
+      "input_sha256": "2eeb775477ccffaa74cd9c2c57e390c80aea612b44e64be573b5858ff909c68e",
+      "native_keys": 67206,
+      "native_scene_bytes": 12836144
+    },
+    "car_engine": {
+      "nodes": 126,
+      "unique_geometry_files": 85,
+      "vertices_over_mesh_nodes": 75751,
+      "triangles_over_mesh_nodes": 77763,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "Take 001",
+          "channels_in": 87,
+          "bindings_out": 87,
+          "duration_seconds": 10.0,
+          "max_time_error_seconds": 9.604644857219569e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 9.424321830774485e-08
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "image_bytes": {
+        "input_images": 14,
+        "exact_hash_matches": 14,
+        "unmatched": []
+      },
+      "input_sha256": "42c1b1aa6324997e06054eb2d039838a0ba3f6b85144d8265a008f2c4d041be6",
+      "native_keys": 2887,
+      "native_scene_bytes": 721613
+    }
+  },
+  "assetc_compiled_playback_identical_fixtures": 16
+}

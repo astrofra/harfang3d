@@ -113,6 +113,14 @@ static void TestAnimationTracks() {
 		}
 	}
 
+	scene.GetAnim(ref)->flags |= hg::AF_TransformStepInterpolation;
+	Model step_model;
+	ExportMotions(step_model, scene);
+	for (const auto &sampler : step_model.animations[0].samplers)
+		Check(sampler.interpolation == "STEP", "native transform STEP interpolation lost on export");
+	for (const auto &sampler : step_model.animations[1].samplers)
+		Check(sampler.interpolation == "LINEAR", "legacy export interpolation changed");
+
 	// No partial accessors/channels for empty tracks or float-time collisions.
 	Model invalid_model;
 	Animation invalid_animation;
@@ -243,6 +251,29 @@ static void WriteSkinReference(const char *scene_path, const char *geo_path, con
 
 int main(int argc, const char **argv) {
 	try {
+		if (argc == 4 && std::string(argv[1]) == "--animation-export") {
+			hg::Scene scene;
+			hg::PipelineResources resources;
+			hg::LoadSceneContext context;
+			Check(hg::LoadSceneJsonFromFile(argv[2], scene, resources, hg::GetForwardPipelineInfo(), context,
+				hg::LSSF_Nodes | hg::LSSF_Anims | hg::LSSF_DoNotLoadResources), "cannot load animation fixture");
+			Model model;
+			model.asset.version = "2.0";
+			model.scenes.push_back({});
+			model.defaultScene = 0;
+			NodeRef_to_IdNode.clear();
+			for (auto node : scene.GetNodes()) {
+				const int id = int(model.nodes.size());
+				NodeRef_to_IdNode[node.ref] = id;
+				model.nodes.push_back({});
+				model.nodes.back().name = node.GetName();
+				model.scenes[0].nodes.push_back(id);
+			}
+			ExportMotions(model, scene);
+			TinyGLTF writer;
+			Check(writer.WriteGltfSceneToFile(&model, argv[3], true, true, true, false), "cannot export animation fixture");
+			return 0;
+		}
 		if (argc == 5 && std::string(argv[1]) == "--skin-reference") {
 			WriteSkinReference(argv[2], argv[3], argv[4]);
 			return 0;

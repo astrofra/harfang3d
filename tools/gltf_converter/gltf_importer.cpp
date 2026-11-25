@@ -28,6 +28,8 @@
 #include "stb_image.h"
 #include "tiny_gltf.h"
 
+#include <array>
+#include <functional>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -409,194 +411,227 @@ static void FinalizeScene(hg::Scene &scene) {
 }
 
 //
-static void ExportMotions(const Model &model, const Scene &gltf_scene, hg::Scene &scene, const Config &config) {
-	if (!config.import_animation)
-		return;
+using AnimationValue = std::array<double, 4>;
+struct AnimationSample {
+	hg::time_ns time;
+	AnimationValue value;
+};
 
-	// all animations
-	hg::debug(hg::format("animations(items=%1)").arg(model.animations.size()).c_str());
-	for (size_t i = 0; i < model.animations.size(); i++) {
-		const tinygltf::Animation &animation = model.animations[i];
-		hg::debug(hg::format(Indent(1) + "name         : %1").arg(animation.name.empty() ? "anim_" + std::to_string(i) : animation.name).c_str());
+static double AnimationDot(const AnimationValue &a, const AnimationValue &b) {
+	double dot = 0;
+	for (int i = 0; i < 4; ++i)
+		dot += a[i] * b[i];
+	return dot;
+}
 
-		hg::SceneAnim scene_anim{animation.name.empty() ? "anim_" + std::to_string(i) : animation.name, hg::time_from_sec(99999), hg::time_from_sec(-99999)};
+static AnimationValue NormalizeAnimationRotation(AnimationValue value) {
+	const double length = std::sqrt(AnimationDot(value, value));
+	if (!std::isfinite(length) || length < 1e-12)
+		throw std::runtime_error("Animation contains an undefined quaternion");
+	for (auto &v : value)
+		v /= length;
+	return value;
+}
 
-		std::vector<hg::AnimRef> anims;
+static AnimationValue AnimationLerp(AnimationValue a, AnimationValue b, double u, bool rotation) {
+	if (rotation && AnimationDot(a, b) < 0)
+		for (auto &v : b)
+			v = -v;
+	for (int i = 0; i < 4; ++i)
+		a[i] = a[i] * (1 - u) + b[i] * u;
+	return rotation ? NormalizeAnimationRotation(a) : a;
+}
 
-		// add animations samplers
-		hg::debug(hg::format(Indent(1) + "samplers(items=%1)").arg(animation.samplers.size()).c_str());
-		for (size_t j = 0; j < animation.samplers.size(); j++) {
-			const tinygltf::AnimationSampler &sampler = animation.samplers[j];
-			hg::debug(hg::format(Indent(2) + "input         : %1").arg(sampler.input).c_str());
-			hg::debug(hg::format(Indent(2) + "interpolation : %1").arg(sampler.interpolation).c_str());
-			hg::debug(hg::format(Indent(2) + "output        : %1").arg(sampler.output).c_str());
+static AnimationValue AnimationSlerp(const AnimationValue &a, AnimationValue b, double u) {
+	double dot = AnimationDot(a, b);
+	if (dot < 0) {
+		dot = -dot;
+		for (auto &v : b)
+			v = -v;
+	}
+	if (dot > 1 - 1e-8)
+		return AnimationLerp(a, b, u, true);
+	const double angle = std::acos(std::min(1.0, dot));
+	AnimationValue v{};
+	for (int c = 0; c < 4; ++c)
+		v[c] = (std::sin((1 - u) * angle) * a[c] + std::sin(u * angle) * b[c]) / std::sin(angle);
+	return NormalizeAnimationRotation(v);
+}
 
-			// input (usually the time) Get the good buffer from all the gltf micmac
-			const auto inputAccessor = model.accessors[sampler.input];
-			const auto &inputBufferView = model.bufferViews[inputAccessor.bufferView];
-			const auto &inputBuffer = model.buffers[inputBufferView.buffer];
-			const auto inputDataPtr = inputBuffer.data.data() + inputBufferView.byteOffset + inputAccessor.byteOffset;
-			const auto input_byte_stride = inputAccessor.ByteStride(inputBufferView);
-			const auto input_count = inputAccessor.count;
+static std::vector<AnimationValue> ReadAnimationValues(const Model &model, int index, int type) {
+	const auto &a = model.accessors.at(index);
+	if (a.type != type || a.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT || a.normalized)
+		throw std::runtime_error("Invalid animation accessor type");
+	const auto &view = model.bufferViews.at(a.bufferView);
+	const size_t stride = a.ByteStride(view), components = GetNumComponentsInType(type);
+	const auto *data = AccessorSpan(model, a.bufferView, a.byteOffset, a.count, stride, components * sizeof(float));
+	std::vector<AnimationValue> values(a.count);
+	for (size_t i = 0; i < a.count; ++i)
+		for (size_t c = 0; c < components; ++c) {
+			float v;
+			std::memcpy(&v, data + i * stride + c * sizeof(float), sizeof(v));
+			if (!std::isfinite(v))
+				throw std::runtime_error("Non-finite animation key or tangent");
+			values[i][c] = v;
+		}
+	return values;
+}
 
-			//	hg::debug(hg::format("input attribute has count %1 and stride %2 bytes").arg(input_count).arg(input_byte_stride).c_str());
-
-			// output (value for the key) Get the good buffer from all the gltf micmac
-			const auto outputAccessor = model.accessors[sampler.output];
-			const auto &outputBufferView = model.bufferViews[outputAccessor.bufferView];
-			const auto &outputBuffer = model.buffers[outputBufferView.buffer];
-			const auto outputDataPtr = outputBuffer.data.data() + outputBufferView.byteOffset + outputAccessor.byteOffset;
-			const auto output_byte_stride = outputAccessor.ByteStride(outputBufferView);
-			const auto output_count = outputAccessor.count;
-
-			//	hg::debug(hg::format("output attribute has count %1 and stride %2 bytes").arg(output_count).arg(output_byte_stride).c_str());
-
-			const auto anim_ref = scene.AddAnim({});
-			anims.push_back(anim_ref);
-			auto anim = scene.GetAnim(anim_ref);
-
-			// get channel type anim
-			std::string target_path = "";
-			for (size_t k = 0; k < animation.channels.size(); k++)
-				if (animation.channels[k].sampler == j)
-					target_path = animation.channels[j].target_path;
-
-			// Transfers the value and time from the buffer to harfang depending of the type
-			switch (inputAccessor.type) {
-				case TINYGLTF_TYPE_SCALAR: {
-					switch (inputAccessor.componentType) {
-						case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-							hg::debug("Input type is FLOAT");
-							// vector of float
-							floatArray<float> time(arrayAdapter<float>(inputDataPtr, input_count, input_byte_stride));
-
-							hg::debug(hg::format("time's size : %1").arg(time.size()).c_str());
-
-							switch (outputAccessor.type) {
-								case TINYGLTF_TYPE_VEC4: {
-									switch (outputAccessor.componentType) {
-										case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-											hg::debug("Output type is FLOAT");
-
-											v4fArray value(arrayAdapter<hg::Vec4>(outputDataPtr, output_count, output_byte_stride));
-
-											hg::debug(hg::format("value's size : %1").arg(value.size()).c_str());
-											anim->quat_tracks.push_back({"NO_MATCH", {}});
-											anim->flags |= hg::AF_UseQuaternionForRotation;
-
-											for (size_t k{0}; k < time.size(); ++k) {
-												auto t = hg::time_from_sec_f(time[k]);
-												auto v = value[k];
-												// hg::debug(hg::format("t[%1]: (%2), v[%3]: (%4, %5, %6,
-												// %7)").arg(k).arg(t).arg(k).arg(v.x).arg(v.y).arg(v.z).arg(v.w).c_str());
-												auto r = hg::ToEuler(hg::Quaternion(v.x, v.y, v.z, v.w));
-												hg::SetKey(anim->quat_tracks.back(), t, hg::QuaternionFromEuler(-r.x, -r.y, r.z));
-											}
-											anim->t_start = hg::time_from_sec_f(time[0]);
-											anim->t_end = hg::time_from_sec_f(time[time.size() - 1]);
-
-											scene_anim.t_start = hg::Min(scene_anim.t_start, anim->t_start);
-											scene_anim.t_end = hg::Max(scene_anim.t_end, anim->t_end);
-										} break;
-										default:
-											hg::error("Error: Animation values needs to be Float (else not implemented)");
-											break;
-									}
-
-								} break;
-
-								case TINYGLTF_TYPE_VEC3: {
-									switch (outputAccessor.componentType) {
-										case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-											hg::debug("Output type is FLOAT");
-
-											v3fArray value(arrayAdapter<hg::Vec3>(outputDataPtr, output_count, output_byte_stride));
-
-											hg::debug(hg::format("value's size : %1").arg(value.size()).c_str());
-											anim->vec3_tracks.push_back({"NO_MATCH", {}});
-
-											for (size_t k{0}; k < time.size(); ++k) {
-												auto t = hg::time_from_sec_f(time[k]);
-												auto v = value[k];
-
-												// fix only for pos
-												if (target_path == "translation")
-													v.z = -v.z;
-
-												// hg::debug(hg::format("t[%1]: (%2), v[%3]: (%4, %5,
-												// %6)").arg(k).arg(t).arg(k).arg(v.x).arg(v.y).arg(v.z).c_str());
-												hg::SetKey(anim->vec3_tracks.back(), t, v);
-											}
-											anim->t_start = hg::time_from_sec_f(time[0]);
-											anim->t_end = hg::time_from_sec_f(time[time.size() - 1]);
-
-											scene_anim.t_start = hg::Min(scene_anim.t_start, anim->t_start);
-											scene_anim.t_end = hg::Max(scene_anim.t_end, anim->t_end);
-										} break;
-										default:
-											hg::error("Error: Animation values needs to be Float (else not implemented)");
-											break;
-									}
-
-								} break;
-							}
-						} break;
-						default:
-							hg::error("Error: Time values needs to be Float (else not implemented)");
-							break;
+// Cubic curves are baked to explicit native linear/spherical interpolation.
+static hg::Anim ImportAnimationChannel(const Model &model, const AnimationSampler &sampler, const std::string &path) {
+	const bool rotation = path == "rotation", cubic = sampler.interpolation == "CUBICSPLINE", step = sampler.interpolation == "STEP";
+	if (!step && !cubic && sampler.interpolation != "LINEAR" && !sampler.interpolation.empty())
+		throw std::runtime_error("Unsupported animation interpolation: " + sampler.interpolation);
+	const auto input = ReadAnimationValues(model, sampler.input, TINYGLTF_TYPE_SCALAR);
+	auto values = ReadAnimationValues(model, sampler.output, rotation ? TINYGLTF_TYPE_VEC4 : TINYGLTF_TYPE_VEC3);
+	if (input.empty() || input.size() > std::numeric_limits<size_t>::max() / (cubic ? 3 : 1) ||
+		values.size() != input.size() * (cubic ? 3 : 1) || (cubic && input.size() < 2))
+		throw std::runtime_error("Animation input/output key counts do not match");
+	std::vector<hg::time_ns> times;
+	for (const auto &t : input) {
+		if (t[0] < 0 || t[0] * 1e9 >= double(std::numeric_limits<hg::time_ns>::max()))
+			throw std::runtime_error("Animation time is outside native range");
+		const auto time = hg::time_from_sec_d(t[0]);
+		if (!times.empty() && time <= times.back())
+			throw std::runtime_error("Animation times must increase at native nanosecond resolution");
+		times.push_back(time);
+	}
+	for (auto &v : values) {
+		if (path == "translation")
+			v[2] = -v[2];
+		else if (rotation) {
+			v[0] = -v[0];
+			v[1] = -v[1];
+		}
+	}
+	const auto key = [&](size_t i) {
+		const auto v = values[cubic ? 3 * i + 1 : i];
+		return rotation ? NormalizeAnimationRotation(v) : v;
+	};
+	std::vector<AnimationSample> samples{{times.front(), key(0)}};
+	const auto append = [&](hg::time_ns time, const AnimationValue &v) {
+		if (samples.size() >= 100000)
+			throw std::runtime_error("Animation baking exceeded 100000 samples per channel");
+		samples.push_back({time, v});
+	};
+	for (size_t i = 0; i + 1 < times.size(); ++i) {
+		const auto start = times[i], end = times[i + 1];
+		const auto a = key(i), b = key(i + 1);
+		if (!cubic || (values[3 * i + 1] == values[3 * (i + 1) + 1] &&
+			values[3 * i + 2] == AnimationValue{} && values[3 * (i + 1)] == AnimationValue{})) {
+			append(end, b);
+			continue;
+		}
+		const auto evaluate = [&](hg::time_ns time) {
+			const double u = double(time - start) / double(end - start);
+			if (time == start)
+				return a;
+			if (time == end)
+				return b;
+			const double dt = input[i + 1][0] - input[i][0], u2 = u * u, u3 = u2 * u;
+			AnimationValue v{};
+			for (int c = 0; c < 4; ++c)
+				v[c] = (2 * u3 - 3 * u2 + 1) * values[3 * i + 1][c] + (u3 - 2 * u2 + u) * dt * values[3 * i + 2][c] +
+					(-2 * u3 + 3 * u2) * values[3 * (i + 1) + 1][c] + (u3 - u2) * dt * values[3 * (i + 1)][c];
+			return rotation ? NormalizeAnimationRotation(v) : v;
+		};
+		std::function<void(hg::time_ns, const AnimationValue &, hg::time_ns, const AnimationValue &, unsigned)> bake;
+		bake = [&](hg::time_ns lo, const AnimationValue &v0, hg::time_ns hi, const AnimationValue &v1, unsigned depth) {
+			const auto duration = hi - lo;
+			// Small intervals have no unrepresented integer-nanosecond times.
+			if (duration <= 2) {
+				if (duration == 2)
+					append(lo + 1, evaluate(lo + 1));
+				append(hi, v1);
+				return;
+			}
+			bool split = duration > hg::time_from_ms(16);
+			for (int fraction = 1; fraction <= 3; ++fraction) {
+				const auto t = lo + duration / 4 * fraction + (duration % 4) * fraction / 4;
+				const auto actual = evaluate(t), approximate = rotation ? AnimationSlerp(v0, v1, double(t - lo) / duration) : AnimationLerp(v0, v1, double(t - lo) / duration, false);
+				if (rotation) {
+					double distance = 0, opposite = 0;
+					for (int c = 0; c < 4; ++c) {
+						distance += (actual[c] - approximate[c]) * (actual[c] - approximate[c]);
+						opposite += (actual[c] + approximate[c]) * (actual[c] + approximate[c]);
 					}
-					break;
+					split |= std::min(distance, opposite) > 2.5e-11; // ~1e-5 radians.
+				} else {
+					for (int c = 0; c < 3; ++c)
+						split |= std::abs(actual[c] - approximate[c]) > 1e-5 + 1e-6 * std::max(std::abs(actual[c]), std::abs(approximate[c]));
 				}
 			}
+			if (split) {
+				if (depth >= 32)
+					throw std::runtime_error("Animation baking cannot meet interpolation tolerance");
+				const auto mid = lo + duration / 2;
+				const auto vm = evaluate(mid);
+				bake(lo, v0, mid, vm, depth + 1);
+				bake(mid, vm, hi, v1, depth + 1);
+			} else {
+				append(hi, v1);
+			}
+		};
+		bake(start, a, end, b, 0);
+	}
+
+	hg::Anim anim;
+	anim.flags = step ? hg::AF_TransformStepInterpolation : hg::AF_TransformLinearInterpolation;
+	anim.t_start = times.front();
+	anim.t_end = times.back();
+	if (rotation) {
+		anim.flags |= hg::AF_UseQuaternionForRotation;
+		anim.quat_tracks.push_back({"Rotation", {}});
+		for (auto s : samples) {
+			auto &keys = anim.quat_tracks.back().keys;
+			hg::Quaternion q(float(s.value[0]), float(s.value[1]), float(s.value[2]), float(s.value[3]));
+			if (!keys.empty() && hg::Dot(keys.back().v, q) < 0)
+				q *= -1.f;
+			keys.push_back({s.time, q});
 		}
+	} else {
+		anim.vec3_tracks.push_back({path == "translation" ? "Position" : "Scale", {}});
+		for (const auto &s : samples) {
+			const hg::Vec3 v(float(s.value[0]), float(s.value[1]), float(s.value[2]));
+			if (!std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z))
+				throw std::runtime_error("Baked animation value exceeds native float range");
+			anim.vec3_tracks.back().keys.push_back({s.time, v});
+		}
+	}
+	return anim;
+}
 
-		// add animation channel, link from the anim track made above to the type of animaton and to the node
-		hg::debug((Indent(1) + "channels : [ ").c_str());
-		for (size_t j = 0; j < animation.channels.size(); j++) {
-			hg::debug(hg::format(Indent(2) + "sampler     : %1").arg(animation.channels[j].sampler).c_str());
-			hg::debug(hg::format(Indent(2) + "target.id   : %1").arg(animation.channels[j].target_node).c_str());
-			hg::debug(hg::format(Indent(2) + "target.path : %1").arg(animation.channels[j].target_path).c_str());
-			hg::debug((j != (animation.channels.size() - 1)) ? "  , " : "");
-
-			if (animation.channels[j].sampler < anims.size()) {
-				auto anim_ref = anims[animation.channels[j].sampler];
-				auto anim = scene.GetAnim(anim_ref);
-
-				const auto node = idNode_to_NodeRef.find(animation.channels[j].target_node);
-				if (node == idNode_to_NodeRef.end())
-					continue; // This channel targets a node outside the current scene.
-				scene_anim.node_anims.push_back({node->second, anim_ref});
-
-				std::string target;
-				if (animation.channels[j].target_path == "translation")
-					target = "Position";
-				else if (animation.channels[j].target_path == "rotation")
-					target = "Rotation";
-				else if (animation.channels[j].target_path == "scale")
-					target = "Scale";
-				else if (animation.channels[j].target_path == "weights")
-					target = "Weights";
-
-				// find which track is not empty
-				if (anim->bool_tracks.size())
-					anim->bool_tracks.back().target = target;
-				else if (anim->int_tracks.size())
-					anim->int_tracks.back().target = target;
-				else if (anim->float_tracks.size())
-					anim->float_tracks.back().target = target;
-				else if (anim->vec2_tracks.size())
-					anim->vec2_tracks.back().target = target;
-				else if (anim->vec3_tracks.size())
-					anim->vec3_tracks.back().target = target;
-				else if (anim->vec4_tracks.size())
-					anim->vec4_tracks.back().target = target;
-				else if (anim->quat_tracks.size())
-					anim->quat_tracks.back().target = target;
+static void ExportMotions(const Model &model, const Scene &, hg::Scene &scene, const Config &config) {
+	if (!config.import_animation)
+		return;
+	for (size_t i = 0; i < model.animations.size(); ++i) {
+		const auto &animation = model.animations[i];
+		hg::SceneAnim clip{animation.name.empty() ? "anim_" + std::to_string(i) : animation.name,
+			std::numeric_limits<hg::time_ns>::max(), 0};
+		std::set<std::pair<int, std::string>> targets;
+		for (const auto &channel : animation.channels) {
+			if (channel.target_path != "translation" && channel.target_path != "rotation" && channel.target_path != "scale") {
+				hg::warn(hg::format("Animation '%1': unsupported target '%2' skipped").arg(clip.name).arg(channel.target_path));
+				continue;
+			}
+			if (channel.target_node < 0 || size_t(channel.target_node) >= model.nodes.size())
+				throw std::runtime_error("Invalid animation target node");
+			const auto node = idNode_to_NodeRef.find(channel.target_node);
+			if (node == idNode_to_NodeRef.end())
+				continue;
+			if (!targets.emplace(channel.target_node, channel.target_path).second)
+				throw std::runtime_error("Duplicate animation target in one clip");
+			try {
+				auto anim = ImportAnimationChannel(model, animation.samplers.at(channel.sampler), channel.target_path);
+				clip.t_start = std::min(clip.t_start, anim.t_start);
+				clip.t_end = std::max(clip.t_end, anim.t_end);
+				clip.node_anims.push_back({node->second, scene.AddAnim(anim)});
+			} catch (const std::exception &e) {
+				throw std::runtime_error("Animation '" + clip.name + "', node " + std::to_string(channel.target_node) + ", " + channel.target_path + ": " + e.what());
 			}
 		}
-		hg::debug("  ]");
-
-		scene.AddSceneAnim(scene_anim);
+		if (!clip.node_anims.empty())
+			scene.AddSceneAnim(clip);
 	}
 }
 

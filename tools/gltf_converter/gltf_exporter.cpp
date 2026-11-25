@@ -215,7 +215,7 @@ template <typename Track> static const Track *FindAnimationTrack(const std::vect
 }
 
 template <typename Track, typename Convert>
-static void ExportAnimationTrack(Model &model, Animation &animation, int node, const char *path, const Track *track, Convert convert) {
+static void ExportAnimationTrack(Model &model, Animation &animation, int node, const char *path, const Track *track, Convert convert, const char *interpolation = "LINEAR") {
 	if (!track || track->keys.empty())
 		return;
 	for (const auto &channel : animation.channels)
@@ -241,7 +241,7 @@ static void ExportAnimationTrack(Model &model, Animation &animation, int node, c
 
 	AnimationSampler sampler;
 	// This patch preserves key samples; native Hermite curve baking is separate.
-	sampler.interpolation = "LINEAR";
+	sampler.interpolation = interpolation;
 	sampler.input = ExportAnimationAccessor(model, input, TINYGLTF_TYPE_SCALAR, 1);
 	sampler.output = ExportAnimationAccessor(model, output, components == 4 ? TINYGLTF_TYPE_VEC4 : TINYGLTF_TYPE_VEC3, components);
 	AnimationChannel channel;
@@ -270,18 +270,22 @@ static void ExportMotions(Model &model, hg::Scene &scene) {
 				continue;
 			}
 
+			const char *interpolation = anim->flags & hg::AF_TransformStepInterpolation ? "STEP" : "LINEAR";
 			ExportAnimationTrack(model, animation, node->second, "translation", FindAnimationTrack(anim->vec3_tracks, "Position"),
-				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, -v.z}; });
+				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, -v.z}; }, interpolation);
 			ExportAnimationTrack(model, animation, node->second, "scale", FindAnimationTrack(anim->vec3_tracks, "Scale"),
-				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, v.z}; });
+				[](const hg::Vec3 &v) { return std::array<float, 3>{v.x, v.y, v.z}; }, interpolation);
 
 			// Match the native evaluator's rotation mode; never serialize Euler VEC3
 			// values as a glTF rotation or emit two rotation channels for one node.
 			if (anim->flags & hg::AF_UseQuaternionForRotation)
 				ExportAnimationTrack(model, animation, node->second, "rotation", FindAnimationTrack(anim->quat_tracks, "Rotation"),
-					[](const hg::Quaternion &q) { return ExportEulerRotation(hg::ToEuler(q)); });
+					[](const hg::Quaternion &q) {
+						const auto v = hg::Normalize(q);
+						return std::array<float, 4>{-v.x, -v.y, v.z, v.w};
+					}, interpolation);
 			else
-				ExportAnimationTrack(model, animation, node->second, "rotation", FindAnimationTrack(anim->vec3_tracks, "Rotation"), ExportEulerRotation);
+				ExportAnimationTrack(model, animation, node->second, "rotation", FindAnimationTrack(anim->vec3_tracks, "Rotation"), ExportEulerRotation, interpolation);
 		}
 		if (!animation.channels.empty())
 			model.animations.push_back(std::move(animation));

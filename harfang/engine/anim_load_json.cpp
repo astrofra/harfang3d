@@ -50,6 +50,10 @@ void SaveAnimToJson(json &js, const Anim &anim) {
 	json flags = json::array();
 	if (anim.flags & AF_UseQuaternionForRotation)
 		flags.push_back("UseQuaternionForRotation");
+	if (anim.flags & AF_TransformLinearInterpolation)
+		flags.push_back("TransformLinearInterpolation");
+	if (anim.flags & AF_TransformStepInterpolation)
+		flags.push_back("TransformStepInterpolation");
 
 	js["flags"] = flags;
 
@@ -145,6 +149,10 @@ void LoadAnimFromJson(const json &js, Anim &anim) {
 		for (auto j : *i)
 			if (j == "UseQuaternionForRotation")
 				anim.flags |= AF_UseQuaternionForRotation;
+			else if (j == "TransformLinearInterpolation")
+				anim.flags |= AF_TransformLinearInterpolation;
+			else if (j == "TransformStepInterpolation")
+				anim.flags |= AF_TransformStepInterpolation;
 	} else {
 		// legacy fallback
 		if (!anim.quat_tracks.empty()) // any quaternion track takes precedence
