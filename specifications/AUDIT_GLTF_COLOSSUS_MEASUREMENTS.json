@@ -1,0 +1,335 @@
+{
+  "revision": "87c361bc2ec191a15549a2301e6e5f9c97777827",
+  "input_hashes": {
+    "generated/anims/colossus.scn": "427d652b9a936622bcda9ee8cabb7ff9d79a671a6ef1873d73a7d31846a4c76c",
+    "colossus/colossus_idle/Layer.geo": "5e37351f1fdea3e699aa43aa679ecb4a7dc6f1ca3f8f338010572db0c576f5c0",
+    "core/shader/pbr_fs.sc": "ae3cd1864d6c2d28392b603270916443423f3c153c556e196aadb1f152652f36"
+  },
+  "geometry": {
+    "vertices": 3821,
+    "polygons": 2348,
+    "corners": 9368,
+    "triangles": 4672,
+    "tangents": 9368,
+    "skin_records": 3821,
+    "bind_poses": 80,
+    "bone_slots": 80,
+    "unique_bone_nodes": 40,
+    "active_slots": 79,
+    "weight_sums": {
+      "255": 3337,
+      "254": 255,
+      "256": 220,
+      "246": 4,
+      "250": 1,
+      "253": 4
+    },
+    "bone_table_halves_equal": true,
+    "bind_pose_halves_equal": true
+  },
+  "output": {
+    "nodes": 51,
+    "meshes": 1,
+    "skins": 0,
+    "skin_nodes": 0,
+    "materials": [
+      {
+        "emissiveTexture": {
+          "index": 3
+        },
+        "name": "DefaultMaterial",
+        "normalTexture": {
+          "index": 2
+        },
+        "occlusionTexture": {
+          "index": 1
+        },
+        "pbrMetallicRoughness": {
+          "baseColorFactor": [
+            0.800000011920929,
+            0.800000011920929,
+            0.800000011920929,
+            1.0
+          ],
+          "baseColorTexture": {
+            "index": 0
+          },
+          "metallicFactor": 0.0,
+          "metallicRoughnessTexture": {
+            "index": 1
+          },
+          "roughnessFactor": 0.5
+        }
+      }
+    ],
+    "images": 4,
+    "samplers": [],
+    "geometry_attributes_equal_native": true,
+    "attributes": {
+      "NORMAL": 1,
+      "POSITION": 0,
+      "TEXCOORD_0": 2
+    },
+    "vertices": 3821
+  },
+  "clips": [
+    {
+      "name": "colossus_idle",
+      "source_duration": 3.9,
+      "source_tracks": {
+        "vec3:Position": 51,
+        "vec3:Scale": 51,
+        "vec3:Rotation": 17,
+        "quat:Rotation": 34
+      },
+      "source_varying_tracks_exact": {
+        "Scale": 34,
+        "Rotation": 34,
+        "Position": 1
+      },
+      "max_scale_component_change": 7.152557373046875e-07,
+      "lost_moving_positions": [
+        {
+          "node": "mixamorig:Hips",
+          "max_component_change": 0.009075045585632324
+        }
+      ],
+      "output_channels": {
+        "translation": 17,
+        "rotation": 34
+      },
+      "output_keys": {
+        "1": 17,
+        "235": 34
+      },
+      "output_range": [
+        0.0,
+        3.9000000953674316
+      ],
+      "selected_tracks_targets_times_verified": 51
+    },
+    {
+      "name": "colossus_walking",
+      "source_duration": 5.570370674,
+      "source_tracks": {
+        "vec3:Position": 51,
+        "vec3:Scale": 51,
+        "vec3:Rotation": 21,
+        "quat:Rotation": 30
+      },
+      "source_varying_tracks_exact": {
+        "Scale": 30,
+        "Rotation": 30,
+        "Position": 1
+      },
+      "max_scale_component_change": 6.556510925292969e-07,
+      "lost_moving_positions": [
+        {
+          "node": "mixamorig:Hips",
+          "max_component_change": 0.11922508478164673
+        }
+      ],
+      "output_channels": {
+        "translation": 21,
+        "rotation": 30
+      },
+      "output_keys": {
+        "1": 21,
+        "189": 30
+      },
+      "output_range": [
+        0.0,
+        5.570370674133301
+      ],
+      "selected_tracks_targets_times_verified": 51
+    },
+    {
+      "name": "colossus_heavy_walking",
+      "source_duration": 5.037036885,
+      "source_tracks": {
+        "vec3:Position": 51,
+        "vec3:Scale": 51,
+        "vec3:Rotation": 18,
+        "quat:Rotation": 33
+      },
+      "source_varying_tracks_exact": {
+        "Scale": 33,
+        "Rotation": 33,
+        "Position": 1
+      },
+      "max_scale_component_change": 7.152557373046875e-07,
+      "lost_moving_positions": [
+        {
+          "node": "mixamorig:Hips",
+          "max_component_change": 0.17005908489227295
+        }
+      ],
+      "output_channels": {
+        "translation": 18,
+        "rotation": 33
+      },
+      "output_keys": {
+        "1": 18,
+        "171": 33
+      },
+      "output_range": [
+        0.0,
+        5.037036895751953
+      ],
+      "selected_tracks_targets_times_verified": 51
+    },
+    {
+      "name": "colossus_crouched_walking",
+      "source_duration": 4.029629781,
+      "source_tracks": {
+        "vec3:Position": 51,
+        "vec3:Scale": 51,
+        "vec3:Rotation": 29,
+        "quat:Rotation": 22
+      },
+      "source_varying_tracks_exact": {
+        "Scale": 22,
+        "Rotation": 22,
+        "Position": 1
+      },
+      "max_scale_component_change": 6.556510925292969e-07,
+      "lost_moving_positions": [
+        {
+          "node": "mixamorig:Hips",
+          "max_component_change": 0.10173577070236206
+        }
+      ],
+      "output_channels": {
+        "translation": 29,
+        "rotation": 22
+      },
+      "output_keys": {
+        "1": 29,
+        "137": 22
+      },
+      "output_range": [
+        0.0,
+        4.029629707336426
+      ],
+      "selected_tracks_targets_times_verified": 51
+    }
+  ],
+  "images": [
+    {
+      "name": "colossus/colossus_idle/colossus_uv_Default_BaseColor",
+      "source_bytes_equal": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGB",
+      "extrema": [
+        [
+          43,
+          224
+        ],
+        [
+          33,
+          184
+        ],
+        [
+          18,
+          166
+        ]
+      ]
+    },
+    {
+      "name": "colossus/colossus_idle/colossus_uv_Default_OcclusionRoughnessMetallic",
+      "source_bytes_equal": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGB",
+      "extrema": [
+        [
+          0,
+          255
+        ],
+        [
+          26,
+          255
+        ],
+        [
+          0,
+          255
+        ]
+      ]
+    },
+    {
+      "name": "colossus/colossus_idle/colossus_uv_Default_Normal",
+      "source_bytes_equal": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGB",
+      "extrema": [
+        [
+          5,
+          252
+        ],
+        [
+          4,
+          254
+        ],
+        [
+          99,
+          255
+        ]
+      ]
+    },
+    {
+      "name": "colossus/colossus_idle/colossus_uv_Default_Self",
+      "source_bytes_equal": true,
+      "size": [
+        2048,
+        2048
+      ],
+      "mode": "RGB",
+      "extrema": [
+        [
+          0,
+          255
+        ],
+        [
+          0,
+          202
+        ],
+        [
+          0,
+          83
+        ]
+      ]
+    }
+  ],
+  "cross_format": {
+    "scene_and_animation_structure_equal": true,
+    "animation_accessor_values_equal": true,
+    "native_hierarchy_edges_preserved": 48,
+    "mesh_is_root_with_constant_zero_translation_in_all_clips": true
+  },
+  "validation": {
+    "gltf": {
+      "validator_version": "2.0.0-dev.3.10",
+      "errors": 223,
+      "warnings": 1,
+      "truncated": false
+    },
+    "glb": {
+      "validator_version": "2.0.0-dev.3.10",
+      "errors": 223,
+      "warnings": 416,
+      "truncated": false
+    }
+  },
+  "output_hashes": {
+    "colossus.glb": "1c2cf16c7d98d62652df0dbb845e3f009ee809e3d13c58c8a55a06cb375d55f5",
+    "colossus.gltf": "fbddba568f745d657cb378796f5a51fda8d6e0d98635672f5183cc0f2bcb9a8e"
+  }
+}
