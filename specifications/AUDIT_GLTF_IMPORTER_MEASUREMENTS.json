@@ -1,0 +1,4124 @@
+{
+  "date": "2026-11-25",
+  "source_revision": "71d5b4fe37defc208c951c5793e5f84fa3b32895",
+  "platform": "macOS-14.1-arm64-arm-64bit-Mach-O",
+  "importer_sha256": "007633d8f3c95e7fab28784ec7b7d15d43fc5b02a7802e41831dc2f29d666884",
+  "validator_version": "2.0.0-dev.3.10",
+  "probe_count": 22,
+  "all_probes_validate_without_errors_or_warnings": true,
+  "real_asset_roundtrips": {
+    "colossus": {
+      "nodes": 51,
+      "unique_geometry_files": 1,
+      "vertices_over_mesh_nodes": 3821,
+      "triangles_over_mesh_nodes": 4672,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "colossus_idle",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 3.900000095,
+          "max_time_error_seconds": 9.802322287200127e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.769414855098414e-07
+          }
+        },
+        {
+          "name": "colossus_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.570370674,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.8856004975503332e-07
+          }
+        },
+        {
+          "name": "colossus_heavy_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.037036895,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 3.3653621840683624e-07
+          }
+        },
+        {
+          "name": "colossus_crouched_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 4.029629707,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 7.797878882024253e-07
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "skin": {
+        "bones": 40,
+        "joint_indices_equal": true,
+        "weight_sum_histogram": {
+          "254": 21,
+          "255": 3791,
+          "256": 9
+        },
+        "max_weight_error": 0.0019607843137254832,
+        "max_bind_matrix_component_error": 2.691522240638733e-07
+      },
+      "deformation": [
+        {
+          "clip": "colossus_idle",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.0001288413498632113,
+          "rms_normalized_cpu_error": 1.0009547254520212e-05,
+          "max_error_with_raw_byte_weights": 0.005970281760088147,
+          "max_joint_world_component_error": 9.48382375288298e-07
+        },
+        {
+          "clip": "colossus_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00017401119011650686,
+          "rms_normalized_cpu_error": 2.1764022744733025e-05,
+          "max_error_with_raw_byte_weights": 0.006033111943833237,
+          "max_joint_world_component_error": 4.36773903141896e-05
+        },
+        {
+          "clip": "colossus_heavy_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.00021471899020339126,
+          "rms_normalized_cpu_error": 5.15222977833998e-05,
+          "max_error_with_raw_byte_weights": 0.006182871609638601,
+          "max_joint_world_component_error": 0.0001287724649388089
+        },
+        {
+          "clip": "colossus_crouched_walking",
+          "samples": 9,
+          "max_normalized_cpu_error": 0.0002482892375050726,
+          "rms_normalized_cpu_error": 1.455941965296922e-05,
+          "max_error_with_raw_byte_weights": 0.005000747475294927,
+          "max_joint_world_component_error": 5.864682568468282e-07
+        }
+      ],
+      "image_bytes": {
+        "input_images": 4,
+        "exact_hash_matches": 4,
+        "unmatched": []
+      },
+      "input_sha256": "227eb7bf006431f1578395c2291f731425459b4fba20685c9fd42898e96fed4d"
+    },
+    "colossus_glb": {
+      "nodes": 51,
+      "unique_geometry_files": 1,
+      "vertices_over_mesh_nodes": 3821,
+      "triangles_over_mesh_nodes": 4672,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "colossus_idle",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 3.900000095,
+          "max_time_error_seconds": 9.802322287200127e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.769414855098414e-07
+          }
+        },
+        {
+          "name": "colossus_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.570370674,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.8856004975503332e-07
+          }
+        },
+        {
+          "name": "colossus_heavy_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 5.037036895,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 3.3653621840683624e-07
+          }
+        },
+        {
+          "name": "colossus_crouched_walking",
+          "channels_in": 153,
+          "bindings_out": 153,
+          "duration_seconds": 4.029629707,
+          "max_time_error_seconds": 9.938049272406602e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 7.797878882024253e-07
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "skin": {
+        "bones": 40,
+        "joint_indices_equal": true,
+        "weight_sum_histogram": {
+          "254": 21,
+          "255": 3791,
+          "256": 9
+        },
+        "max_weight_error": 0.0019607843137254832,
+        "max_bind_matrix_component_error": 2.691522240638733e-07
+      },
+      "image_bytes": {
+        "input_images": 4,
+        "exact_hash_matches": 4,
+        "unmatched": []
+      },
+      "input_sha256": "2eeb775477ccffaa74cd9c2c57e390c80aea612b44e64be573b5858ff909c68e"
+    },
+    "car_engine": {
+      "nodes": 126,
+      "unique_geometry_files": 85,
+      "vertices_over_mesh_nodes": 75751,
+      "triangles_over_mesh_nodes": 77763,
+      "triangle_bindings_match": true,
+      "max_position_error": 0,
+      "max_normal_error": 0,
+      "max_uv_error": 0,
+      "clips": [
+        {
+          "name": "Take 001",
+          "channels_in": 87,
+          "bindings_out": 87,
+          "duration_seconds": 10.0,
+          "max_time_error_seconds": 9.604644857219569e-10,
+          "max_key_value_error": {
+            "translation": 0.0,
+            "scale": 0.0,
+            "rotation": 1.3328008615016164e-07
+          }
+        }
+      ],
+      "missing_texture_files": [],
+      "image_bytes": {
+        "input_images": 14,
+        "exact_hash_matches": 14,
+        "unmatched": []
+      },
+      "input_sha256": "42c1b1aa6324997e06054eb2d039838a0ba3f6b85144d8265a008f2c4d041be6"
+    }
+  },
+  "colossus_gltf_glb_native_scene_and_geometry_identical": true,
+  "deformation_notes": {
+    "reference": "Actual native evaluator on reimported Colossus scene, compared with independent glTF CPU evaluator",
+    "samples_per_clip": 9,
+    "vertex_time_comparisons": 137556,
+    "normalized": "Native byte weights divided by their actual total",
+    "raw_weights": "World XYZ uses byte weights divided by 255; not a screen-space silhouette metric",
+    "gpu_render_performed": false
+  },
+  "probes": {
+    "indexed": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "243ad856a099571ee36c2937fc7c0e1400b4eb566cec7b68b78f731939c12908",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "indexed.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "nonindexed": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "1de0c7621f2e6e1bdfd5e7a804de0e0761016b64fe6ca065aa647919b478e905",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 0,
+            "polygons": 0,
+            "bindings": 0,
+            "normals": 0,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [],
+          "bindings": [],
+          "first_normal": [],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "nonindexed.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "strip": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "e6933868d04b635efb24538beb9d8f6666cf91c31431e332f7513fdb73315bcf",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 1,
+            "bindings": 3,
+            "normals": 3,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "strip.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "fan": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "90be3543cc9466be5c57dc397427c9317889d63a1e176b5499d6f4d3a658368e",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 1,
+            "bindings": 3,
+            "normals": 3,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "fan.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "linear": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "fe892b3ecff9ab99a3e79ac6eeb5d76243829f7b472b554dd0246b357596587b",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "linear.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -4.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "LINEAR",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    },
+    "step": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "82530e50401d355b0b1d89a8812ca2e381a287a7ad37e6381cbd7f2a3174c708",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "step.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -4.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "STEP",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    },
+    "cubicspline": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "3075b8210f90168fbf5086b9c8b0c92a8d420c2f5c4225987b76fcd83aeb874e",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "cubicspline.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -0.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "CUBICSPLINE",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    },
+    "reordered_channels": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "8941481a4334aff7c0b10e890888a437243b76dac0a2e64f00537f2a6e106e5a",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "reordered_channels.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          4.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            },
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          1.0,
+                          1.0,
+                          -3.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          2.0,
+                          2.0,
+                          -5.0
+                        ]
+                      }
+                    ],
+                    "target": "Scale"
+                  }
+                ]
+              },
+              "idx": 1
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "LINEAR",
+              "node_anims": [
+                {
+                  "anim": 1,
+                  "node": 0
+                },
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    },
+    "shared_sampler": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "4f9e0fcb086a6efc512d2588b315b83b9c699973e8a009e6aa4cb7aa59d4c9aa",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "shared_sampler.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -4.0
+                        ]
+                      }
+                    ],
+                    "target": "Scale"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "LINEAR",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                },
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    },
+    "skin_normal": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "76b8aaa06ddd6590f97ed9d99ffde8f034f8981d6d07b261afe08d21e35b4885",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 4,
+            "bind_poses": 2
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ]
+          ],
+          "bind_poses": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ]
+        }
+      },
+      "scenes": {
+        "skin_normal.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            },
+            {
+              "idx": 1,
+              "name": "Bone0"
+            },
+            {
+              "idx": 2,
+              "name": "Bone1"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [
+                1,
+                2
+              ],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [
+                    "EnableSkinning"
+                  ],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "skin_no_ibm": {
+      "returncode": -11,
+      "signal": "SIGSEGV",
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "3d5cff7d38908835e6cbe2e35a4db37d0992fe9d25c2781bffb5d1fbf5f575a2",
+      "geometry": {},
+      "scenes": {},
+      "texture_metadata": {}
+    },
+    "skin_instance": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "610cbd07132c73b388e34db714161f597a146212fe4af8c8f91252b9123552be",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 4,
+            "bind_poses": 2
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ]
+          ],
+          "bind_poses": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ]
+        }
+      },
+      "scenes": {
+        "skin_instance.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            },
+            {
+              "idx": 1,
+              "name": "Bone0"
+            },
+            {
+              "idx": 2,
+              "name": "Bone1"
+            },
+            {
+              "idx": 3,
+              "name": "Instance"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [
+                1,
+                2
+              ],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [
+                    "EnableSkinning"
+                  ],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            },
+            {
+              "bones": [
+                1,
+                2
+              ],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "skin_no_material": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "6336648e528b5289648fbb3244097fd23e4859e0953fd58e9edd19ada858d00b",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 4,
+            "bind_poses": 2
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ]
+          ],
+          "bind_poses": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ]
+        }
+      },
+      "scenes": {
+        "skin_no_material.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            },
+            {
+              "idx": 1,
+              "name": "Bone0"
+            },
+            {
+              "idx": 2,
+              "name": "Bone1"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [
+                1,
+                2
+              ],
+              "material_infos": [
+                {
+                  "name": "dummy_mat"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        0.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "skin_shear_ibm": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "00e0cd377d0e27c3dfc0da9aa9227694da020e286f3286c99b298d9863330c20",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 4,
+            "bind_poses": 2
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ],
+            [
+              0,
+              1,
+              0,
+              0,
+              128,
+              128,
+              0,
+              0
+            ]
+          ],
+          "bind_poses": [
+            [
+              0.8703883290290833,
+              0.3232541084289551,
+              0.0,
+              0.0,
+              -0.43519410490989685,
+              1.1717960834503174,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ]
+        }
+      },
+      "scenes": {
+        "skin_shear_ibm.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            },
+            {
+              "idx": 1,
+              "name": "Bone0"
+            },
+            {
+              "idx": 2,
+              "name": "Bone1"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [
+                1,
+                2
+              ],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [
+                    "EnableSkinning"
+                  ],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "sparse_base": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "ba796830ebe9833a76c7bf6e4a2cebc0e70f4a61a730f829409b3eb10cab0903",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "sparse_base.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "sparse_only": {
+      "returncode": -11,
+      "signal": "SIGSEGV",
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "0b9fd20aab9a4a99b7d991e2f8c176abbea2db36f17cdaf917de931709993ea1",
+      "geometry": {},
+      "scenes": {},
+      "texture_metadata": {}
+    },
+    "tangents": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "a2839659d992b9a4fee4d942c2c4ba40faa422ce0619d0fd31a90cdc5308cdde",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 6,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              -0.800000011920929,
+              0.0,
+              -0.6000000238418579
+            ]
+          ],
+          "first_tangent_frame": [
+            [
+              0.6000000238418579,
+              0.0,
+              0.800000011920929,
+              0.0,
+              0.2800000309944153,
+              -0.0
+            ]
+          ],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "tangents.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "colors": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "3f1fea1d5efd63e81260e8d01cad16c631c66295419373dd4e8c9c68ae825bdd",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "colors.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "signed_normalized": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "4b690e1d2216d7df5948a5884eaa0e56d298b24ade04324527bd8a0c878155cf",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -0.9921875
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "signed_normalized.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {}
+    },
+    "occlusion_only": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "18e2ff3e0354e0911592ac54b4ffd2988d901deb6f90dfbdc2cb32c1f01af227",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 6,
+            "uv0": 6,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "occlusion_only.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "textures": [
+                    {
+                      "name": "uOcclusionRoughnessMetalnessMap",
+                      "path": "pixel.png",
+                      "stage": 1
+                    }
+                  ],
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        0.5,
+                        0.699999988079071,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {
+        "pixel.png.meta": {
+          "profiles": {
+            "default": {
+              "compression": "BC7",
+              "preprocess": {
+                "construct": [
+                  "R",
+                  0,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "mask_texture": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "6899b83df8280a9825159e297b8a6d05819cc49de91d3f25768e55d197f4a1da",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 6,
+            "uv0": 6,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [
+            [
+              1.0,
+              0.0,
+              0.0,
+              -0.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "mask_texture.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "alpha",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "textures": [
+                    {
+                      "name": "uBaseOpacityMap",
+                      "path": "pixel.png",
+                      "stage": 0
+                    }
+                  ],
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        0.20000000298023224,
+                        0.30000001192092896,
+                        0.4000000059604645,
+                        0.5
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [],
+          "scene_anims": []
+        }
+      },
+      "texture_metadata": {
+        "pixel.png.meta": {
+          "profiles": {
+            "default": {
+              "compression": "BC7",
+              "srgb": 1
+            }
+          }
+        }
+      }
+    },
+    "multiple_scenes": {
+      "returncode": 0,
+      "signal": null,
+      "validator": {
+        "errors": 0,
+        "warnings": 0
+      },
+      "fixture_sha256": "399f3330ea07341562db79d1ebe99b4c0ed468e6af3f7e2c3add021e64914552",
+      "geometry": {
+        "Mesh.geo": {
+          "counts": {
+            "positions": 4,
+            "polygons": 2,
+            "bindings": 6,
+            "normals": 6,
+            "colors": 0,
+            "tangents": 0,
+            "uv0": 0,
+            "uv1": 0,
+            "uv2": 0,
+            "uv3": 0,
+            "uv4": 0,
+            "uv5": 0,
+            "uv6": 0,
+            "uv7": 0,
+            "skin": 0,
+            "bind_poses": 0
+          },
+          "positions": [
+            [
+              0.0,
+              0.0,
+              -0.0
+            ],
+            [
+              1.0,
+              0.0,
+              -0.0
+            ],
+            [
+              0.0,
+              1.0,
+              -0.0
+            ],
+            [
+              1.0,
+              1.0,
+              -0.0
+            ]
+          ],
+          "bindings": [
+            [
+              2
+            ],
+            [
+              1
+            ],
+            [
+              0
+            ],
+            [
+              3
+            ],
+            [
+              1
+            ],
+            [
+              2
+            ]
+          ],
+          "first_normal": [
+            [
+              0.0,
+              0.0,
+              -1.0
+            ]
+          ],
+          "first_tangent_frame": [],
+          "skin": [],
+          "bind_poses": []
+        }
+      },
+      "scenes": {
+        "multiple_scenes_B.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Other"
+            }
+          ],
+          "objects": [],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -4.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "LINEAR",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        },
+        "multiple_scenes_A.scn": {
+          "nodes": [
+            {
+              "idx": 0,
+              "name": "Mesh"
+            }
+          ],
+          "objects": [
+            {
+              "bones": [],
+              "material_infos": [
+                {
+                  "name": "Material"
+                }
+              ],
+              "materials": [
+                {
+                  "blend_mode": "opaque",
+                  "depth_test": "less",
+                  "face_culling": "cw",
+                  "flags": [],
+                  "program": "core/shader/pbr.hps",
+                  "values": [
+                    {
+                      "name": "uBaseOpacityColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        1.0
+                      ]
+                    },
+                    {
+                      "name": "uOcclusionRoughnessMetalnessColor",
+                      "type": "vec4",
+                      "value": [
+                        1.0,
+                        1.0,
+                        1.0,
+                        -1.0
+                      ]
+                    },
+                    {
+                      "name": "uSelfColor",
+                      "type": "vec4",
+                      "value": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        -1.0
+                      ]
+                    }
+                  ],
+                  "write_a": true,
+                  "write_b": true,
+                  "write_g": true,
+                  "write_r": true,
+                  "write_z": true
+                }
+              ],
+              "name": "Mesh.geo"
+            }
+          ],
+          "anims": [
+            {
+              "anim": {
+                "flags": [],
+                "t_end": 1000000000,
+                "t_start": 0,
+                "vec3": [
+                  {
+                    "keys": [
+                      {
+                        "bias": 0.0,
+                        "t": 0,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -2.0
+                        ]
+                      },
+                      {
+                        "bias": 0.0,
+                        "t": 1000000000,
+                        "tension": 0.0,
+                        "v": [
+                          0.0,
+                          0.0,
+                          -4.0
+                        ]
+                      }
+                    ],
+                    "target": "Position"
+                  }
+                ]
+              },
+              "idx": 0
+            }
+          ],
+          "scene_anims": [
+            {
+              "anim": 4294967295,
+              "frame_duration": 50000000,
+              "name": "LINEAR",
+              "node_anims": [
+                {
+                  "anim": 0,
+                  "node": 0
+                }
+              ],
+              "t_end": 1000000000,
+              "t_start": 0
+            }
+          ]
+        }
+      },
+      "texture_metadata": {}
+    }
+  }
+}

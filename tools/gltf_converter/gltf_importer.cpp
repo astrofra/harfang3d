@@ -31,6 +31,10 @@
 #include <fstream>
 #include <iostream>
 #include <mutex>
+#include <cstring>
+#include <cmath>
+#include <limits>
+#include <stdexcept>
 
 #undef CopyFile
 #undef GetObject
@@ -45,6 +49,122 @@ std::vector<std::string> already_saved_picture;
 
 std::map<std::string, std::string> primitiveIdsToGeoPath;
 std::map<std::string, int> geoPathOcurrence;
+
+// Validate spans before forming pointers. The last matrix column need not carry
+// trailing alignment padding, so element_bytes can be smaller than stride.
+static const unsigned char *AccessorSpan(const Model &model, int view_index, size_t offset, size_t count, size_t stride, size_t element_bytes) {
+	if (view_index < 0 || size_t(view_index) >= model.bufferViews.size())
+		throw std::runtime_error("Invalid accessor buffer view");
+	const auto &view = model.bufferViews[view_index];
+	if (view.buffer < 0 || size_t(view.buffer) >= model.buffers.size())
+		throw std::runtime_error("Invalid accessor buffer");
+	const auto &buffer = model.buffers[view.buffer].data;
+	if (view.byteOffset > buffer.size() || view.byteLength > buffer.size() - view.byteOffset || offset > view.byteLength ||
+		!count || stride < element_bytes || element_bytes > view.byteLength - offset ||
+		(count - 1) > (view.byteLength - offset - element_bytes) / stride)
+		throw std::runtime_error("Accessor exceeds its buffer view");
+	return buffer.data() + view.byteOffset + offset;
+}
+
+// Existing conversion code reads dense accessors. Resolve sparse patches once,
+// including zero-initialized bases, for geometry, animation and skin consumers.
+static void PrepareAccessors(Model &model) {
+	for (size_t index = 0; index < model.accessors.size(); ++index) {
+		auto &a = model.accessors[index];
+		try {
+			const int component_bytes = GetComponentSizeInBytes(a.componentType);
+			const int components = GetNumComponentsInType(a.type);
+			if (component_bytes <= 0 || components <= 0 || !a.count)
+				throw std::runtime_error("Invalid accessor element type or count");
+			const size_t columns = a.type == TINYGLTF_TYPE_MAT2 ? 2 : a.type == TINYGLTF_TYPE_MAT3 ? 3 : a.type == TINYGLTF_TYPE_MAT4 ? 4 : 1;
+			const size_t column_bytes = components / columns * component_bytes;
+			const size_t column_stride = columns > 1 ? (column_bytes + 3) & ~size_t(3) : column_bytes;
+			const size_t packed_stride = columns * column_stride;
+			const size_t element_bytes = (columns - 1) * column_stride + column_bytes;
+			size_t stride = packed_stride;
+			const unsigned char *base = nullptr;
+			if (a.bufferView >= 0) {
+				const auto &view = model.bufferViews.at(a.bufferView);
+				stride = view.byteStride ? view.byteStride : packed_stride;
+				if (stride < packed_stride || stride % component_bytes || a.byteOffset % component_bytes || view.byteOffset % component_bytes)
+					throw std::runtime_error("Invalid accessor alignment or stride");
+				base = AccessorSpan(model, a.bufferView, a.byteOffset, a.count, stride, element_bytes);
+			} else if (a.bufferView != -1 || a.byteOffset != 0) {
+				throw std::runtime_error("Invalid accessor without a buffer view");
+			}
+			if (base && !a.sparse.isSparse)
+				continue;
+			if (a.count > std::numeric_limits<size_t>::max() / packed_stride)
+				throw std::runtime_error("Accessor allocation size overflow");
+			Buffer dense;
+			dense.data.resize(a.count * packed_stride, 0);
+			if (base)
+				for (size_t i = 0; i < a.count; ++i)
+					std::memcpy(dense.data.data() + i * packed_stride, base + i * stride, element_bytes);
+			if (a.sparse.isSparse) {
+				const auto &s = a.sparse;
+				if (s.count <= 0 || size_t(s.count) > a.count || s.indices.byteOffset < 0 || s.values.byteOffset < 0)
+					throw std::runtime_error("Invalid sparse accessor count or offset");
+				if (s.indices.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE && s.indices.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT &&
+					s.indices.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+					throw std::runtime_error("Invalid sparse index component type");
+				const size_t index_bytes = GetComponentSizeInBytes(s.indices.componentType);
+				const auto *indices = AccessorSpan(model, s.indices.bufferView, s.indices.byteOffset, s.count, index_bytes, index_bytes);
+				const auto *values = AccessorSpan(model, s.values.bufferView, s.values.byteOffset, s.count, packed_stride, element_bytes);
+				uint32_t previous = 0;
+				for (int i = 0; i < s.count; ++i) {
+					uint32_t vertex = 0;
+					// glTF integers are little-endian, irrespective of host alignment.
+					for (size_t b = 0; b < index_bytes; ++b)
+						vertex |= uint32_t(indices[i * index_bytes + b]) << (8 * b);
+					if (vertex >= a.count || (i && vertex <= previous))
+						throw std::runtime_error("Sparse indices must be increasing and within accessor count");
+					std::memcpy(dense.data.data() + vertex * packed_stride, values + i * packed_stride, element_bytes);
+					previous = vertex;
+				}
+			}
+			BufferView view;
+			view.buffer = int(model.buffers.size());
+			view.byteLength = dense.data.size();
+			view.byteStride = packed_stride;
+			model.buffers.push_back(std::move(dense));
+			a.bufferView = int(model.bufferViews.size());
+			model.bufferViews.push_back(view);
+			a.byteOffset = 0;
+			a.sparse.isSparse = false;
+		} catch (const std::exception &e) {
+			throw std::runtime_error("Accessor " + std::to_string(index) + ": " + e.what());
+		}
+	}
+}
+
+static std::vector<hg::Mat4> ImportBindPoses(const Model &model, const Skin &skin) {
+	std::vector<hg::Mat4> poses(skin.joints.size(), hg::Mat4::Identity);
+	if (skin.inverseBindMatrices == -1)
+		return poses;
+	if (skin.inverseBindMatrices < 0 || size_t(skin.inverseBindMatrices) >= model.accessors.size())
+		throw std::runtime_error("Invalid inverse bind matrix accessor");
+	const auto &a = model.accessors[skin.inverseBindMatrices];
+	if (a.type != TINYGLTF_TYPE_MAT4 || a.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT || a.count < skin.joints.size())
+		throw std::runtime_error("Inverse bind matrices must be FLOAT MAT4 with one entry per joint");
+	const auto &view = model.bufferViews.at(a.bufferView);
+	const size_t stride = a.ByteStride(view);
+	const auto *data = AccessorSpan(model, a.bufferView, a.byteOffset, a.count, stride, sizeof(float) * 16);
+	for (size_t i = 0; i < poses.size(); ++i) {
+		float matrix[16];
+		std::memcpy(matrix, data + i * stride, sizeof(matrix));
+		for (float value : matrix)
+			if (!std::isfinite(value))
+				throw std::runtime_error("Non-finite inverse bind matrix");
+		if (matrix[3] != 0 || matrix[7] != 0 || matrix[11] != 0 || matrix[15] != 1)
+			throw std::runtime_error("Inverse bind matrix must be affine");
+		// glTF column-major affine matrix -> native row-major 3x4, C * B * C.
+		for (int row = 0; row < 3; ++row)
+			for (int col = 0; col < 4; ++col)
+				poses[i].m[row][col] = matrix[col * 4 + row] * (row == 2 ? -1.f : 1.f) * (col == 2 ? -1.f : 1.f);
+	}
+	return poses;
+}
 
 static std::string Indent(const int indent) {
 	std::string s;
@@ -76,7 +196,9 @@ template <typename T> struct arrayAdapter {
 			throw std::out_of_range("Tried to access beyond the last element of an array adapter with "
 									"count " +
 									std::to_string(elemCount) + " while getting elemnet number " + std::to_string(pos));
-		return *(reinterpret_cast<const T *>(dataPtr + pos * stride));
+		T value;
+		std::memcpy(&value, dataPtr + pos * stride, sizeof(value));
+		return value;
 	}
 };
 
@@ -440,7 +562,10 @@ static void ExportMotions(const Model &model, const Scene &gltf_scene, hg::Scene
 				auto anim_ref = anims[animation.channels[j].sampler];
 				auto anim = scene.GetAnim(anim_ref);
 
-				scene_anim.node_anims.push_back({idNode_to_NodeRef[animation.channels[j].target_node], anim_ref});
+				const auto node = idNode_to_NodeRef.find(animation.channels[j].target_node);
+				if (node == idNode_to_NodeRef.end())
+					continue; // This channel targets a node outside the current scene.
+				scene_anim.node_anims.push_back({node->second, anim_ref});
 
 				std::string target;
 				if (animation.channels[j].target_path == "translation")
@@ -482,12 +607,19 @@ static void ExportSkins(const Model &model, const Scene &gltf_scene, hg::Scene &
 	for (size_t gltf_id_node = 0; gltf_id_node < model.nodes.size(); ++gltf_id_node) {
 		const auto &gltf_node = model.nodes[gltf_id_node];
 		if (gltf_node.skin >= 0) {
-			const auto &skin = model.skins[gltf_node.skin];
-			auto node = scene.GetNode(idNode_to_NodeRef[gltf_id_node]);
+			const auto mapped = idNode_to_NodeRef.find(int(gltf_id_node));
+			if (mapped == idNode_to_NodeRef.end())
+				continue;
+			const auto &skin = model.skins.at(gltf_node.skin);
+			auto node = scene.GetNode(mapped->second);
 			if (auto object = node.GetObject()) {
 				object.SetBoneCount(skin.joints.size());
-				for (size_t j = 0; j < skin.joints.size(); j++)
-					object.SetBone(j, idNode_to_NodeRef[skin.joints[j]]);
+				for (size_t j = 0; j < skin.joints.size(); j++) {
+					const auto joint = idNode_to_NodeRef.find(skin.joints[j]);
+					if (joint == idNode_to_NodeRef.end())
+						throw std::runtime_error("Skin joint is missing from the current scene");
+					object.SetBone(j, joint->second);
+				}
 			}
 		}
 	}
@@ -1076,6 +1208,10 @@ static void ExportGeometry(
 					hg::Vec4 weights;
 					for (size_t i{0}; i < count; ++i) {
 						w_weights0(&weights.x, i);
+						if (!std::isfinite(weights.x) || !std::isfinite(weights.y) || !std::isfinite(weights.z) || !std::isfinite(weights.w) ||
+							weights.x < 0 || weights.y < 0 || weights.z < 0 || weights.w < 0 ||
+							weights.x > 1 || weights.y > 1 || weights.z > 1 || weights.w > 1)
+							throw std::runtime_error("Invalid skin weight");
 						geo.skin[i + start_id_vtx].weight[0] = hg::pack_float<uint8_t>(weights.x);
 						geo.skin[i + start_id_vtx].weight[1] = hg::pack_float<uint8_t>(weights.y);
 						geo.skin[i + start_id_vtx].weight[2] = hg::pack_float<uint8_t>(weights.z);
@@ -1125,6 +1261,27 @@ static void ExportObject(const Model &model, const Node &gltf_node, hg::Node &no
 	if (gltf_node.mesh < 0 && gltf_node.skin < 0)
 		return;
 
+	if (gltf_node.skin >= 0) {
+		const auto &skin = model.skins.at(gltf_node.skin);
+		if (skin.joints.empty())
+			throw std::runtime_error("Skin has no joints");
+		for (int joint : skin.joints)
+			if (joint < 0 || size_t(joint) >= model.nodes.size())
+				throw std::runtime_error("Invalid skin joint node");
+		for (const auto &primitive : model.meshes.at(gltf_node.mesh).primitives) {
+			const auto &position = model.accessors.at(primitive.attributes.at("POSITION"));
+			const auto &joints = model.accessors.at(primitive.attributes.at("JOINTS_0"));
+			const auto &weights = model.accessors.at(primitive.attributes.at("WEIGHTS_0"));
+			if (joints.type != TINYGLTF_TYPE_VEC4 || joints.normalized ||
+				(joints.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE && joints.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT) ||
+				weights.type != TINYGLTF_TYPE_VEC4 ||
+				(weights.componentType != TINYGLTF_COMPONENT_TYPE_FLOAT &&
+					(!weights.normalized || (weights.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE && weights.componentType != TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT))) ||
+				joints.count != position.count || weights.count != position.count)
+				throw std::runtime_error("Invalid skin attribute type or vertex count");
+		}
+	}
+
 	hg::Geometry geo;
 	std::string path = node.GetName();
 	std::string primitiveIds;
@@ -1144,7 +1301,6 @@ static void ExportObject(const Model &model, const Node &gltf_node, hg::Node &no
 	}
 
 	primitiveIds += "_" + std::to_string(gltf_node.skin);
-	bool found_geo = false;
 
 	// if there is set of primitive ids existing
 	auto primitiveIdsToGeoPath_itr = primitiveIdsToGeoPath.find(primitiveIds);
@@ -1193,50 +1349,19 @@ static void ExportObject(const Model &model, const Node &gltf_node, hg::Node &no
 					geo.tangent = hg::ComputeVertexTangent(geo, vtx_normal, 0, hg::Deg(45.f));
 			}
 		}
-		// find bind pose in the skins
 		if (gltf_node.skin >= 0) {
-			hg::debug(hg::format("Exporting geometry skin"));
-
-			const auto &skin = model.skins[gltf_node.skin];
-			geo.bind_pose.resize(skin.joints.size());
-
-			const auto attribAccessor = model.accessors[skin.inverseBindMatrices];
-			const auto &bufferView = model.bufferViews[attribAccessor.bufferView];
-			const auto &buffer = model.buffers[bufferView.buffer];
-			const auto dataPtr = buffer.data.data() + bufferView.byteOffset + attribAccessor.byteOffset;
-			const auto byte_stride = attribAccessor.ByteStride(bufferView);
-			const auto count = attribAccessor.count;
-
-			switch (attribAccessor.type) {
-				case TINYGLTF_TYPE_MAT4: {
-					switch (attribAccessor.componentType) {
-						case TINYGLTF_COMPONENT_TYPE_DOUBLE:
-						case TINYGLTF_COMPONENT_TYPE_FLOAT: {
-							floatArray<float> value(arrayAdapter<float>(dataPtr, count * 16, sizeof(float)));
-
-							for (size_t k{0}; k < count; ++k) {
-								hg::Mat4 m_InverseBindMatrices(value[k * 16], value[k * 16 + 1], value[k * 16 + 2], value[k * 16 + 4], value[k * 16 + 5],
-									value[k * 16 + 6], value[k * 16 + 8], value[k * 16 + 9], value[k * 16 + 10], value[k * 16 + 12], value[k * 16 + 13],
-									value[k * 16 + 14]);
-
-								m_InverseBindMatrices = hg::InverseFast(m_InverseBindMatrices);
-
-								auto p = hg::GetT(m_InverseBindMatrices);
-								p.z = -p.z;
-								auto r = hg::GetR(m_InverseBindMatrices);
-								r.x = -r.x;
-								r.y = -r.y;
-								auto s = hg::GetS(m_InverseBindMatrices);
-
-								geo.bind_pose[k] = hg::InverseFast(hg::TransformationMat4(p, r, s));
-							}
-						} break;
-						default:
-							hg::error("Unhandeled component type for inverseBindMatrices");
-					}
-				} break;
-				default:
-					hg::error("Unhandeled MAT4 type for inverseBindMatrices");
+			geo.bind_pose = ImportBindPoses(model, model.skins.at(gltf_node.skin));
+			if (geo.skin.size() != geo.vtx.size())
+				throw std::runtime_error("Skin records do not match geometry vertices");
+			for (const auto &vertex : geo.skin) {
+				unsigned total = 0;
+				for (int i = 0; i < 4; ++i) {
+					if (vertex.index[i] >= geo.bind_pose.size())
+						throw std::runtime_error("Skin influence index exceeds joint count");
+					total += vertex.weight[i];
+				}
+				if (!total)
+					throw std::runtime_error("Skin vertex has no nonzero weights");
 			}
 		}
 
@@ -1273,7 +1398,7 @@ static void ExportObject(const Model &model, const Node &gltf_node, hg::Node &no
 			if (meshPrimitive.material >= 0) {
 				auto gltf_mat = model.materials[meshPrimitive.material];
 				auto mat = ExportMaterial(model, gltf_mat, config, resources);
-				if (geo.skin.size())
+				if (gltf_node.skin >= 0)
 					mat.flags |= hg::MF_EnableSkinning;
 
 				object.SetMaterial(primitiveId, std::move(mat));
@@ -1296,6 +1421,9 @@ static void ExportObject(const Model &model, const Node &gltf_node, hg::Node &no
 				mat.values["uBaseOpacityColor"] = {bgfx::UniformType::Vec4, {1.f, 1.f, 1.f, 1.f}};
 				mat.values["uOcclusionRoughnessMetalnessColor"] = {bgfx::UniformType::Vec4, {1.f, 1.f, 0.f, -1.f}};
 				mat.values["uSelfColor"] = {bgfx::UniformType::Vec4, {0.f, 0.f, 0.f, -1.f}};
+
+				if (gltf_node.skin >= 0)
+					mat.flags |= hg::MF_EnableSkinning;
 
 				object.SetMaterial(primitiveId, std::move(mat));
 				object.SetMaterialName(primitiveId, "dummy_mat");
@@ -1480,6 +1608,8 @@ bool LoadImageDataEx(Image *image, const int image_idx, std::string *err, std::s
 
 static bool ImportGltfScene(const std::string &path, const Config &config) {
 	const auto t_start = hg::time_now();
+	primitiveIdsToGeoPath.clear();
+	geoPathOcurrence.clear();
 
 	if (config.base_output_path.empty())
 		return false;
@@ -1514,6 +1644,8 @@ static bool ImportGltfScene(const std::string &path, const Config &config) {
 		hg::log(hg::format("warning %1: %2").arg(path.c_str()).arg(warn.c_str()));
 	}
 
+	PrepareAccessors(model);
+
 	hg::log("loaded glTF file has:");
 	hg::log(hg::format("%1 accessors").arg(model.accessors.size()).c_str());
 	hg::log(hg::format("%1 animations").arg(model.animations.size()).c_str());
@@ -1535,6 +1667,7 @@ static bool ImportGltfScene(const std::string &path, const Config &config) {
 			return false;
 
 	for (auto gltf_scene : model.scenes) {
+		idNode_to_NodeRef.clear();
 		hg::Scene scene;
 		hg::PipelineResources resources;
 
@@ -1694,7 +1827,12 @@ int main(int argc, const char **argv) {
 
 	//
 	config.input_path = cmd_content.positionals[0];
-	auto res = ImportGltfScene(cmd_content.positionals[0], config);
+	bool res = false;
+	try {
+		res = ImportGltfScene(cmd_content.positionals[0], config);
+	} catch (const std::exception &e) {
+		hg::error(hg::format("Import failed: %1").arg(e.what()));
+	}
 
 	const auto msg = std::string("[ImportScene") + std::string(res ? ": OK]" : ": KO]");
 	hg::log(msg.c_str());
